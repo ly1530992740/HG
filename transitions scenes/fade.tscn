@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://dcbuliwvdfre1"]
+
+[ext_resource type="Script" uid="uid://dxwcexb44t3sc" path="res://transitions scenes/fade.gd" id="1_wk8xf"]
+[ext_resource type="Texture2D" uid="uid://ewereq2wko7u" path="res://Textures/Terrain/Tileset/Water Background color.png" id="2_dka7w"]
+
+[node name="fade" type="Node2D" unique_id=428934220]
+z_index = 20
+script = ExtResource("1_wk8xf")
+
+[node name="fade" type="CanvasLayer" parent="." unique_id=1325433187]
+layer = 5
+
+[node name="Sprite2D" type="Sprite2D" parent="fade" unique_id=1073480421]
+self_modulate = Color(0.009317499, 0.009317501, 0.009317499, 1)
+position = Vector2(400.00015, 464)
+scale = Vector2(71.25, 49.25)
+texture = ExtResource("2_dka7w")
+
+[node name="PointLight2D" type="PointLight2D" parent="fade" unique_id=1254561162]
+position = Vector2(396.00006, 456)
+scale = Vector2(69.125, 46.500004)
+color = Color(0.14911404, 0.14911404, 0.14911404, 0.78431374)
+texture = ExtResource("2_dka7w")
+
+[node name="Timer" type="Timer" parent="fade" unique_id=4916933]

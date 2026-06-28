@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://cheih81517bv4"]
+
+[ext_resource type="Texture2D" uid="uid://cirts3vgvsug1" path="res://Textures/Factions/Knights/Buildings/Tower/Tower_Construction.png" id="1_wf7mx"]
+[ext_resource type="Script" uid="uid://djgxon7hm837j" path="res://buildings/unit construction/ghosts/anim.gd" id="2_qqeb3"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_u40yy"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_wf7mx")
+}],
+"loop": false,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_wf7mx"]
+radius = 31.349836
+
+[node name="tower ghost" type="Area2D" unique_id=2030273565]
+scale = Vector2(0.8, 0.8)
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1157473760]
+sprite_frames = SubResource("SpriteFrames_u40yy")
+autoplay = "default"
+script = ExtResource("2_qqeb3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=725069164]
+visible = false
+position = Vector2(-1.2500005, 62.5)
+shape = SubResource("CircleShape2D_wf7mx")
+metadata/_edit_lock_ = true

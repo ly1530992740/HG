@@ -1,0 +1,77 @@
+[gd_scene load_steps=12 format=3 uid="uid://wjbme2jd5dlo"]
+
+[ext_resource type="Texture2D" uid="uid://byna07rfg160i" path="res://Textures/new/Particle FX/Dust_01.png" id="1_5ihbq"]
+[ext_resource type="Script" uid="uid://b16lxe2ewmbtn" path="res://Materiels/fx particles/dusts/dusts.gd" id="2_i7qya"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_onf35"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_erdsv"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_r15dw"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_kexex"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(192, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lbkhy"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(256, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yx8gc"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(320, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_pilp4"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(384, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ldry1"]
+atlas = ExtResource("1_5ihbq")
+region = Rect2(448, 0, 64, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_x2qk1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_onf35")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_erdsv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_r15dw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_kexex")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lbkhy")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yx8gc")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_pilp4")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ldry1")
+}],
+"loop": false,
+"name": &"default",
+"speed": 15.0
+}]
+
+[node name="dust in" type="AnimatedSprite2D" unique_id=1549300176]
+sprite_frames = SubResource("SpriteFrames_x2qk1")
+autoplay = "default"
+frame = 7
+frame_progress = 1.0
+script = ExtResource("2_i7qya")
+
+[connection signal="animation_finished" from="." to="." method="_on_animation_finished"]

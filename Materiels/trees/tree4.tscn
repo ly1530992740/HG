@@ -1,0 +1,153 @@
+[gd_scene format=3 uid="uid://cyqmu8gexbvnr"]
+
+[ext_resource type="Texture2D" uid="uid://bm3403vwh8e4w" path="res://Textures/new/Resources/Wood/Trees/Tree3.png" id="3_q6vng"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_v2eeu"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mvg30"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jmuwa"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cvap4"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(768, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_j05c1"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(1152, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xikbt"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bj28m"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(192, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5kqv8"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jyh1l"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(576, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ufgph"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(768, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_x3ws7"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(960, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nmhbw"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(1152, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_pyo6p"]
+atlas = ExtResource("3_q6vng")
+region = Rect2(1344, 0, 192, 192)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_b0elb"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_v2eeu")
+}],
+"loop": true,
+"name": &"chopped",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_mvg30")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jmuwa")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_cvap4")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_j05c1")
+}],
+"loop": true,
+"name": &"chopping",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_xikbt")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_bj28m")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5kqv8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jyh1l")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ufgph")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_x3ws7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nmhbw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_pyo6p")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 7.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_21lfk"]
+radius = 5.3333335
+height = 29.333328
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_tf48w"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_wbew2"]
+radius = 40.0
+height = 80.0
+
+[node name="tree" type="StaticBody2D" unique_id=1417836211 groups=["block_building"]]
+z_index = 1
+scale = Vector2(1.5, 1.5)
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1144608368]
+sprite_frames = SubResource("SpriteFrames_b0elb")
+animation = &"chopped"
+autoplay = "idle"
+metadata/_edit_lock_ = true
+
+[node name="body" type="CollisionShape2D" parent="." unique_id=1290406062]
+visible = false
+position = Vector2(0, 54)
+shape = SubResource("CapsuleShape2D_21lfk")
+metadata/_edit_lock_ = true
+
+[node name="chopped" type="CollisionShape2D" parent="." unique_id=905214903]
+visible = false
+position = Vector2(-0.33333334, -0.6666643)
+shape = SubResource("CapsuleShape2D_tf48w")
+metadata/_edit_lock_ = true
+
+[node name="tree_trunk" type="Area2D" parent="." unique_id=788754757]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="tree_trunk" unique_id=629876441]
+visible = false
+position = Vector2(0, 48)
+shape = SubResource("CapsuleShape2D_wbew2")
+debug_color = Color(0.66399723, 0.51185244, 0.08247767, 0.41960785)
+metadata/_edit_lock_ = true

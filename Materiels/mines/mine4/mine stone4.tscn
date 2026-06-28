@@ -1,0 +1,130 @@
+[gd_scene load_steps=15 format=3 uid="uid://cxfoogxb42kw1"]
+
+[ext_resource type="Texture2D" uid="uid://1x6sby0425g3" path="res://Textures/new/Resources/Gold/Gold Stones/Gold Stone 4_Highlight.png" id="1_2ri0f"]
+[ext_resource type="Script" uid="uid://woso27g5dekw" path="res://Materiels/mines/mine4/mine_stone4.gd" id="1_qgdkq"]
+[ext_resource type="AudioStream" uid="uid://b3crn42chrv2y" path="res://Audio/pickaxe-blow.mp3" id="3_7khhs"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_vvrbx"]
+atlas = ExtResource("1_2ri0f")
+region = Rect2(0, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wpuv7"]
+atlas = ExtResource("1_2ri0f")
+region = Rect2(128, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5js71"]
+atlas = ExtResource("1_2ri0f")
+region = Rect2(256, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3s4hg"]
+atlas = ExtResource("1_2ri0f")
+region = Rect2(384, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6xkp5"]
+atlas = ExtResource("1_2ri0f")
+region = Rect2(512, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ojpll"]
+atlas = ExtResource("1_2ri0f")
+region = Rect2(640, 0, 128, 128)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_s7nqt"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_vvrbx")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_wpuv7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5js71")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3s4hg")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6xkp5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ojpll")
+}],
+"loop": true,
+"name": &"default",
+"speed": 10.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ygovw"]
+radius = 35.014282
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_n8ytw"]
+radius = 55.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qgdkq"]
+bg_color = Color(0.6, 0.6, 0.6, 0.0392157)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7khhs"]
+bg_color = Color(0.9137255, 0.9411765, 0.26666668, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8, 0.8, 0.8, 0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="mine stone4" type="StaticBody2D" unique_id=1782066560 groups=["mines"]]
+script = ExtResource("1_qgdkq")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1149922703]
+sprite_frames = SubResource("SpriteFrames_s7nqt")
+autoplay = "default"
+frame_progress = 0.6599959
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1221182967]
+visible = false
+position = Vector2(0, -4)
+shape = SubResource("CircleShape2D_ygovw")
+metadata/_edit_lock_ = true
+
+[node name="mine zone" type="Area2D" parent="." unique_id=1802420230 groups=["mines"]]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="mine zone" unique_id=254861556]
+visible = false
+shape = SubResource("CircleShape2D_n8ytw")
+metadata/_edit_lock_ = true
+
+[node name="Marker2D" type="Marker2D" parent="." unique_id=133525930]
+metadata/_edit_lock_ = true
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1164888179]
+zoom = Vector2(0.5, 0.5)
+limit_smoothed = true
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0
+
+[node name="health_bar" type="ProgressBar" parent="." unique_id=764718255]
+z_index = 5
+offset_left = -63.0
+offset_top = -48.0
+offset_right = 67.0
+offset_bottom = -40.857002
+theme_override_styles/background = SubResource("StyleBoxFlat_qgdkq")
+theme_override_styles/fill = SubResource("StyleBoxFlat_7khhs")
+max_value = 10.0
+value = 10.0
+show_percentage = false
+metadata/_edit_use_anchors_ = true
+
+[node name="rock_audio" type="AudioStreamPlayer" parent="." unique_id=731906868]
+stream = ExtResource("3_7khhs")

@@ -1,0 +1,100 @@
+[gd_scene format=3 uid="uid://dcb65j7s8606h"]
+
+[ext_resource type="Script" uid="uid://i0r2fuuiy2e1" path="res://Materiels/wood/wood.gd" id="1_jrpw6"]
+[ext_resource type="Texture2D" uid="uid://d0t2lleuf7qj4" path="res://Textures/Resources/Resources/W_Spawn.png" id="1_p15fs"]
+[ext_resource type="Texture2D" uid="uid://cfiba41ywqion" path="res://Textures/new/Resources/Wood/Wood Resource/Wood Resource.png" id="3_q8tkt"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_wga6p"]
+radius = 12.7499
+height = 69.4132
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jrpw6"]
+atlas = ExtResource("1_p15fs")
+region = Rect2(0, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_q8tkt"]
+atlas = ExtResource("1_p15fs")
+region = Rect2(128, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_oeyvi"]
+atlas = ExtResource("1_p15fs")
+region = Rect2(256, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2mnyj"]
+atlas = ExtResource("1_p15fs")
+region = Rect2(384, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5dvxh"]
+atlas = ExtResource("1_p15fs")
+region = Rect2(512, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_r0244"]
+atlas = ExtResource("1_p15fs")
+region = Rect2(640, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_uijfn"]
+atlas = ExtResource("1_p15fs")
+region = Rect2(768, 0, 128, 128)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_slqx2"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_q8tkt")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jrpw6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_q8tkt")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_oeyvi")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2mnyj")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5dvxh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_r0244")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_uijfn")
+}],
+"loop": false,
+"name": &"sp",
+"speed": 10.0
+}]
+
+[node name="wood" type="Area2D" unique_id=1328391548 groups=["resource"]]
+scale = Vector2(0.6, 0.6)
+script = ExtResource("1_jrpw6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=109499995]
+visible = false
+position = Vector2(1, 22)
+rotation = -1.91288
+shape = SubResource("CapsuleShape2D_wga6p")
+metadata/_edit_lock_ = true
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=973755483]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_slqx2")
+animation = &"idle"
+autoplay = "sp"
+metadata/_edit_lock_ = true
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=627959694]
+zoom = Vector2(0.5, 0.5)
+limit_smoothed = true
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0
+
+[connection signal="area_entered" from="." to="." method="_on_area_entered"]

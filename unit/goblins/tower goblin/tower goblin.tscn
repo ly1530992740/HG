@@ -1,0 +1,96 @@
+[gd_scene load_steps=13 format=3 uid="uid://bfy735g85vyah"]
+
+[ext_resource type="Texture2D" uid="uid://6oicjcn8qy11" path="res://Textures/Factions/Goblins/Buildings/Wood_Tower/Wood_Tower_Destroyed.png" id="1_1kng6"]
+[ext_resource type="Texture2D" uid="uid://b7onb6k3siyyr" path="res://Textures/Factions/Goblins/Buildings/Wood_Tower/Wood_Tower_Red.png" id="1_bl8h7"]
+[ext_resource type="Script" uid="uid://oskpb3tysak1" path="res://unit/goblins/tower goblin/tower_goblin.gd" id="1_pol34"]
+[ext_resource type="AudioStream" uid="uid://b4fn1adpqy8gp" path="res://Audio/shield impact.mp3" id="4_4m77g"]
+[ext_resource type="AudioStream" uid="uid://fv3eiwrsr2a6" path="res://Audio/tree-impact-sound-sfx.mp3" id="5_eb201"]
+[ext_resource type="AudioStream" uid="uid://dawal2upgad7n" path="res://Audio/punch-a-rock.mp3" id="6_yb2sd"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1kng6"]
+atlas = ExtResource("1_bl8h7")
+region = Rect2(0, 0, 256, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_pol34"]
+atlas = ExtResource("1_bl8h7")
+region = Rect2(256, 0, 256, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4m77g"]
+atlas = ExtResource("1_bl8h7")
+region = Rect2(512, 0, 256, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_eb201"]
+atlas = ExtResource("1_bl8h7")
+region = Rect2(768, 0, 256, 192)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_yb2sd"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_1kng6")
+}],
+"loop": false,
+"name": &"destroyed",
+"speed": 2.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1kng6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_pol34")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4m77g")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_eb201")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 7.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1kng6"]
+size = Vector2(80, 128)
+
+[node name="tower goblin" type="StaticBody2D" unique_id=1166519081 groups=["block_building", "goblinbuildings"]]
+script = ExtResource("1_pol34")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1267847497]
+sprite_frames = SubResource("SpriteFrames_yb2sd")
+animation = &"idle"
+autoplay = "idle"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=688163651]
+visible = false
+shape = SubResource("RectangleShape2D_1kng6")
+metadata/_edit_lock_ = true
+
+[node name="Marker2D" type="Marker2D" parent="." unique_id=1952697495]
+visible = false
+position = Vector2(0, -40)
+
+[node name="hitbox" type="Area2D" parent="." unique_id=1483112514 groups=["goblinbuildings"]]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="hitbox" unique_id=54000706]
+visible = false
+position = Vector2(1, -4.5)
+shape = SubResource("RectangleShape2D_1kng6")
+metadata/_edit_lock_ = true
+
+[node name="hit_swordfx" type="AudioStreamPlayer" parent="." unique_id=298425547]
+stream = ExtResource("4_4m77g")
+volume_db = -15.0
+pitch_scale = 1.1
+
+[node name="hit_attackfx" type="AudioStreamPlayer" parent="." unique_id=1301173462]
+stream = ExtResource("5_eb201")
+volume_db = -12.0
+
+[node name="destroyed_fx" type="AudioStreamPlayer" parent="." unique_id=262782907]
+stream = ExtResource("6_yb2sd")
+volume_db = -15.0
+pitch_scale = 1.5
+
+[connection signal="area_entered" from="hitbox" to="." method="_on_hitbox_area_entered"]

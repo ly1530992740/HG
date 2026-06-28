@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://c3k7dr7r7c821"
+path="res://.godot/imported/7.mp3-99223f7a0530e9ff1d085211b0316bb1.mp3str"
+
+[deps]
+
+source_file="res://voice overs/motivations/7.mp3"
+dest_files=["res://.godot/imported/7.mp3-99223f7a0530e9ff1d085211b0316bb1.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

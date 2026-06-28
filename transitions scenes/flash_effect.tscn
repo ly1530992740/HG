@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3 uid="uid://dj8lkdptvq8p5"]
+
+[ext_resource type="Script" uid="uid://btw5ii7tgvfej" path="res://transitions scenes/flash_effect.gd" id="1_7xmjt"]
+[ext_resource type="Texture2D" uid="uid://ewereq2wko7u" path="res://Textures/Terrain/Tileset/Water Background color.png" id="2_bffxn"]
+
+[node name="FlashEffect" type="Node2D" unique_id=428934220]
+script = ExtResource("1_7xmjt")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1073480421]
+
+[node name="PointLight2D" type="PointLight2D" parent="." unique_id=1254561162]
+position = Vector2(396.00006, 456)
+scale = Vector2(69.125, 46.500004)
+color = Color(1, 1, 1, 0.78431374)
+texture = ExtResource("2_bffxn")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1241763805]
+
+[node name="Timer" type="Timer" parent="." unique_id=4916933]

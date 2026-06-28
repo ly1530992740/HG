@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3 uid="uid://cg5khxi5bu66e"]
+
+[ext_resource type="Texture2D" uid="uid://x07ancqdk8ad" path="res://Textures/Factions/Knights/Buildings/House/House_Construction.png" id="1_2dsgd"]
+[ext_resource type="Script" uid="uid://djgxon7hm837j" path="res://buildings/unit construction/ghosts/anim.gd" id="2_k13xc"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_u40yy"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_2dsgd")
+}],
+"loop": false,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_yvj12"]
+size = Vector2(60.000015, 58.750023)
+
+[node name="archery ghost" type="Area2D" unique_id=2030273565]
+scale = Vector2(0.8, 0.8)
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1157473760]
+sprite_frames = SubResource("SpriteFrames_u40yy")
+autoplay = "default"
+script = ExtResource("2_k13xc")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=725069164]
+visible = false
+position = Vector2(-5.9604633e-07, 30.624983)
+scale = Vector2(0.99999964, 0.99999964)
+shape = SubResource("RectangleShape2D_yvj12")
+metadata/_edit_lock_ = true

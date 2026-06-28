@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3 uid="uid://bdyit63tax3vr"]
+
+[ext_resource type="Texture2D" uid="uid://x07ancqdk8ad" path="res://Textures/Factions/Knights/Buildings/House/House_Construction.png" id="1_tyc15"]
+[ext_resource type="Script" uid="uid://djgxon7hm837j" path="res://buildings/unit construction/ghosts/anim.gd" id="2_awcar"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_u40yy"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_tyc15")
+}],
+"loop": false,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_yvj12"]
+size = Vector2(65, 72.50002)
+
+[node name="monastery ghost" type="Area2D" unique_id=2030273565]
+scale = Vector2(0.8, 0.8)
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1157473760]
+sprite_frames = SubResource("SpriteFrames_u40yy")
+autoplay = "default"
+script = ExtResource("2_awcar")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=725069164]
+visible = false
+position = Vector2(2.3841844e-06, 42.499992)
+scale = Vector2(0.9999997, 0.9999997)
+shape = SubResource("RectangleShape2D_yvj12")
+metadata/_edit_lock_ = true

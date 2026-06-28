@@ -1,0 +1,159 @@
+[gd_scene format=3 uid="uid://eoxfyypsbvmp"]
+
+[ext_resource type="Script" uid="uid://dugjq4ma8v5gx" path="res://unit/goblins/tower goblin/Goblin arche.gd" id="1_wv46u"]
+[ext_resource type="Texture2D" uid="uid://0jglmupuj7cc" path="res://Textures/Factions/Goblins/Troops/TNT/Red/TNT_Red.png" id="2_4yrn0"]
+[ext_resource type="AudioStream" uid="uid://du3e367ys537c" path="res://Audio/swing-whoosh-2.mp3" id="3_cpcn6"]
+[ext_resource type="AudioStream" uid="uid://5chysp54ushe" path="res://Audio/hit-swing-sword-small.mp3" id="4_urvu5"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cpcn6"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_urvu5"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(192, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_d5km2"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_r68ap"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(576, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_f6usc"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(768, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_883i3"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(960, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xc52o"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(0, 384, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dj01x"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(192, 384, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6k4aq"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(384, 384, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3b23s"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(576, 384, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_trwhp"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(768, 384, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_p0w7b"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(960, 384, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6hg2q"]
+atlas = ExtResource("2_4yrn0")
+region = Rect2(1152, 384, 192, 192)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_ur8nx"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_cpcn6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_urvu5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_d5km2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_r68ap")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_f6usc")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_883i3")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_xc52o")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dj01x")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6k4aq")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3b23s")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_trwhp")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_p0w7b")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6hg2q")
+}],
+"loop": true,
+"name": &"shoot",
+"speed": 10.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ma6gm"]
+radius = 392.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_rnhik"]
+radius = 48.04165
+
+[node name="Goblin archer" type="CharacterBody2D" unique_id=1844413625 groups=["block_building", "goblin"]]
+script = ExtResource("1_wv46u")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=2037407249]
+sprite_frames = SubResource("SpriteFrames_ur8nx")
+animation = &"idle"
+autoplay = "idle"
+frame_progress = 0.40128946
+
+[node name="attack zone" type="Area2D" parent="." unique_id=853258448]
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="attack zone" unique_id=1247068184]
+visible = false
+shape = SubResource("CircleShape2D_ma6gm")
+debug_color = Color(0.1979, 0.633168, 0.299468, 0.42)
+
+[node name="Marker2D" type="Marker2D" parent="." unique_id=1751199643]
+
+[node name="cooldown" type="Timer" parent="." unique_id=881212948]
+wait_time = 1.2
+autostart = true
+
+[node name="shape" type="CollisionShape2D" parent="." unique_id=1697646128]
+visible = false
+position = Vector2(0, -4)
+shape = SubResource("CircleShape2D_rnhik")
+metadata/_edit_lock_ = true
+
+[node name="soundfx" type="Node2D" parent="." unique_id=1576629700]
+
+[node name="throw_audio" type="AudioStreamPlayer" parent="soundfx" unique_id=1218751837]
+stream = ExtResource("3_cpcn6")
+volume_db = -15.0
+
+[node name="hit_audio" type="AudioStreamPlayer" parent="soundfx" unique_id=726235112]
+stream = ExtResource("4_urvu5")
+volume_db = -10.0
+
+[connection signal="body_entered" from="attack zone" to="." method="_on_attack_zone_body_entered"]
+[connection signal="body_exited" from="attack zone" to="." method="_on_attack_zone_body_exited"]
+[connection signal="timeout" from="cooldown" to="." method="_on_cooldown_timeout"]

@@ -1,0 +1,124 @@
+[gd_scene format=3 uid="uid://d4tdgsw8y4a0"]
+
+[ext_resource type="Script" uid="uid://53mfplrmddph" path="res://unit/goblins/tower goblin/arrow_goblin.gd" id="1_4wvqg"]
+[ext_resource type="Texture2D" uid="uid://uor2abdnjiq0" path="res://Textures/Factions/Goblins/Troops/TNT/Dynamite/Dynamite.png" id="2_06gga"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4wvqg"]
+atlas = ExtResource("2_06gga")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1m7lg"]
+atlas = ExtResource("2_06gga")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_muepb"]
+atlas = ExtResource("2_06gga")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_son7w"]
+atlas = ExtResource("2_06gga")
+region = Rect2(192, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_suief"]
+atlas = ExtResource("2_06gga")
+region = Rect2(256, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xr8ui"]
+atlas = ExtResource("2_06gga")
+region = Rect2(320, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ew1xw"]
+atlas = ExtResource("2_06gga")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2a28y"]
+atlas = ExtResource("2_06gga")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1gc88"]
+atlas = ExtResource("2_06gga")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_v8iyf"]
+atlas = ExtResource("2_06gga")
+region = Rect2(192, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xrusy"]
+atlas = ExtResource("2_06gga")
+region = Rect2(256, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_slsx3"]
+atlas = ExtResource("2_06gga")
+region = Rect2(320, 0, 64, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_nvao4"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4wvqg")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1m7lg")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_muepb")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_son7w")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_suief")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_xr8ui")
+}],
+"loop": true,
+"name": &"down",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ew1xw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2a28y")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1gc88")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_v8iyf")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_xrusy")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_slsx3")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 10.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_2s8v8"]
+radius = 3.0
+
+[node name="arrowgoblin" type="Area2D" unique_id=1257145156]
+script = ExtResource("1_4wvqg")
+
+[node name="Anim" type="AnimatedSprite2D" parent="." unique_id=1888064793]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_nvao4")
+animation = &"idle"
+autoplay = "idle"
+frame_progress = 0.2867207
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1675493022]
+visible = false
+position = Vector2(0, 3)
+rotation = 1.5708
+shape = SubResource("CapsuleShape2D_2s8v8")
+metadata/_edit_lock_ = true
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]

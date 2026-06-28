@@ -1,0 +1,353 @@
+[gd_scene format=4 uid="uid://c4y2ur3bmjk0g"]
+
+[ext_resource type="Texture2D" uid="uid://dqu84r3bf44iv" path="res://Textures/Factions/Knights/Buildings/Tower/Tower_Destroyed.png" id="1_hp24g"]
+[ext_resource type="Script" uid="uid://xcyulocdybvk" path="res://buildings/Towers/tower.gd" id="1_qjhtf"]
+[ext_resource type="Texture2D" uid="uid://cirts3vgvsug1" path="res://Textures/Factions/Knights/Buildings/Tower/Tower_Construction.png" id="2_b0fq4"]
+[ext_resource type="Texture2D" uid="uid://b0flogxqaok4a" path="res://Textures/Buildings/Black Buildings/Tower.png" id="2_mm6lg"]
+[ext_resource type="Script" uid="uid://d3m5ybgmiajwx" path="res://buildings/Towers/anim.gd" id="3_qjhtf"]
+[ext_resource type="AudioStream" uid="uid://dawal2upgad7n" path="res://Audio/punch-a-rock.mp3" id="6_0mhsv"]
+[ext_resource type="AudioStream" uid="uid://dwynohts2b61m" path="res://Audio/hammer.mp3" id="7_b1bea"]
+[ext_resource type="AudioStream" uid="uid://cd4p71kxycgdj" path="res://Audio/placement sfx.mp3" id="8_nicto"]
+[ext_resource type="AudioStream" uid="uid://strecyw63cgi" path="res://Audio/wooden-drop.mp3" id="9_3qlh3"]
+[ext_resource type="StyleBox" uid="uid://c8fylsvlqiy44" path="res://Main/buttons.tres" id="10_dr6g5"]
+[ext_resource type="Texture2D" uid="uid://qsg77ydcd2lm" path="res://Textures/new/UI/Icons/Icon_11.png" id="11_sjrn0"]
+[ext_resource type="Texture2D" uid="uid://d2ctqh2w8tqd7" path="res://Textures/new/UI/Papers/SpecialPaper.png" id="12_kw4x7"]
+[ext_resource type="FontFile" uid="uid://y1rd4gfu2rmk" path="res://Textures/font texts/RINGM___.TTF" id="13_eor8d"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_81fmr"]
+atlas = ExtResource("1_hp24g")
+region = Rect2(0, 0, 128, 256)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_4ohh2"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_b0fq4")
+}],
+"loop": false,
+"name": &"construct",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_81fmr")
+}],
+"loop": true,
+"name": &"destroyed",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_mm6lg")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_1ic5v"]
+radius = 31.0
+height = 146.5
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_0estd"]
+radius = 70.0
+height = 178.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_b0fq4"]
+size = Vector2(130, 176.66666)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0mhsv"]
+size = Vector2(48, 104)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_b1bea"]
+radius = 24.0
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_dr6g5"]
+texture = ExtResource("12_kw4x7")
+texture_region_size = Vector2i(64, 64)
+0:0/0 = 0
+2:0/0 = 0
+4:0/0 = 0
+0:2/0 = 0
+2:2/0 = 0
+4:2/0 = 0
+0:4/0 = 0
+2:4/0 = 0
+4:4/0 = 0
+
+[sub_resource type="TileSet" id="TileSet_2y2t5"]
+tile_size = Vector2i(64, 64)
+sources/1 = SubResource("TileSetAtlasSource_dr6g5")
+
+[node name="Tower" type="StaticBody2D" unique_id=2059844180 groups=["block_building", "building"]]
+z_index = 1
+texture_filter = 1
+collision_layer = 31
+collision_mask = 31
+input_pickable = true
+script = ExtResource("1_qjhtf")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1620268275]
+sprite_frames = SubResource("SpriteFrames_4ohh2")
+animation = &"idle"
+autoplay = "construct"
+script = ExtResource("3_qjhtf")
+metadata/_edit_lock_ = true
+
+[node name="shape" type="CollisionShape2D" parent="." unique_id=280170484]
+visible = false
+position = Vector2(1, 19.75)
+shape = SubResource("CapsuleShape2D_1ic5v")
+metadata/_edit_lock_ = true
+
+[node name="Marker2D" type="Marker2D" parent="." unique_id=1822058102]
+position = Vector2(2, -50)
+metadata/_edit_lock_ = true
+
+[node name="tower" type="Area2D" parent="." unique_id=2130058530]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="tower" unique_id=918889657]
+visible = false
+position = Vector2(-2, 39)
+shape = SubResource("CapsuleShape2D_0estd")
+metadata/_edit_lock_ = true
+
+[node name="ExploDetector" type="Area2D" parent="." unique_id=694873029]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ExploDetector" unique_id=651287331]
+visible = false
+position = Vector2(1.666667, 18.333328)
+shape = SubResource("RectangleShape2D_b0fq4")
+metadata/_edit_lock_ = true
+
+[node name="RepairDetector" type="Area2D" parent="." unique_id=1461042685]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RepairDetector" unique_id=1073911498]
+visible = false
+position = Vector2(0, 28.000002)
+shape = SubResource("RectangleShape2D_0mhsv")
+metadata/_edit_lock_ = true
+
+[node name="PlacementChecker" type="Area2D" parent="." unique_id=1179817676]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlacementChecker" unique_id=1238029824]
+visible = false
+position = Vector2(0, 72)
+shape = SubResource("CircleShape2D_b1bea")
+metadata/_edit_lock_ = true
+
+[node name="destroyed_fx" type="AudioStreamPlayer" parent="." unique_id=435851786]
+stream = ExtResource("6_0mhsv")
+volume_db = -5.0
+pitch_scale = 1.5
+
+[node name="construct_fx" type="AudioStreamPlayer" parent="." unique_id=245990052]
+stream = ExtResource("7_b1bea")
+volume_db = 5.0
+pitch_scale = 2.5
+
+[node name="place_fx" type="AudioStreamPlayer" parent="." unique_id=918899356]
+stream = ExtResource("8_nicto")
+volume_db = -5.0
+
+[node name="drop_fx" type="AudioStreamPlayer" parent="." unique_id=2108807227]
+stream = ExtResource("9_3qlh3")
+volume_db = -5.0
+
+[node name="upgrade" type="Button" parent="." unique_id=529046933]
+process_mode = 3
+modulate = Color(1, 1, 1, 0.78431374)
+self_modulate = Color(0, 1, 0, 1)
+z_index = 5
+offset_left = -62.000004
+offset_top = -222.0
+offset_right = 115.14285
+offset_bottom = -81.714294
+scale = Vector2(0.7, 0.7)
+theme_override_styles/normal = ExtResource("10_dr6g5")
+theme_override_styles/pressed = ExtResource("10_dr6g5")
+theme_override_styles/hover = ExtResource("10_dr6g5")
+theme_override_styles/disabled = ExtResource("10_dr6g5")
+theme_override_styles/focus = ExtResource("10_dr6g5")
+icon = ExtResource("11_sjrn0")
+flat = true
+icon_alignment = 1
+
+[node name="updater" type="Node2D" parent="." unique_id=346024896]
+visible = false
+z_index = 15
+position = Vector2(-762, -305)
+scale = Vector2(2, 2)
+
+[node name="tile" type="TileMapLayer" parent="updater" unique_id=692295407]
+modulate = Color(1, 1, 1, 0.78431374)
+z_index = 10
+tile_map_data = PackedByteArray("AAACAPz/AQAAAAAAAAADAPz/AQACAAAAAAAEAPz/AQACAAAAAAAFAPz/AQACAAAAAAAGAPz/AQACAAAAAAAHAPz/AQACAAAAAAAIAPz/AQACAAAAAAACAP3/AQAAAAIAAAACAP7/AQAAAAIAAAACAP//AQAAAAIAAAADAP3/AQACAAIAAAAEAP3/AQACAAIAAAAFAP3/AQACAAIAAAAGAP3/AQACAAIAAAAHAP3/AQACAAIAAAAIAP3/AQACAAIAAAADAP//AQACAAIAAAADAP7/AQACAAIAAAAEAP7/AQACAAIAAAAFAP7/AQACAAIAAAAGAP7/AQACAAIAAAAHAP7/AQACAAIAAAAIAP7/AQACAAIAAAAEAP//AQACAAIAAAAFAP//AQACAAIAAAAGAP//AQACAAIAAAAHAP//AQACAAIAAAAIAP//AQACAAIAAAAJAP3/AQAEAAIAAAAJAP7/AQAEAAIAAAAJAAAAAQAEAAQAAAAJAP//AQAEAAIAAAAIAAAAAQACAAQAAAAHAAAAAQACAAQAAAAGAAAAAQACAAQAAAAFAAAAAQACAAQAAAAEAAAAAQACAAQAAAADAAAAAQACAAQAAAACAAAAAQAAAAQAAAAJAPz/AQAEAAAAAAA=")
+tile_set = SubResource("TileSet_2y2t5")
+metadata/_edit_lock_ = true
+
+[node name="health_up" type="Label" parent="updater" unique_id=1816987333]
+z_index = 10
+offset_left = 192.0
+offset_top = -192.00002
+offset_right = 384.0
+offset_bottom = -135.00002
+scale = Vector2(0.7, 0.7)
+theme_override_colors/font_color = Color(0.9372549, 0.88235295, 0.67058825, 1)
+theme_override_colors/font_outline_color = Color(0.21806103, 0.21806103, 0.21806103, 1)
+theme_override_constants/outline_size = 10
+theme_override_fonts/font = ExtResource("13_eor8d")
+theme_override_font_sizes/font_size = 40
+text = "health :"
+vertical_alignment = 1
+
+[node name="upgrade_health" type="Button" parent="updater/health_up" unique_id=1960716271]
+process_mode = 3
+modulate = Color(1, 1, 1, 0.78431374)
+self_modulate = Color(0, 1, 0, 1)
+z_index = 10
+layout_mode = 0
+offset_left = 382.85724
+offset_top = 11.428585
+offset_right = 510.8572
+offset_bottom = 75.42859
+theme_override_styles/normal = ExtResource("10_dr6g5")
+theme_override_styles/pressed = ExtResource("10_dr6g5")
+theme_override_styles/hover = ExtResource("10_dr6g5")
+theme_override_styles/disabled = ExtResource("10_dr6g5")
+theme_override_styles/focus = ExtResource("10_dr6g5")
+flat = true
+autowrap_mode = 3
+expand_icon = true
+
+[node name="Label" type="Label" parent="updater/health_up/upgrade_health" unique_id=537537135]
+z_index = 10
+layout_mode = 0
+offset_left = 21.0
+offset_top = 17.0
+offset_right = 178.0
+offset_bottom = 81.0
+scale = Vector2(0.5, 0.5)
+theme_override_colors/font_outline_color = Color(0.21806103, 0.21806103, 0.21806103, 1)
+theme_override_constants/outline_size = 10
+theme_override_fonts/font = ExtResource("13_eor8d")
+theme_override_font_sizes/font_size = 40
+text = "upgrade"
+horizontal_alignment = 1
+vertical_alignment = 1
+metadata/_edit_lock_ = true
+
+[node name="repair time_up" type="Label" parent="updater" unique_id=406408876]
+z_index = 10
+offset_left = 191.5
+offset_top = -129.5
+offset_right = 418.5
+offset_bottom = -72.5
+scale = Vector2(0.7, 0.7)
+theme_override_colors/font_color = Color(0.9372549, 0.88235295, 0.67058825, 1)
+theme_override_colors/font_outline_color = Color(0.21806103, 0.21806103, 0.21806103, 1)
+theme_override_constants/outline_size = 10
+theme_override_fonts/font = ExtResource("13_eor8d")
+theme_override_font_sizes/font_size = 40
+text = "repair time :"
+vertical_alignment = 1
+
+[node name="upgrade_repairtime" type="Button" parent="updater/repair time_up" unique_id=1425803874]
+process_mode = 3
+modulate = Color(1, 1, 1, 0.78431374)
+self_modulate = Color(0, 1, 0, 1)
+z_index = 10
+layout_mode = 0
+offset_left = 382.85712
+offset_top = 15.714264
+offset_right = 510.8571
+offset_bottom = 79.714264
+theme_override_styles/normal = ExtResource("10_dr6g5")
+theme_override_styles/pressed = ExtResource("10_dr6g5")
+theme_override_styles/hover = ExtResource("10_dr6g5")
+theme_override_styles/disabled = ExtResource("10_dr6g5")
+theme_override_styles/focus = ExtResource("10_dr6g5")
+flat = true
+autowrap_mode = 3
+expand_icon = true
+
+[node name="Label" type="Label" parent="updater/repair time_up/upgrade_repairtime" unique_id=1830060342]
+z_index = 10
+layout_mode = 0
+offset_left = 21.0
+offset_top = 17.0
+offset_right = 178.0
+offset_bottom = 81.0
+scale = Vector2(0.5, 0.5)
+theme_override_colors/font_outline_color = Color(0.21806103, 0.21806103, 0.21806103, 1)
+theme_override_constants/outline_size = 10
+theme_override_fonts/font = ExtResource("13_eor8d")
+theme_override_font_sizes/font_size = 40
+text = "upgrade"
+horizontal_alignment = 1
+vertical_alignment = 1
+metadata/_edit_lock_ = true
+
+[node name="construction time_up" type="Label" parent="updater" unique_id=1529899431]
+z_index = 10
+offset_left = 192.0
+offset_top = -65.0
+offset_right = 568.0
+offset_bottom = -8.0
+scale = Vector2(0.7, 0.7)
+theme_override_colors/font_color = Color(0.9372549, 0.88235295, 0.67058825, 1)
+theme_override_colors/font_outline_color = Color(0.21806103, 0.21806103, 0.21806103, 1)
+theme_override_constants/outline_size = 10
+theme_override_fonts/font = ExtResource("13_eor8d")
+theme_override_font_sizes/font_size = 40
+text = "construction time :"
+vertical_alignment = 1
+
+[node name="upgrade_constructiontime" type="Button" parent="updater/construction time_up" unique_id=1314021163]
+process_mode = 3
+modulate = Color(1, 1, 1, 0.78431374)
+self_modulate = Color(0, 1, 0, 1)
+z_index = 10
+layout_mode = 0
+offset_left = 382.85703
+offset_top = 2.8571472
+offset_right = 510.857
+offset_bottom = 66.85715
+theme_override_styles/normal = ExtResource("10_dr6g5")
+theme_override_styles/pressed = ExtResource("10_dr6g5")
+theme_override_styles/hover = ExtResource("10_dr6g5")
+theme_override_styles/disabled = ExtResource("10_dr6g5")
+theme_override_styles/focus = ExtResource("10_dr6g5")
+flat = true
+autowrap_mode = 3
+expand_icon = true
+
+[node name="Label" type="Label" parent="updater/construction time_up/upgrade_constructiontime" unique_id=626233367]
+z_index = 10
+layout_mode = 0
+offset_left = 21.0
+offset_top = 17.0
+offset_right = 178.0
+offset_bottom = 81.0
+scale = Vector2(0.5, 0.5)
+theme_override_colors/font_outline_color = Color(0.21806103, 0.21806103, 0.21806103, 1)
+theme_override_constants/outline_size = 10
+theme_override_fonts/font = ExtResource("13_eor8d")
+theme_override_font_sizes/font_size = 40
+text = "upgrade"
+horizontal_alignment = 1
+vertical_alignment = 1
+metadata/_edit_lock_ = true
+
+[node name="hider" type="Timer" parent="." unique_id=1507084404]
+wait_time = 2.5
+autostart = true
+
+[connection signal="area_entered" from="ExploDetector" to="." method="_on_explo_detector_area_entered"]
+[connection signal="area_entered" from="RepairDetector" to="." method="_on_repair_detector_area_entered"]
+[connection signal="area_entered" from="PlacementChecker" to="." method="_on_placement_checker_area_entered"]
+[connection signal="area_exited" from="PlacementChecker" to="." method="_on_placement_checker_area_exited"]
+[connection signal="body_entered" from="PlacementChecker" to="." method="_on_placement_checker_body_entered"]
+[connection signal="body_exited" from="PlacementChecker" to="." method="_on_placement_checker_body_exited"]
+[connection signal="pressed" from="upgrade" to="." method="_on_upgrade_pressed"]
+[connection signal="timeout" from="hider" to="." method="_on_hider_timeout"]

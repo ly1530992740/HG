@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://1mheuetnqnuo"
+path="res://.godot/imported/level starter.mp3-3e8ca2f61d127ab135b87dd4a9d85e23.mp3str"
+
+[deps]
+
+source_file="res://voice overs/level starter.mp3"
+dest_files=["res://.godot/imported/level starter.mp3-3e8ca2f61d127ab135b87dd4a9d85e23.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

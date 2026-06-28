@@ -1,0 +1,159 @@
+[gd_scene load_steps=21 format=3 uid="uid://6amalcha3e5s"]
+
+[ext_resource type="Script" uid="uid://cnuahip03cm11" path="res://Materiels/trees/tree.gd" id="1_kk8bk"]
+[ext_resource type="Texture2D" uid="uid://rfyprjh8kahd" path="res://Textures/new/Resources/Wood/Trees/Stump 2.png" id="2_4hvwo"]
+[ext_resource type="Texture2D" uid="uid://82dju51hqy10" path="res://Textures/new/Resources/Wood/Trees/Tree2.png" id="3_kfurk"]
+[ext_resource type="AudioStream" uid="uid://fv3eiwrsr2a6" path="res://Audio/tree-impact-sound-sfx.mp3" id="4_kfurk"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ahlxm"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(0, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_42g4u"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(384, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_r4un2"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(768, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_78li7"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(1344, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_k3gsn"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(0, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8a08r"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(192, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_p4p64"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(384, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sah0n"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(576, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3qid2"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(768, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_otd3m"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(960, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tt4iv"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(1152, 0, 192, 256)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xbi2m"]
+atlas = ExtResource("3_kfurk")
+region = Rect2(1344, 0, 192, 256)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_b0elb"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_4hvwo")
+}],
+"loop": true,
+"name": &"chopped",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ahlxm")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_42g4u")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_r4un2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_78li7")
+}],
+"loop": true,
+"name": &"chopping",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_k3gsn")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8a08r")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_p4p64")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sah0n")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3qid2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_otd3m")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_tt4iv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_xbi2m")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 7.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_21lfk"]
+radius = 15.0
+height = 56.0
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_tf48w"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_4hvwo"]
+radius = 36.0
+height = 82.0
+
+[node name="tree" type="StaticBody2D" unique_id=1417836211 groups=["block_building", "trees"]]
+z_index = 1
+script = ExtResource("1_kk8bk")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1144608368]
+sprite_frames = SubResource("SpriteFrames_b0elb")
+animation = &"idle"
+autoplay = "idle"
+frame_progress = 0.019651484
+metadata/_edit_lock_ = true
+
+[node name="body" type="CollisionShape2D" parent="." unique_id=1290406062]
+visible = false
+position = Vector2(0, 86)
+shape = SubResource("CapsuleShape2D_21lfk")
+metadata/_edit_lock_ = true
+
+[node name="chopped" type="CollisionShape2D" parent="." unique_id=905214903]
+visible = false
+position = Vector2(1, 97)
+shape = SubResource("CapsuleShape2D_tf48w")
+metadata/_edit_lock_ = true
+
+[node name="tree_trunk" type="Area2D" parent="." unique_id=788754757 groups=["trees"]]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="tree_trunk" unique_id=21760164]
+visible = false
+position = Vector2(0, 86)
+shape = SubResource("CapsuleShape2D_4hvwo")
+debug_color = Color(0.66399723, 0.51185244, 0.08247767, 0.41960785)
+
+[node name="cut_audio" type="AudioStreamPlayer" parent="." unique_id=1226748456]
+stream = ExtResource("4_kfurk")
+volume_db = -10.0
+
+[connection signal="area_entered" from="tree_trunk" to="." method="_on_tree_trunk_area_entered"]
+[connection signal="body_entered" from="tree_trunk" to="." method="_on_tree_trunk_body_entered"]

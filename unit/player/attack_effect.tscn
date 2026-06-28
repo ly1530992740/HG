@@ -1,0 +1,48 @@
+[gd_scene load_steps=8 format=3 uid="uid://cxl35erpg6w3g"]
+
+[ext_resource type="Texture2D" uid="uid://dyqdfpwhahnsm" path="res://Textures/Effects/attack effect/hit_effect_0001.png" id="1_4wn8u"]
+[ext_resource type="Texture2D" uid="uid://b00pdhw71idjo" path="res://Textures/Effects/attack effect/hit_effect_0002.png" id="2_n2m7n"]
+[ext_resource type="Texture2D" uid="uid://f455v6kcuh4s" path="res://Textures/Effects/attack effect/hit_effect_0003.png" id="3_e4eog"]
+[ext_resource type="Texture2D" uid="uid://b7maomquj325l" path="res://Textures/Effects/attack effect/hit_effect_0004.png" id="4_d3ucl"]
+[ext_resource type="Script" uid="uid://cv656xvdg2mpp" path="res://unit/player/attack_effect.gd" id="5_n2m7n"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_e6ly1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_4wn8u")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_n2m7n")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_e4eog")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_d3ucl")
+}],
+"loop": false,
+"name": &"default",
+"speed": 15.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_my2oa"]
+radius = 89.005615
+
+[node name="attack effect" type="AnimatedSprite2D" unique_id=1294936258]
+self_modulate = Color(1, 1, 1, 0.003921569)
+sprite_frames = SubResource("SpriteFrames_e6ly1")
+autoplay = "default"
+frame = 3
+frame_progress = 1.0
+script = ExtResource("5_n2m7n")
+
+[node name="attack effect" type="Area2D" parent="." unique_id=1184736151 groups=["attackeffect"]]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="attack effect" unique_id=1378895569]
+visible = false
+shape = SubResource("CircleShape2D_my2oa")
+metadata/_edit_lock_ = true
+
+[connection signal="animation_finished" from="." to="." method="_on_animation_finished"]
+[connection signal="body_entered" from="attack effect" to="." method="_on_attack_effect_body_entered"]

@@ -1,0 +1,126 @@
+[gd_scene load_steps=16 format=3 uid="uid://cqveo5vd4p27y"]
+
+[ext_resource type="Script" uid="uid://blfkkwytl0du3" path="res://buildings/Houses/house_tuto.gd" id="1_wf3nq"]
+[ext_resource type="Texture2D" uid="uid://x07ancqdk8ad" path="res://Textures/Factions/Knights/Buildings/House/House_Construction.png" id="2_xvx8i"]
+[ext_resource type="Texture2D" uid="uid://bpqjm312laine" path="res://Textures/Factions/Knights/Buildings/House/House_Destroyed.png" id="3_iooj2"]
+[ext_resource type="Texture2D" uid="uid://b7pqqmespu26t" path="res://Textures/Buildings/Black Buildings/House1.png" id="4_7jkfi"]
+[ext_resource type="Script" uid="uid://qnqmu5lxoikl" path="res://buildings/Houses/anim1.gd" id="5_m4iim"]
+[ext_resource type="AudioStream" uid="uid://dawal2upgad7n" path="res://Audio/punch-a-rock.mp3" id="6_6ip8r"]
+[ext_resource type="AudioStream" uid="uid://dwynohts2b61m" path="res://Audio/hammer.mp3" id="7_ndpul"]
+[ext_resource type="AudioStream" uid="uid://cd4p71kxycgdj" path="res://Audio/placement sfx.mp3" id="8_1dy6e"]
+[ext_resource type="AudioStream" uid="uid://strecyw63cgi" path="res://Audio/wooden-drop.mp3" id="9_a2l8q"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_bfkp7"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_xvx8i")
+}],
+"loop": false,
+"name": &"construct",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_iooj2")
+}],
+"loop": true,
+"name": &"destroyed",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("4_7jkfi")
+}],
+"loop": false,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_5lfvc"]
+radius = 41.0
+height = 122.0
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_bhx3p"]
+radius = 45.0
+height = 140.0
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_713kd"]
+radius = 75.0
+height = 195.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_bhx3p"]
+radius = 150.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_713kd"]
+radius = 43.46135
+
+[node name="house" type="StaticBody2D" unique_id=68796875 groups=["block_building", "building", "safehouse"]]
+texture_filter = 1
+input_pickable = true
+script = ExtResource("1_wf3nq")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=303652853]
+sprite_frames = SubResource("SpriteFrames_bfkp7")
+animation = &"idle"
+autoplay = "construct"
+script = ExtResource("5_m4iim")
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1334465061]
+visible = false
+position = Vector2(1, 7)
+shape = SubResource("CapsuleShape2D_5lfvc")
+metadata/_edit_lock_ = true
+
+[node name="Marker2D" type="Marker2D" parent="." unique_id=4968274]
+position = Vector2(0, 117)
+
+[node name="ExploDetector" type="Area2D" parent="." unique_id=317171297]
+visible = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ExploDetector" unique_id=922440273]
+shape = SubResource("CapsuleShape2D_bhx3p")
+metadata/_edit_lock_ = true
+
+[node name="RepairDetector" type="Area2D" parent="." unique_id=1234485529]
+visible = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RepairDetector" unique_id=1721902476]
+shape = SubResource("CapsuleShape2D_713kd")
+metadata/_edit_lock_ = true
+
+[node name="safe" type="Area2D" parent="." unique_id=1909777686 groups=["safehouse"]]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="safe" unique_id=936621428]
+visible = false
+shape = SubResource("CircleShape2D_bhx3p")
+debug_color = Color(1, 1, 1, 0.41960785)
+metadata/_edit_lock_ = true
+
+[node name="PlacementChecker" type="Area2D" parent="." unique_id=488385000]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlacementChecker" unique_id=1731479271]
+visible = false
+position = Vector2(1.1920929e-07, 0)
+shape = SubResource("CircleShape2D_713kd")
+metadata/_edit_lock_ = true
+
+[node name="destroyed_fx" type="AudioStreamPlayer" parent="." unique_id=227448126]
+stream = ExtResource("6_6ip8r")
+volume_db = -30.0
+pitch_scale = 1.5
+
+[node name="construct_fx" type="AudioStreamPlayer" parent="." unique_id=476053062]
+stream = ExtResource("7_ndpul")
+volume_db = -5.0
+
+[node name="place_fx" type="AudioStreamPlayer" parent="." unique_id=66449892]
+stream = ExtResource("8_1dy6e")
+volume_db = -15.0
+
+[node name="drop_fx" type="AudioStreamPlayer" parent="." unique_id=196763987]
+stream = ExtResource("9_a2l8q")
+volume_db = -12.0
+
+[connection signal="area_entered" from="RepairDetector" to="." method="_on_repair_detector_area_entered"]

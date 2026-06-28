@@ -1,0 +1,261 @@
+[gd_scene format=3 uid="uid://dvba1u7yimo31"]
+
+[ext_resource type="Texture2D" uid="uid://dk6bunfn3s0v2" path="res://Textures/Factions/Goblins/Troops/Barrel/Red/Barrel_Red.png" id="1_4ba7t"]
+[ext_resource type="Script" uid="uid://dfviyyplu3q2i" path="res://unit/goblins/goblin barrel.gd" id="1_hggns"]
+[ext_resource type="AudioStream" uid="uid://du3e367ys537c" path="res://Audio/swing-whoosh-2.mp3" id="4_jnj57"]
+[ext_resource type="AudioStream" uid="uid://b4fn1adpqy8gp" path="res://Audio/shield impact.mp3" id="4_wg4wi"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4a3t1"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(0, 640, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5cjqo"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(128, 640, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_65rug"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(256, 640, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hggns"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(0, 384, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_b6aep"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(128, 384, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3tjcn"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(256, 384, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_83ebl"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(384, 384, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_if3eg"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(512, 384, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_n44tw"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(640, 384, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_iaadp"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(0, 128, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0tgk0"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(128, 128, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nhiwi"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(256, 128, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sfgj1"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(384, 128, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fj3nl"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(512, 128, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_7s5tb"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(640, 128, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_obf4m"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(0, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_t71ki"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(0, 512, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dwwau"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(128, 512, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tpetq"]
+atlas = ExtResource("1_4ba7t")
+region = Rect2(256, 512, 128, 128)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_4a3t1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4a3t1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5cjqo")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_65rug")
+}],
+"loop": false,
+"name": &"attack",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hggns")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_b6aep")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3tjcn")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_83ebl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_if3eg")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_n44tw")
+}],
+"loop": true,
+"name": &"hide",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_iaadp")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_0tgk0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nhiwi")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sfgj1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fj3nl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_7s5tb")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_obf4m")
+}],
+"loop": true,
+"name": &"off",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_t71ki")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dwwau")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_tpetq")
+}],
+"loop": true,
+"name": &"run",
+"speed": 10.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_5cjqo"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_65rug"]
+radius = 27.180424
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hggns"]
+radius = 62.85714
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_moobe"]
+radius = 141.60881
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_6dxgl"]
+radius = 15.0
+
+[node name="Goblin barrel" type="CharacterBody2D" unique_id=1326828298 groups=["block_building", "goblin"]]
+scale = Vector2(0.7, 0.7)
+script = ExtResource("1_hggns")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1630397953]
+sprite_frames = SubResource("SpriteFrames_4a3t1")
+animation = &"off"
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=2123605864]
+visible = false
+position = Vector2(0, 7.1428566)
+shape = SubResource("CircleShape2D_5cjqo")
+
+[node name="hurtbox" type="Area2D" parent="." unique_id=711240326]
+position = Vector2(0, 5.714287)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="hurtbox" unique_id=1419661754]
+visible = false
+shape = SubResource("CircleShape2D_65rug")
+metadata/_edit_lock_ = true
+
+[node name="detect_area" type="Area2D" parent="." unique_id=747640548]
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="detect_area" unique_id=1029074429]
+visible = false
+position = Vector2(0, 2.8571434)
+shape = SubResource("CircleShape2D_hggns")
+debug_color = Color(0, 0.64943075, 0.15635538, 0.41960785)
+metadata/_edit_lock_ = true
+
+[node name="NavigationAgent2D" type="NavigationAgent2D" parent="." unique_id=651606094]
+target_desired_distance = 60.0
+simplify_path = true
+simplify_epsilon = 10.0
+path_return_max_length = 10240.0
+path_return_max_radius = 10240.0
+avoidance_enabled = true
+radius = 50.0
+neighbor_distance = 600.0
+time_horizon_agents = 10.0
+time_horizon_obstacles = 10.0
+max_speed = 100000.0
+
+[node name="hurt" type="Timer" parent="." unique_id=1758430501]
+
+[node name="flash" type="Timer" parent="." unique_id=1731512373]
+
+[node name="targeter_area" type="Area2D" parent="." unique_id=1170485459]
+
+[node name="shape" type="CollisionShape2D" parent="targeter_area" unique_id=961743640]
+visible = false
+shape = SubResource("CircleShape2D_moobe")
+metadata/_edit_lock_ = true
+
+[node name="PredictCast" type="ShapeCast2D" parent="." unique_id=1806537431]
+visible = false
+shape = SubResource("CircleShape2D_6dxgl")
+target_position = Vector2(20, 0)
+max_results = 1
+
+[node name="sound fx" type="Node2D" parent="." unique_id=1590618979]
+
+[node name="throw_audio" type="AudioStreamPlayer" parent="sound fx" unique_id=950756362]
+stream = ExtResource("4_jnj57")
+volume_db = -5.0
+
+[node name="hit_attackfx" type="AudioStreamPlayer" parent="sound fx" unique_id=1946357367]
+stream = ExtResource("4_wg4wi")
+volume_db = -10.0
+
+[connection signal="area_entered" from="hurtbox" to="." method="_on_hurtbox_area_entered"]
+[connection signal="body_entered" from="detect_area" to="." method="_on_detect_area_body_entered"]
+[connection signal="body_exited" from="detect_area" to="." method="_on_detect_area_body_exited"]
+[connection signal="timeout" from="hurt" to="." method="_on_hurt_timeout"]
+[connection signal="timeout" from="flash" to="." method="_on_flash_timeout"]
+[connection signal="body_entered" from="targeter_area" to="." method="_on_targeter_area_body_entered"]
+[connection signal="body_exited" from="targeter_area" to="." method="_on_targeter_area_body_exited"]

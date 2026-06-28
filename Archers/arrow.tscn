@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://lgf0nkwtym83"]
+
+[ext_resource type="Script" uid="uid://bui1bkh6bgrij" path="res://Archers/arrow.gd" id="1_bw8sv"]
+[ext_resource type="Texture2D" uid="uid://c2y2shvf0w8h" path="res://Textures/Units/Black Units/Archer/Arrow.png" id="2_3aci3"]
+[ext_resource type="Texture2D" uid="uid://cr8yfk6abpwmu" path="res://Textures/Factions/Knights/Troops/Archer/Arrow/Arrow.png" id="2_nmklb"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8h0tq"]
+atlas = ExtResource("2_nmklb")
+region = Rect2(0, 64, 64, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_nvao4"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8h0tq")
+}],
+"loop": true,
+"name": &"down",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_3aci3")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_2s8v8"]
+radius = 1.0
+
+[node name="arrow" type="Area2D" unique_id=1257145156 groups=["arrow"]]
+script = ExtResource("1_bw8sv")
+
+[node name="Anim" type="AnimatedSprite2D" parent="." unique_id=1888064793]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_nvao4")
+animation = &"down"
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1675493022]
+visible = false
+position = Vector2(-5, 3)
+rotation = 1.5708
+shape = SubResource("CapsuleShape2D_2s8v8")
+
+[node name="Line2D" type="Line2D" parent="." unique_id=526238631]
+width = 4.0
+texture_mode = 2
+joint_mode = 2
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]

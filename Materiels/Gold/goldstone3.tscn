@@ -1,0 +1,63 @@
+[gd_scene format=3 uid="uid://cqmslac5k7krs"]
+
+[ext_resource type="Script" uid="uid://c14dfu2vh7rr4" path="res://Materiels/Gold/gold.gd" id="1_eomjc"]
+[ext_resource type="Texture2D" uid="uid://bp3alv3tci418" path="res://Textures/new/Resources/Gold/Gold Stones/Gold Stone 3.png" id="2_eomjc"]
+[ext_resource type="Texture2D" uid="uid://8w37d6iw21rr" path="res://Textures/Resources/Resources/G_Spawn.png" id="3_a3ubf"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_wga6p"]
+radius = 12.7499
+height = 69.4132
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6ilfh"]
+atlas = ExtResource("3_a3ubf")
+region = Rect2(0, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_60rmj"]
+atlas = ExtResource("3_a3ubf")
+region = Rect2(128, 0, 128, 128)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_slqx2"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_eomjc")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6ilfh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_60rmj")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_eomjc")
+}],
+"loop": false,
+"name": &"sp",
+"speed": 10.0
+}]
+
+[node name="gold" type="Area2D" unique_id=1328391548 groups=["resource"]]
+scale = Vector2(0.6, 0.6)
+script = ExtResource("1_eomjc")
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=109499995]
+visible = false
+position = Vector2(1, 22)
+rotation = -1.91288
+shape = SubResource("CapsuleShape2D_wga6p")
+metadata/_edit_lock_ = true
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=973755483]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_slqx2")
+animation = &"sp"
+autoplay = "sp"
+metadata/_edit_lock_ = true
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]

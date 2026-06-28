@@ -1,0 +1,64 @@
+[gd_scene format=3 uid="uid://hel0yd1a6bpa"]
+
+[ext_resource type="Script" uid="uid://bdtbk4rbc18e2" path="res://Materiels/TNT/tnt.gd" id="1_buhlv"]
+[ext_resource type="Texture2D" uid="uid://uor2abdnjiq0" path="res://Textures/Factions/Goblins/Troops/TNT/Dynamite/Dynamite.png" id="1_k81f3"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_buhlv"]
+atlas = ExtResource("1_k81f3")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_d6djr"]
+atlas = ExtResource("1_k81f3")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bpif0"]
+atlas = ExtResource("1_k81f3")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_baqum"]
+atlas = ExtResource("1_k81f3")
+region = Rect2(192, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_80llx"]
+atlas = ExtResource("1_k81f3")
+region = Rect2(256, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_kdgrm"]
+atlas = ExtResource("1_k81f3")
+region = Rect2(320, 0, 64, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_3iwmn"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_buhlv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_d6djr")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_bpif0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_baqum")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_80llx")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_kdgrm")
+}],
+"loop": true,
+"name": &"default",
+"speed": 10.0
+}]
+
+[node name="tnt" type="Node2D" unique_id=125470808]
+z_index = 10
+scale = Vector2(0.8, 0.8)
+script = ExtResource("1_buhlv")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=653954035]
+sprite_frames = SubResource("SpriteFrames_3iwmn")
+autoplay = "default"
+frame_progress = 0.6861826

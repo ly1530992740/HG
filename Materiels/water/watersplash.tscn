@@ -1,0 +1,87 @@
+[gd_scene format=3 uid="uid://dhcgg0wxci7wj"]
+
+[ext_resource type="Texture2D" uid="uid://bxh7os4o8wpyf" path="res://Textures/new/Particle FX/Water Splash.png" id="1_wjpjx"]
+[ext_resource type="Script" uid="uid://btsvqvw74wc4" path="res://Materiels/water/watersplash.gd" id="2_64ehl"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_64ehl"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_py86a"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(192, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tp41l"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ecwlj"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(576, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ybggt"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(768, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jqbyh"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(960, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_g7bq8"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(1152, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_q5q1l"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(1344, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_urluj"]
+atlas = ExtResource("1_wjpjx")
+region = Rect2(1536, 0, 192, 192)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_axff1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_64ehl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_py86a")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_tp41l")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ecwlj")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ybggt")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jqbyh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_g7bq8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_q5q1l")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_urluj")
+}],
+"loop": false,
+"name": &"sp",
+"speed": 10.0
+}]
+
+[node name="watersplash" type="AnimatedSprite2D" unique_id=1116283782]
+sprite_frames = SubResource("SpriteFrames_axff1")
+animation = &"sp"
+autoplay = "sp"
+frame = 8
+frame_progress = 1.0
+script = ExtResource("2_64ehl")
+
+[node name="splash" type="AudioStreamPlayer" parent="." unique_id=181655393]
+
+[connection signal="animation_finished" from="." to="." method="_on_animation_finished"]

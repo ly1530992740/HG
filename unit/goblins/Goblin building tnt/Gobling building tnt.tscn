@@ -1,0 +1,77 @@
+[gd_scene format=3 uid="uid://bc6cfw68ji3et"]
+
+[ext_resource type="Script" uid="uid://cml48sy40p1as" path="res://unit/goblins/Goblin building tnt/gobling_building_tnt.gd" id="1_tgxtr"]
+[ext_resource type="PackedScene" uid="uid://33s6yer2wod7" path="res://unit/goblins/goblin tnt.tscn" id="2_2xwpi"]
+[ext_resource type="PackedScene" uid="uid://kttq8bco8th8" path="res://Materiels/fire/fire.tscn" id="2_ok8lk"]
+[ext_resource type="Texture2D" uid="uid://dav6rrbyd34ky" path="res://Textures/Factions/Goblins/Buildings/Wood_House/Goblin_House_Destroyed.png" id="2_xcnab"]
+[ext_resource type="Texture2D" uid="uid://oi5ne8rf8xfc" path="res://Textures/Factions/Goblins/Buildings/Wood_House/Goblin_House.png" id="3_8jj7a"]
+[ext_resource type="AudioStream" uid="uid://b4fn1adpqy8gp" path="res://Audio/shield impact.mp3" id="4_djan5"]
+[ext_resource type="AudioStream" uid="uid://fv3eiwrsr2a6" path="res://Audio/tree-impact-sound-sfx.mp3" id="5_ok8lk"]
+[ext_resource type="AudioStream" uid="uid://dawal2upgad7n" path="res://Audio/punch-a-rock.mp3" id="6_2xwpi"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_dgplc"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_xcnab")
+}],
+"loop": false,
+"name": &"destroy",
+"speed": 2.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_8jj7a")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_dgplc"]
+radius = 64.0
+height = 160.0
+
+[node name="Goblin house tnt" type="StaticBody2D" unique_id=999118619 groups=["block_building", "goblinbuildings"]]
+script = ExtResource("1_tgxtr")
+GOBLIN_SCENE_BARREL = ExtResource("2_2xwpi")
+FIRE_SCENE = ExtResource("2_ok8lk")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=134340610]
+sprite_frames = SubResource("SpriteFrames_dgplc")
+animation = &"idle"
+autoplay = "idle"
+metadata/_edit_lock_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=763163938]
+visible = false
+shape = SubResource("CapsuleShape2D_dgplc")
+metadata/_edit_lock_ = true
+
+[node name="hitbox" type="Area2D" parent="." unique_id=1138306519]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="hitbox" unique_id=1073927977]
+visible = false
+shape = SubResource("CapsuleShape2D_dgplc")
+debug_color = Color(0.9983043, 0, 0.15667439, 0.41960785)
+metadata/_edit_lock_ = true
+
+[node name="Marker barrel1" type="Marker2D" parent="." unique_id=805605422]
+visible = false
+position = Vector2(0, 104)
+
+[node name="hit_swordfx" type="AudioStreamPlayer" parent="." unique_id=229687987]
+stream = ExtResource("4_djan5")
+volume_db = -15.0
+pitch_scale = 1.1
+
+[node name="hit_attackfx" type="AudioStreamPlayer" parent="." unique_id=893210258]
+stream = ExtResource("5_ok8lk")
+volume_db = -12.0
+
+[node name="destroyed_fx" type="AudioStreamPlayer" parent="." unique_id=425033009]
+stream = ExtResource("6_2xwpi")
+volume_db = -15.0
+pitch_scale = 1.5
+
+[connection signal="area_entered" from="hitbox" to="." method="_on_hitbox_area_entered"]

@@ -1,0 +1,126 @@
+[gd_scene load_steps=15 format=3 uid="uid://cthwj5refik7w"]
+
+[ext_resource type="Script" uid="uid://db1seia4atapx" path="res://Materiels/mines/mine2/mine_stone2.gd" id="1_8y186"]
+[ext_resource type="Texture2D" uid="uid://di057tgbjr51w" path="res://Textures/new/Resources/Gold/Gold Stones/Gold Stone 2_Highlight.png" id="1_ueq2h"]
+[ext_resource type="AudioStream" uid="uid://b3crn42chrv2y" path="res://Audio/pickaxe-blow.mp3" id="3_p3unu"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8y186"]
+atlas = ExtResource("1_ueq2h")
+region = Rect2(0, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5422n"]
+atlas = ExtResource("1_ueq2h")
+region = Rect2(128, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_01dnn"]
+atlas = ExtResource("1_ueq2h")
+region = Rect2(256, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4d3bt"]
+atlas = ExtResource("1_ueq2h")
+region = Rect2(384, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6a6v3"]
+atlas = ExtResource("1_ueq2h")
+region = Rect2(512, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_uc52x"]
+atlas = ExtResource("1_ueq2h")
+region = Rect2(640, 0, 128, 128)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_s7nqt"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8y186")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5422n")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_01dnn")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4d3bt")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6a6v3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_uc52x")
+}],
+"loop": true,
+"name": &"default",
+"speed": 10.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ygovw"]
+radius = 16.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_n8ytw"]
+radius = 51.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hgrnb"]
+bg_color = Color(0.6, 0.6, 0.6, 0.0392157)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_p3unu"]
+bg_color = Color(0.9137255, 0.9411765, 0.26666668, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8, 0.8, 0.8, 0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="minestone2" type="StaticBody2D" unique_id=1782066560 groups=["mines"]]
+script = ExtResource("1_8y186")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=1149922703]
+sprite_frames = SubResource("SpriteFrames_s7nqt")
+autoplay = "default"
+frame_progress = 0.6458642
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1221182967]
+visible = false
+shape = SubResource("CircleShape2D_ygovw")
+metadata/_edit_lock_ = true
+
+[node name="mine zone" type="Area2D" parent="." unique_id=1802420230 groups=["mines"]]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="mine zone" unique_id=254861556]
+visible = false
+shape = SubResource("CircleShape2D_n8ytw")
+metadata/_edit_lock_ = true
+
+[node name="Marker2D" type="Marker2D" parent="." unique_id=133525930]
+metadata/_edit_lock_ = true
+
+[node name="health_bar" type="ProgressBar" parent="." unique_id=1898938587]
+z_index = 5
+offset_left = -54.0
+offset_top = -32.0
+offset_right = 56.0
+offset_bottom = -24.857
+theme_override_styles/background = SubResource("StyleBoxFlat_hgrnb")
+theme_override_styles/fill = SubResource("StyleBoxFlat_p3unu")
+max_value = 10.0
+value = 10.0
+show_percentage = false
+metadata/_edit_use_anchors_ = true
+
+[node name="rock_audio" type="AudioStreamPlayer" parent="." unique_id=2074572270]
+stream = ExtResource("3_p3unu")
+
+[connection signal="area_entered" from="mine zone" to="." method="_on_mine_zone_area_entered"]
+[connection signal="body_entered" from="mine zone" to="." method="_on_mine_zone_body_entered"]

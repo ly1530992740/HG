@@ -1,0 +1,77 @@
+[gd_scene load_steps=12 format=3 uid="uid://dk617n3jp82jd"]
+
+[ext_resource type="Texture2D" uid="uid://05vstshxppd" path="res://Textures/new/Particle FX/Explosion_01.png" id="1_8ywo7"]
+[ext_resource type="Script" uid="uid://bos3iri1oj0is" path="res://Materiels/explosion/explosions/explo_1.gd" id="2_t7h8o"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_t7h8o"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2jqkv"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(192, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_kfjww"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_53jjt"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(576, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_a810i"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(768, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fptsn"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(960, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dc534"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(1152, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6s4t1"]
+atlas = ExtResource("1_8ywo7")
+region = Rect2(1344, 0, 192, 192)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_mv8xx"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_t7h8o")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2jqkv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_kfjww")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_53jjt")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_a810i")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fptsn")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dc534")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6s4t1")
+}],
+"loop": false,
+"name": &"default",
+"speed": 10.0
+}]
+
+[node name="explo1" type="AnimatedSprite2D" unique_id=1478603305]
+sprite_frames = SubResource("SpriteFrames_mv8xx")
+autoplay = "default"
+frame = 7
+frame_progress = 1.0
+script = ExtResource("2_t7h8o")
+
+[connection signal="animation_finished" from="." to="." method="_on_animation_finished"]

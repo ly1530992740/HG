@@ -1,0 +1,313 @@
+[gd_scene format=3 uid="uid://bhqvyo5syb6vf"]
+
+[ext_resource type="Script" uid="uid://djt30b7pfhg5u" path="res://unit/Monks/monks.gd" id="1_6vsho"]
+[ext_resource type="Texture2D" uid="uid://bmsupg0y22hdg" path="res://Textures/Units/Red Units/Monk/Idle.png" id="2_6vsho"]
+[ext_resource type="Texture2D" uid="uid://dt37256ghchrw" path="res://Textures/Units/Red Units/Monk/Heal.png" id="3_fsc1q"]
+[ext_resource type="Texture2D" uid="uid://doqbyjct1usca" path="res://Textures/Units/Red Units/Monk/Run.png" id="4_xbdx8"]
+[ext_resource type="Texture2D" uid="uid://ctawlc7fuii42" path="res://Textures/new/UI/Cursors/Cursor_04.png" id="8_k1uhu"]
+[ext_resource type="Script" uid="uid://5mj3esmdhreg" path="res://unit/pawn_/cursor.gd" id="9_2ucic"]
+[ext_resource type="AudioStream" uid="uid://b6n7iidpo3idv" path="res://Audio/single-mouse-click.mp3" id="10_aj8d7"]
+[ext_resource type="AudioStream" uid="uid://cnsu216dj16gd" path="res://Audio/young-man-being-hurt.mp3" id="11_bnmrh"]
+[ext_resource type="AudioStream" uid="uid://dvq1hvvuu3ih5" path="res://Audio/man-death-scream.mp3" id="12_ftcoy"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w6jg3"]
+atlas = ExtResource("2_6vsho")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8f74y"]
+atlas = ExtResource("2_6vsho")
+region = Rect2(192, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_k1uhu"]
+atlas = ExtResource("2_6vsho")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2ucic"]
+atlas = ExtResource("2_6vsho")
+region = Rect2(576, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lw1xe"]
+atlas = ExtResource("2_6vsho")
+region = Rect2(768, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5rsw7"]
+atlas = ExtResource("2_6vsho")
+region = Rect2(960, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_k15ec"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_oaf1i"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(192, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_y478u"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sti4c"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(576, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_aj8d7"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(768, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bnmrh"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(960, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ftcoy"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(1152, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1gv7q"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(1344, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bxgjp"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(1536, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_vjd6b"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(1728, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xaqnp"]
+atlas = ExtResource("3_fsc1q")
+region = Rect2(1920, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e8xbj"]
+atlas = ExtResource("4_xbdx8")
+region = Rect2(0, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_d4hv2"]
+atlas = ExtResource("4_xbdx8")
+region = Rect2(192, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cilox"]
+atlas = ExtResource("4_xbdx8")
+region = Rect2(384, 0, 192, 192)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tqfbr"]
+atlas = ExtResource("4_xbdx8")
+region = Rect2(576, 0, 192, 192)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_sotx5"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_w6jg3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8f74y")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_k1uhu")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2ucic")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lw1xe")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5rsw7")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_k15ec")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_oaf1i")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_y478u")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sti4c")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_aj8d7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_bnmrh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ftcoy")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1gv7q")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_bxgjp")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_vjd6b")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_xaqnp")
+}],
+"loop": true,
+"name": &"repair",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_e8xbj")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_d4hv2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_cilox")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_tqfbr")
+}],
+"loop": true,
+"name": &"run",
+"speed": 10.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_c67b4"]
+radius = 19.0263
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_a6sx2"]
+radius = 150.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_f7nn8"]
+radius = 23.5372
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ckbi7"]
+bg_color = Color(0.6, 0.6, 0.6, 0.0392157)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_63575"]
+bg_color = Color(0.905882, 0.380392, 0.380392, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8, 0.8, 0.8, 0)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="red monk" type="CharacterBody2D" unique_id=577371360 groups=["block_building", "player"]]
+script = ExtResource("1_6vsho")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=31474195]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_sotx5")
+animation = &"idle"
+autoplay = "idle"
+metadata/_edit_lock_ = true
+
+[node name="shape" type="CollisionShape2D" parent="." unique_id=600404778]
+visible = false
+position = Vector2(1, 3)
+shape = SubResource("CircleShape2D_c67b4")
+metadata/_edit_lock_ = true
+
+[node name="dectector zone" type="Area2D" parent="." unique_id=2027674315]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="dectector zone" unique_id=1883722818]
+visible = false
+shape = SubResource("CircleShape2D_a6sx2")
+debug_color = Color(0.494118, 0.576471, 0.239216, 0.266667)
+metadata/_edit_lock_ = true
+
+[node name="hitbox" type="Area2D" parent="." unique_id=751621839]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="hitbox" unique_id=653518328]
+visible = false
+shape = SubResource("CircleShape2D_f7nn8")
+debug_color = Color(0.952413, 0.206507, 0.192456, 0.42)
+metadata/_edit_lock_ = true
+
+[node name="ProgressBar" type="ProgressBar" parent="." unique_id=921622106]
+z_index = 5
+offset_left = -50.0
+offset_top = -44.0
+offset_right = 50.0
+offset_bottom = -34.0
+theme_override_styles/background = SubResource("StyleBoxFlat_ckbi7")
+theme_override_styles/fill = SubResource("StyleBoxFlat_63575")
+max_value = 10.0
+value = 10.0
+show_percentage = false
+metadata/_edit_lock_ = true
+
+[node name="Marker2D" type="Marker2D" parent="." unique_id=638347169]
+z_index = 5
+metadata/_edit_lock_ = true
+
+[node name="Button" type="Button" parent="." unique_id=1018994613]
+process_mode = 3
+modulate = Color(1, 1, 1, 0)
+z_index = 5
+offset_left = -30.0
+offset_top = -27.0
+offset_right = 31.0
+offset_bottom = 27.0
+metadata/_edit_lock_ = true
+
+[node name="UseTimer" type="Timer" parent="." unique_id=1894778993]
+
+[node name="sound fx" type="Node2D" parent="." unique_id=995199776]
+
+[node name="click_audio" type="AudioStreamPlayer" parent="sound fx" unique_id=1931551759]
+stream = ExtResource("10_aj8d7")
+volume_db = -5.0
+
+[node name="death_audio" type="AudioStreamPlayer" parent="sound fx" unique_id=912887600]
+stream = ExtResource("11_bnmrh")
+volume_db = -10.0
+pitch_scale = 1.4
+
+[node name="hit_audio" type="AudioStreamPlayer" parent="sound fx" unique_id=1681352543]
+stream = ExtResource("12_ftcoy")
+volume_db = -5.0
+pitch_scale = 2.0
+max_polyphony = 5
+
+[node name="AudioStreamPlayer4" type="AudioStreamPlayer" parent="sound fx" unique_id=1176361754]
+
+[node name="AudioStreamPlayer5" type="AudioStreamPlayer" parent="sound fx" unique_id=57255655]
+
+[node name="select indicator" type="Label" parent="." unique_id=1712867518]
+modulate = Color(1, 1, 1, 0.5882353)
+z_index = -1
+texture_filter = 1
+offset_left = -69.0
+offset_top = -488.0
+offset_right = 150.0
+offset_bottom = 603.0
+theme_override_colors/font_color = Color(0.36862746, 0.43529412, 0.5254902, 1)
+metadata/_edit_lock_ = true
+
+[node name="Cursor" type="Sprite2D" parent="select indicator" unique_id=792866359]
+modulate = Color(0.90588236, 0.38039216, 0.38039216, 1)
+position = Vector2(69, 507.00006)
+scale = Vector2(0.87500006, 0.625)
+texture = ExtResource("8_k1uhu")
+script = ExtResource("9_2ucic")
+
+[connection signal="area_entered" from="dectector zone" to="." method="_on_dectector_zone_area_entered"]
+[connection signal="area_entered" from="hitbox" to="." method="_on_hitbox_area_entered"]
+[connection signal="pressed" from="Button" to="." method="_on_button_pressed"]
+[connection signal="timeout" from="UseTimer" to="." method="_on_use_timer_timeout"]

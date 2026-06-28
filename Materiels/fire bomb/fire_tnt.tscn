@@ -1,0 +1,78 @@
+[gd_scene load_steps=12 format=3 uid="uid://bms7rqaodmrad"]
+
+[ext_resource type="Script" uid="uid://b05fi4af73ab7" path="res://Materiels/fire bomb/fire_tnt.gd" id="1_ep6j5"]
+[ext_resource type="Texture2D" uid="uid://cpw7awxlefwdm" path="res://Textures/Effects/Fire/Fire.png" id="2_hwu03"]
+[ext_resource type="AudioStream" uid="uid://c5gyr718ooos0" path="res://Audio/fire-crackling.mp3" id="3_2ykl4"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2ykl4"]
+atlas = ExtResource("2_hwu03")
+region = Rect2(0, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_y1ro8"]
+atlas = ExtResource("2_hwu03")
+region = Rect2(128, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lcgba"]
+atlas = ExtResource("2_hwu03")
+region = Rect2(256, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ssjnk"]
+atlas = ExtResource("2_hwu03")
+region = Rect2(384, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_getlu"]
+atlas = ExtResource("2_hwu03")
+region = Rect2(512, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ty324"]
+atlas = ExtResource("2_hwu03")
+region = Rect2(640, 0, 128, 128)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_s2pvo"]
+atlas = ExtResource("2_hwu03")
+region = Rect2(768, 0, 128, 128)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_3iwmn"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2ykl4")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_y1ro8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lcgba")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ssjnk")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_getlu")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ty324")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_s2pvo")
+}],
+"loop": true,
+"name": &"default",
+"speed": 15.0
+}]
+
+[node name="tnt" type="Node2D" unique_id=125470808]
+z_index = 10
+scale = Vector2(0.8, 0.8)
+script = ExtResource("1_ep6j5")
+
+[node name="anim" type="AnimatedSprite2D" parent="." unique_id=653954035]
+scale = Vector2(0.7, 0.7)
+sprite_frames = SubResource("SpriteFrames_3iwmn")
+autoplay = "default"
+frame_progress = 0.26153713
+
+[node name="fire tnt" type="AudioStreamPlayer" parent="." unique_id=414445289]
+stream = ExtResource("3_2ykl4")
+volume_db = -5.0
+pitch_scale = 1.5
