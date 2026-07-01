@@ -1,0 +1,91 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="PackedScene" path="res://unit/pawn_/pawn black.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://unit/goblins/goblin torch.tscn" id="2_enemy"]
+[ext_resource type="Script" path="res://tests/firearm_test/firearm_test_scene.gd" id="3_scene"]
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_test_area"]
+vertices = PackedVector2Array(-820, -460, 820, -460, 820, 460, -820, 460)
+polygons = [PackedInt32Array(0, 1, 2, 3)]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_bound_x"]
+size = Vector2(24, 1120)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_bound_y"]
+size = Vector2(1840, 24)
+
+[node name="FirearmTestScene" type="Node2D"]
+script = ExtResource("3_scene")
+
+[node name="Ground" type="Polygon2D" parent="."]
+z_index = -20
+color = Color(0.22, 0.34, 0.25, 1)
+polygon = PackedVector2Array(-900, -540, 900, -540, 900, 540, -900, 540)
+
+[node name="GroundInner" type="Polygon2D" parent="."]
+z_index = -19
+color = Color(0.28, 0.42, 0.31, 1)
+polygon = PackedVector2Array(-820, -460, 820, -460, 820, 460, -820, 460)
+
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
+navigation_polygon = SubResource("NavigationPolygon_test_area")
+
+[node name="LeftBound" type="StaticBody2D" parent="."]
+position = Vector2(-912, 0)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LeftBound"]
+shape = SubResource("RectangleShape2D_bound_x")
+
+[node name="RightBound" type="StaticBody2D" parent="."]
+position = Vector2(912, 0)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RightBound"]
+shape = SubResource("RectangleShape2D_bound_x")
+
+[node name="TopBound" type="StaticBody2D" parent="."]
+position = Vector2(0, -552)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TopBound"]
+shape = SubResource("RectangleShape2D_bound_y")
+
+[node name="BottomBound" type="StaticBody2D" parent="."]
+position = Vector2(0, 552)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BottomBound"]
+shape = SubResource("RectangleShape2D_bound_y")
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+position = Vector2(-260, 100)
+enable_player_firearm = true
+
+[node name="Enemy" parent="." instance=ExtResource("2_enemy")]
+position = Vector2(290, 90)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="Hud" type="PanelContainer" parent="CanvasLayer"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 404.0
+offset_bottom = 118.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/Hud"]
+offset_left = 7.0
+offset_top = 7.0
+offset_right = 381.0
+offset_bottom = 95.0
+
+[node name="AmmoLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Ammo: -- / --"
+
+[node name="EnemyLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Enemy HP: -- / --"
+
+[node name="StatusLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "Arrow keys move | Mouse aims | F fires | R reloads"

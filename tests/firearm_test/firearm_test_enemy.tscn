@@ -1,0 +1,36 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://tests/firearm_test/firearm_test_enemy.gd" id="1_enemy"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_enemy"]
+radius = 28.0
+
+[node name="FirearmTestEnemy" type="CharacterBody2D" groups=["goblin"]]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1_enemy")
+
+[node name="Body" type="Polygon2D" parent="."]
+color = Color(0.86, 0.22, 0.16, 1)
+polygon = PackedVector2Array(0, -34, 25, -15, 24, 20, 0, 36, -24, 20, -25, -15)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_enemy")
+
+[node name="HealthBar" type="ProgressBar" parent="."]
+offset_left = -36.0
+offset_top = -58.0
+offset_right = 36.0
+offset_bottom = -48.0
+max_value = 6.0
+value = 6.0
+show_percentage = false
+
+[node name="StatusLabel" type="Label" parent="."]
+offset_left = -48.0
+offset_top = 36.0
+offset_right = 48.0
+offset_bottom = 59.0
+theme_override_font_sizes/font_size = 12
+text = "AI  HP 6/6"
+horizontal_alignment = 1

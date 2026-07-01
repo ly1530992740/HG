@@ -2,7 +2,7 @@ extends CharacterBody2D
 # --------------------------------------------------
 # ENUMS
 # --------------------------------------------------
-enum Tool { HAND, HAMMER, PICKAXE, AXE, KNIFE }
+enum Tool { HAND, HAMMER, PICKAXE, AXE, KNIFE, GUN }
 enum State { IDLE, RUN, USE, DEAD }
 
 # --------------------------------------------------
@@ -17,6 +17,11 @@ enum State { IDLE, RUN, USE, DEAD }
 @export var attack_effect_scene := preload("res://unit/player/attack_effect.tscn")
 @export var attack_repair_scene := preload("res://unit/pawn_/repair_effect.tscn")
 @export var skull_scene := preload("res://Materiels/skull/skull.tscn")
+@export var enable_player_firearm := true
+@export var firearm_data: WeaponData
+@export var firearm_muzzle_offset := Vector2(24, -8)
+
+const DEFAULT_PROJECTILE_SCENE := preload("res://weapons/projectile.tscn")
 
 # --------------------------------------------------
 # INPUT CONSTANTS (CLEAN)
@@ -70,6 +75,9 @@ var can_use_tool := true     # Cooldown system
 var life: int
 var knockback_velocity := Vector2.ZERO
 var last_input_dir := Vector2.DOWN
+var firearm_weapon: FirearmWeapon
+var firearm_muzzle: Marker2D
+var firearm_tool_button: Button
 
 # Inventory
 var collected := {
@@ -103,6 +111,8 @@ func _ready() -> void:
 	toolbox_panel.hide()
 	use_timer.wait_time = use_duration
 	use_timer.one_shot = true
+	_setup_firearm()
+	_setup_firearm_tool_button()
 
 # --------------------------------------------------
 # PICKUP RESOURCE FUNCTION
@@ -149,6 +159,23 @@ func _input(event: InputEvent) -> void:
 		use_current_tool()
 		hide_toolbox_if_visible()
 
+	if event.is_action_released("attack_knight") and current_tool == Tool.GUN and firearm_weapon:
+		firearm_weapon.stop_attack()
+		get_viewport().set_input_as_handled()
+
+	if event.is_action_pressed("fire_weapon"):
+		_fire_weapon_at_mouse()
+		get_viewport().set_input_as_handled()
+
+	if event.is_action_released("fire_weapon") and firearm_weapon:
+		firearm_weapon.stop_attack()
+		get_viewport().set_input_as_handled()
+
+	if event.is_action_pressed("reload_weapon"):
+		if firearm_weapon:
+			firearm_weapon.reload()
+		get_viewport().set_input_as_handled()
+
 # --------------------------------------------------
 # HIDE TOOLBOX IF VISIBLE
 # --------------------------------------------------
@@ -163,9 +190,10 @@ func hide_toolbox_if_visible() -> void:
 func _physics_process(delta: float) -> void:
 	if active==true:
 		GlobalPlayer.active_player_position=global_position
+		if firearm_weapon and firearm_weapon.trigger_held:
+			firearm_weapon.update_trigger_target(get_global_mouse_position())
 	if active and not busy:
-		if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_LEFT) or \
-		Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_UP):
+		if _is_move_input_pressed():
 				hide_toolbox_if_visible()
 
 	# Handle combat UI auto-hide
@@ -198,6 +226,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	update_animation()
+	_update_firearm_muzzle()
 
 # --------------------------------------------------
 # MOVEMENT LOGIC (ARROW KEYS ONLY)
@@ -208,16 +237,7 @@ func handle_movement() -> void:
 		state = State.IDLE
 		return
 
-	var input_vector := Vector2.ZERO
-	
-	if Input.is_key_pressed(KEY_RIGHT):
-		input_vector.x += 1
-	if Input.is_key_pressed(KEY_LEFT):
-		input_vector.x -= 1
-	if Input.is_key_pressed(KEY_DOWN):
-		input_vector.y += 1
-	if Input.is_key_pressed(KEY_UP):
-		input_vector.y -= 1
+	var input_vector := _get_move_input_vector()
 
 	if input_vector == Vector2.ZERO:
 		velocity = Vector2.ZERO
@@ -228,6 +248,117 @@ func handle_movement() -> void:
 	velocity = last_input_dir * speed
 	state = State.RUN
 	flip_sprite(last_input_dir)
+	_update_firearm_muzzle()
+
+func _is_move_input_pressed() -> bool:
+	return Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_LEFT) or \
+		Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_UP) or \
+		Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_A) or \
+		Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_W)
+
+func _get_move_input_vector() -> Vector2:
+	var input_vector := Vector2.ZERO
+
+	if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
+		input_vector.x += 1
+	if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
+		input_vector.x -= 1
+	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
+		input_vector.y += 1
+	if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
+		input_vector.y -= 1
+
+	return input_vector
+
+# --------------------------------------------------
+# FIREARM TEST HOOK
+# --------------------------------------------------
+func _setup_firearm() -> void:
+	if not enable_player_firearm:
+		return
+
+	firearm_muzzle = Marker2D.new()
+	firearm_muzzle.name = "WeaponMuzzle"
+	firearm_muzzle.position = firearm_muzzle_offset
+	add_child(firearm_muzzle)
+
+	var data := firearm_data if firearm_data != null else _make_default_firearm_data()
+
+	firearm_weapon = FirearmWeapon.new()
+	firearm_weapon.name = "FirearmWeapon"
+	firearm_weapon.weapon_data = data
+	firearm_weapon.muzzle_path = NodePath("../WeaponMuzzle")
+	add_child(firearm_weapon)
+	firearm_weapon.equip(self)
+
+func _setup_firearm_tool_button() -> void:
+	if not enable_player_firearm or toolbox_panel == null:
+		return
+
+	firearm_tool_button = toolbox_panel.get_node_or_null("Gun") as Button
+	if firearm_tool_button == null:
+		firearm_tool_button = Button.new()
+		firearm_tool_button.name = "Gun"
+		firearm_tool_button.z_index = 1
+		firearm_tool_button.offset_left = 131.33333
+		firearm_tool_button.offset_top = 232.0
+		firearm_tool_button.offset_right = 195.33333
+		firearm_tool_button.offset_bottom = 296.0
+		firearm_tool_button.text = "GUN"
+		firearm_tool_button.tooltip_text = "Gun"
+		firearm_tool_button.focus_mode = Control.FOCUS_NONE
+		firearm_tool_button.add_theme_font_size_override("font_size", 15)
+		_copy_button_styles(hand_btn, firearm_tool_button)
+		toolbox_panel.add_child(firearm_tool_button)
+
+	if not firearm_tool_button.pressed.is_connected(_on_gun_pressed):
+		firearm_tool_button.pressed.connect(_on_gun_pressed)
+
+func _copy_button_styles(source: Button, target: Button) -> void:
+	if source == null or target == null:
+		return
+
+	for style_name in ["normal", "pressed", "hover", "hover_pressed", "disabled", "focus"]:
+		var stylebox := source.get_theme_stylebox(style_name)
+		if stylebox:
+			target.add_theme_stylebox_override(style_name, stylebox)
+
+func _make_default_firearm_data() -> WeaponData:
+	var data := WeaponData.new()
+	data.weapon_name = "Prototype Rifle"
+	data.damage = 2
+	data.fire_mode = WeaponData.FireMode.SEMI_AUTO
+	data.fire_cooldown = 0.35
+	data.spread_degrees = 2.0
+	data.magazine_size = 6
+	data.reserve_ammo = 24
+	data.reload_time = 1.2
+	data.projectile_scene = DEFAULT_PROJECTILE_SCENE
+	data.projectile_speed = 1300.0
+	data.projectile_lifetime = 0.45
+	data.hit_groups = ["goblin", "goblinbuildings"]
+	return data
+
+func _fire_weapon_at_mouse() -> void:
+	if firearm_weapon == null:
+		return
+
+	var target_position := get_global_mouse_position()
+	_face_firearm_target(target_position)
+	firearm_weapon.start_trigger(target_position)
+
+func _face_firearm_target(target_position: Vector2) -> void:
+	var dir := target_position - global_position
+	if abs(dir.x) > 0.1:
+		anim.flip_h = dir.x < 0
+	_update_firearm_muzzle()
+
+func _update_firearm_muzzle() -> void:
+	if firearm_muzzle == null:
+		return
+
+	var x_sign := -1.0 if anim.flip_h else 1.0
+	firearm_muzzle.position = Vector2(abs(firearm_muzzle_offset.x) * x_sign, firearm_muzzle_offset.y)
 
 # --------------------------------------------------
 # USE CURRENT TOOL WITH Q KEY (WITH COOLDOWN)
@@ -248,6 +379,8 @@ func use_current_tool() -> void:
 			repeat_tool_action(Tool.KNIFE, "meat", "knife", 1)
 		Tool.HAND:
 			repeat_tool_action(Tool.HAND, "", "hand", 1)
+		Tool.GUN:
+			_fire_weapon_at_mouse()
 
 
 # --------------------------------------------------
@@ -446,6 +579,7 @@ func update_animation() -> void:
 		Tool.PICKAXE: suffix = "pickaxe"
 		Tool.AXE: suffix = "axe"
 		Tool.KNIFE: suffix = "knife"
+		Tool.GUN: suffix = ""
 		Tool.HAND: suffix = ""
 
 	if state == State.USE:
@@ -498,6 +632,11 @@ func _on_hand_pressed() -> void:
 	Global.pawn_tool="hand"
 	equip_audio.play()
 
+func _on_gun_pressed() -> void:
+	set_tool_and_activate(Tool.GUN)
+	hide_toolbox_if_visible()
+	Global.pawn_tool="gun"
+	equip_audio.play()
 
 func scale_bump(node) -> void:
 	var tween = create_tween()
