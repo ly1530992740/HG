@@ -45,6 +45,11 @@ Current fields:
 - `burst_count`
 - `burst_delay`
 - `spread_degrees`
+- `projectile_count`
+- `projectile_spread_degrees`
+- `ammo_per_shot`
+- `cycle_time`
+- `reload_type`
 - `magazine_size`
 - `reserve_ammo`
 - `reload_time`
@@ -52,6 +57,10 @@ Current fields:
 - `projectile_speed`
 - `projectile_lifetime`
 - `hit_groups`
+- `melee_range`
+- `melee_radius`
+- `melee_active_time`
+- `melee_recover_time`
 - `shoot_sound`
 - `reload_sound`
 - `empty_sound`
@@ -85,6 +94,9 @@ Responsibilities:
 - Fire cooldown.
 - Reloading.
 - Semi-auto / auto / burst entry points.
+- Multi-projectile shots for shotgun-like weapons.
+- Ammo cost per shot.
+- Simple cycle/bolt-action delay after firing.
 - Projectile spawning.
 - Optional muzzle flash and audio.
 
@@ -107,8 +119,33 @@ fired
 reload_started
 reload_finished
 ammo_changed(magazine_ammo, reserve_ammo)
+cycle_started(duration)
+cycle_finished
 attack_failed(reason)
 ```
+
+### `MeleeWeapon`
+
+Base class for short-range weapons.
+
+Responsibilities:
+
+- Uses the same `Weapon` interface.
+- Does not spawn a projectile.
+- Spawns a short-lived `Area2D` hitbox in front of the wielder.
+- Applies damage through the same existing target APIs:
+
+```gdscript
+target.take_damage(damage, hitbox.global_position)
+target.take_damages(damage)
+```
+
+Current melee tuning comes from `WeaponData`:
+
+- `melee_range`
+- `melee_radius`
+- `melee_active_time`
+- `melee_recover_time`
 
 ### `Projectile`
 
@@ -169,6 +206,64 @@ projectile lifetime: 0.45
 hit groups: goblin, goblinbuildings
 ```
 
+## Enemy Firearm Test Integration
+
+The current firearm enemy test is in:
+
+```text
+unit/goblins/goblin_base.gd
+unit/goblins/goblin shooter.gd
+unit/goblins/goblin shooter.tscn
+weapons/enemy_bullet.tscn
+tests/firearm_test/firearm_test_scene.tscn
+```
+
+### `GoblinBase`
+
+Shared base for the new firearm enemy path.
+
+Responsibilities:
+
+- Health and death.
+- Hit feedback.
+- Knockback.
+- Basic target list and pack reservation.
+- Navigation/chase helpers.
+- Existing scene signal methods for `hurtbox`, `detect_area`, and `targeter_area`.
+
+This base was introduced for the firearm enemy first. Existing older enemy scripts still have duplicated logic and have not yet been migrated to the base.
+
+### `GoblinShooter`
+
+Subclass of `GoblinBase` used by the firearm test scene.
+
+Current behavior:
+
+- Finds the player inside `detect_range`.
+- Chases until `attack_range`.
+- Keeps a small distance from the player.
+- Fires `weapons/enemy_bullet.tscn` toward the player on a cooldown.
+- Shows a runtime HP bar above its head.
+
+Current limitation:
+
+- It does not yet own a real `FirearmWeapon` component.
+- It spawns the enemy projectile directly as a temporary bridge.
+- The next AI weapon step should replace direct projectile spawning with `FirearmWeapon.try_attack(target.global_position)`.
+
+### Projectile Hitbox Rule
+
+`Projectile` now treats Area2D hits as damage only when the area is a real damage receiver:
+
+```text
+hurtbox
+hitbox
+group: hurtbox
+group: hitbox
+```
+
+Large detection areas such as `detect_area` and `targeter_area` are ignored by projectile damage. This prevents bullets from damaging enemies before they reach the visible body/hurtbox.
+
 ## Child Firearm Classes
 
 Current child classes are intentionally thin:
@@ -177,6 +272,9 @@ Current child classes are intentionally thin:
 PistolWeapon extends FirearmWeapon
 RifleWeapon extends FirearmWeapon
 SmgWeapon extends FirearmWeapon
+ShotgunWeapon extends FirearmWeapon
+BoltActionRifleWeapon extends FirearmWeapon
+LmgWeapon extends FirearmWeapon
 ```
 
 For now, behavior differences should mostly live in `WeaponData`.
@@ -188,6 +286,41 @@ Examples:
 - Pistol: fast draw, lower recoil, semi-auto only.
 - Rifle: higher damage, longer range, lower fire rate.
 - SMG: automatic fire, larger spread, larger magazine.
+- Shotgun: uses `projectile_count` and `projectile_spread_degrees`.
+- Bolt-action rifle: uses `cycle_time` for the simple bolt/cycle delay.
+- LMG: currently reuses automatic firearm logic with larger magazine and slower reload.
+
+## Weapon Type Mapping
+
+Current intended implementation:
+
+```text
+Melee
+  -> MeleeWeapon
+  -> short-lived Area2D hitbox
+
+Pistol
+  -> FirearmWeapon
+  -> SEMI_AUTO, projectile_count = 1, cycle_time = 0
+
+SMG
+  -> FirearmWeapon
+  -> AUTO, projectile_count = 1, short fire_cooldown
+
+Shotgun
+  -> FirearmWeapon
+  -> SEMI_AUTO, projectile_count > 1, projectile_spread_degrees > 0
+
+Bolt-action rifle
+  -> FirearmWeapon
+  -> SEMI_AUTO, high damage, cycle_time > 0
+
+LMG
+  -> FirearmWeapon
+  -> AUTO, large magazine, slow reload
+```
+
+The important rule is that gun categories should remain data-driven until a real mechanic forces a subclass override.
 
 ## Pending Work
 

@@ -78,6 +78,8 @@ var last_input_dir := Vector2.DOWN
 var firearm_weapon: FirearmWeapon
 var firearm_muzzle: Marker2D
 var firearm_tool_button: Button
+var firearm_selector_panel: PanelContainer
+var firearm_buttons: Array[Button] = []
 
 # Inventory
 var collected := {
@@ -113,6 +115,7 @@ func _ready() -> void:
 	use_timer.one_shot = true
 	_setup_firearm()
 	_setup_firearm_tool_button()
+	_setup_firearm_selector()
 
 # --------------------------------------------------
 # PICKUP RESOURCE FUNCTION
@@ -314,6 +317,59 @@ func _setup_firearm_tool_button() -> void:
 	if not firearm_tool_button.pressed.is_connected(_on_gun_pressed):
 		firearm_tool_button.pressed.connect(_on_gun_pressed)
 
+func _setup_firearm_selector() -> void:
+	if not enable_player_firearm or toolbox_panel == null:
+		return
+
+	firearm_selector_panel = toolbox_panel.get_node_or_null("FirearmSelector") as PanelContainer
+	if firearm_selector_panel == null:
+		firearm_selector_panel = PanelContainer.new()
+		firearm_selector_panel.name = "FirearmSelector"
+		firearm_selector_panel.offset_left = 64.0
+		firearm_selector_panel.offset_top = 304.0
+		firearm_selector_panel.offset_right = 236.0
+		firearm_selector_panel.offset_bottom = 404.0
+		firearm_selector_panel.z_index = 2
+		toolbox_panel.add_child(firearm_selector_panel)
+
+		var list := VBoxContainer.new()
+		list.name = "WeaponList"
+		list.add_theme_constant_override("separation", 3)
+		firearm_selector_panel.add_child(list)
+
+		var title := Label.new()
+		title.text = "Weapons"
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.add_theme_font_size_override("font_size", 9)
+		list.add_child(title)
+
+		var grid := GridContainer.new()
+		grid.name = "WeaponGrid"
+		grid.columns = 2
+		grid.add_theme_constant_override("h_separation", 3)
+		grid.add_theme_constant_override("v_separation", 3)
+		list.add_child(grid)
+
+	var weapon_list := firearm_selector_panel.get_node("WeaponList") as VBoxContainer
+	var weapon_grid := weapon_list.get_node("WeaponGrid") as GridContainer
+	if firearm_buttons.is_empty():
+		_add_firearm_option(weapon_grid, "Pistol", "pistol")
+		_add_firearm_option(weapon_grid, "SMG", "smg")
+		_add_firearm_option(weapon_grid, "Shotgun", "shotgun")
+		_add_firearm_option(weapon_grid, "Bolt", "bolt_rifle")
+		_add_firearm_option(weapon_grid, "LMG", "lmg")
+
+func _add_firearm_option(parent: Container, label: String, weapon_id: String) -> void:
+	var button := Button.new()
+	button.text = label
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(78, 20)
+	button.add_theme_font_size_override("font_size", 8)
+	_copy_button_styles(hand_btn, button)
+	parent.add_child(button)
+	button.pressed.connect(_on_firearm_option_pressed.bind(weapon_id))
+	firearm_buttons.append(button)
+
 func _copy_button_styles(source: Button, target: Button) -> void:
 	if source == null or target == null:
 		return
@@ -338,6 +394,84 @@ func _make_default_firearm_data() -> WeaponData:
 	data.projectile_lifetime = 0.45
 	data.hit_groups = ["goblin", "goblinbuildings"]
 	return data
+
+func _make_firearm_data(weapon_id: String) -> WeaponData:
+	var data := WeaponData.new()
+	data.projectile_scene = DEFAULT_PROJECTILE_SCENE
+	data.hit_groups = ["goblin", "goblinbuildings"]
+
+	match weapon_id:
+		"pistol":
+			data.weapon_name = "Pistol"
+			data.damage = 2
+			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
+			data.fire_cooldown = 0.28
+			data.spread_degrees = 2.0
+			data.magazine_size = 10
+			data.reserve_ammo = 50
+			data.reload_time = 1.0
+			data.projectile_speed = 1250.0
+			data.projectile_lifetime = 0.45
+		"smg":
+			data.weapon_name = "SMG"
+			data.damage = 1
+			data.fire_mode = WeaponData.FireMode.AUTO
+			data.fire_cooldown = 0.09
+			data.spread_degrees = 5.5
+			data.magazine_size = 30
+			data.reserve_ammo = 120
+			data.reload_time = 1.4
+			data.projectile_speed = 1200.0
+			data.projectile_lifetime = 0.42
+		"shotgun":
+			data.weapon_name = "Shotgun"
+			data.damage = 1
+			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
+			data.fire_cooldown = 0.85
+			data.spread_degrees = 1.5
+			data.projectile_count = 8
+			data.projectile_spread_degrees = 30.0
+			data.magazine_size = 6
+			data.reserve_ammo = 36
+			data.reload_time = 1.7
+			data.projectile_speed = 1050.0
+			data.projectile_lifetime = 0.30
+		"bolt_rifle":
+			data.weapon_name = "Bolt Rifle"
+			data.damage = 5
+			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
+			data.fire_cooldown = 0.1
+			data.spread_degrees = 0.5
+			data.cycle_time = 1.05
+			data.magazine_size = 5
+			data.reserve_ammo = 25
+			data.reload_time = 1.6
+			data.projectile_speed = 1700.0
+			data.projectile_lifetime = 0.70
+		"lmg":
+			data.weapon_name = "LMG"
+			data.damage = 2
+			data.fire_mode = WeaponData.FireMode.AUTO
+			data.fire_cooldown = 0.11
+			data.spread_degrees = 6.5
+			data.magazine_size = 70
+			data.reserve_ammo = 210
+			data.reload_time = 3.4
+			data.projectile_speed = 1300.0
+			data.projectile_lifetime = 0.50
+		_:
+			return _make_default_firearm_data()
+
+	return data
+
+func set_firearm_weapon(weapon_id: String) -> void:
+	if firearm_weapon == null:
+		return
+
+	firearm_weapon.set_weapon_data(_make_firearm_data(weapon_id))
+	set_tool_and_activate(Tool.GUN)
+	Global.pawn_tool = "gun"
+	update_animation()
 
 func _fire_weapon_at_mouse() -> void:
 	if firearm_weapon == null:
@@ -636,6 +770,11 @@ func _on_gun_pressed() -> void:
 	set_tool_and_activate(Tool.GUN)
 	hide_toolbox_if_visible()
 	Global.pawn_tool="gun"
+	equip_audio.play()
+
+func _on_firearm_option_pressed(weapon_id: String) -> void:
+	set_firearm_weapon(weapon_id)
+	hide_toolbox_if_visible()
 	equip_audio.play()
 
 func scale_bump(node) -> void:

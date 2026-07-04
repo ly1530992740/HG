@@ -40,7 +40,7 @@ func _on_area_entered(area: Area2D) -> void:
 	if shooter and (area == shooter or area.get_parent() == shooter):
 		return
 
-	var target := area.get_parent()
+	var target := _get_damage_area_target(area)
 	if target is Node2D:
 		_try_hit(target)
 
@@ -73,3 +73,16 @@ func _apply_damage(target: Node2D) -> void:
 		target.take_damage(damage, global_position)
 	elif target.has_method("take_damages"):
 		target.take_damages(damage)
+
+func _get_damage_area_target(area: Area2D) -> Node:
+	if not _is_damage_area(area):
+		return null
+
+	return area.get_parent()
+
+func _is_damage_area(area: Area2D) -> bool:
+	var area_name := String(area.name).to_lower()
+	return area.is_in_group("hurtbox") \
+		or area.is_in_group("hitbox") \
+		or area_name == "hurtbox" \
+		or area_name == "hitbox"

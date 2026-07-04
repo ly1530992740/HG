@@ -1,7 +1,7 @@
-[gd_scene load_steps=8 format=3]
+﻿[gd_scene load_steps=8 format=3]
 
 [ext_resource type="PackedScene" path="res://unit/pawn_/pawn black.tscn" id="1_player"]
-[ext_resource type="PackedScene" path="res://unit/goblins/goblin torch.tscn" id="2_enemy"]
+[ext_resource type="PackedScene" path="res://unit/goblins/goblin shooter.tscn" id="2_enemy"]
 [ext_resource type="Script" path="res://tests/firearm_test/firearm_test_scene.gd" id="3_scene"]
 
 [sub_resource type="NavigationPolygon" id="NavigationPolygon_test_area"]

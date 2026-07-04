@@ -1,0 +1,2 @@
+extends FirearmWeapon
+class_name ShotgunWeapon

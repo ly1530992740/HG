@@ -8,6 +8,8 @@
 
 config_version=5
 
+"ï»¿config_version"=5
+
 [application]
 
 config/name="Tiny Sword survival island"
@@ -21,10 +23,10 @@ config/icon="res://icon.svg"
 [autoload]
 
 Global="*res://global.gd"
-BuildingManager="*uid://b7363eo32o344"
-GlobalPlayer="*uid://c048qkpanhg7m"
-TargetManager="*uid://bwgylo156ij5o"
-tutomanager="*uid://dcd5xuytcgh0r"
+BuildingManager="*res://buildings/unit construction/building_manager.gd"
+GlobalPlayer="*res://global_player.gd"
+TargetManager="*res://target_manager.gd"
+tutomanager="*res://tutomanager.gd"
 
 [display]
 
@@ -34,6 +36,10 @@ window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/scale=1.5
 mouse_cursor/custom_image="uid://demgxhdh76j4o"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/goap/plugin.cfg")
 
 [file_customization]
 

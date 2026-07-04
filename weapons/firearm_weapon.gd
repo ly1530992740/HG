@@ -5,11 +5,16 @@ signal fired
 signal reload_started
 signal reload_finished
 signal ammo_changed(magazine_ammo: int, reserve_ammo: int)
+signal cycle_started(duration: float)
+signal cycle_finished
+signal weapon_changed(data: WeaponData)
 
 var magazine_ammo := 0
 var reserve_ammo := 0
 var cooldown_timer := 0.0
+var cycle_timer := 0.0
 var reloading := false
+var cycling := false
 var trigger_held := false
 var trigger_target_position := Vector2.ZERO
 var burst_active := false
@@ -21,13 +26,17 @@ var _empty_audio: AudioStreamPlayer2D
 func _ready() -> void:
 	_setup_audio_players()
 	if weapon_data:
-		magazine_ammo = weapon_data.magazine_size
-		reserve_ammo = weapon_data.reserve_ammo
-		emit_signal("ammo_changed", magazine_ammo, reserve_ammo)
+		set_weapon_data(weapon_data)
 
 func _process(delta: float) -> void:
 	if cooldown_timer > 0.0:
 		cooldown_timer = max(0.0, cooldown_timer - delta)
+
+	if cycle_timer > 0.0:
+		cycle_timer = max(0.0, cycle_timer - delta)
+		if cycle_timer == 0.0 and cycling:
+			cycling = false
+			emit_signal("cycle_finished")
 
 	if trigger_held and weapon_data and weapon_data.fire_mode == WeaponData.FireMode.AUTO:
 		try_attack(trigger_target_position)
@@ -41,11 +50,15 @@ func try_attack(target_position: Vector2) -> bool:
 		emit_signal("attack_failed", "reloading")
 		return false
 
+	if cycling:
+		emit_signal("attack_failed", "cycling")
+		return false
+
 	if cooldown_timer > 0.0:
 		emit_signal("attack_failed", "cooldown")
 		return false
 
-	if magazine_ammo <= 0:
+	if magazine_ammo < _get_ammo_per_shot():
 		_play_audio(_empty_audio)
 		emit_signal("attack_failed", "empty_magazine")
 		return false
@@ -81,6 +94,10 @@ func reload() -> bool:
 	if reloading:
 		return false
 
+	if cycling:
+		emit_signal("attack_failed", "cycling")
+		return false
+
 	if magazine_ammo >= weapon_data.magazine_size:
 		return false
 
@@ -98,6 +115,24 @@ func add_reserve_ammo(amount: int) -> void:
 
 func get_total_ammo() -> int:
 	return magazine_ammo + reserve_ammo
+
+func set_weapon_data(data: WeaponData, reset_ammo := true) -> void:
+	weapon_data = data
+	trigger_held = false
+	burst_active = false
+	reloading = false
+	cycling = false
+	cooldown_timer = 0.0
+	cycle_timer = 0.0
+
+	_update_audio_streams()
+
+	if reset_ammo and weapon_data:
+		magazine_ammo = weapon_data.magazine_size
+		reserve_ammo = weapon_data.reserve_ammo
+		emit_signal("ammo_changed", magazine_ammo, reserve_ammo)
+
+	emit_signal("weapon_changed", weapon_data)
 
 func _reload_async() -> void:
 	reloading = true
@@ -120,8 +155,8 @@ func _reload_async() -> void:
 	emit_signal("ammo_changed", magazine_ammo, reserve_ammo)
 	emit_signal("reload_finished")
 
-func _fire_once(target_position: Vector2) -> void:
-	magazine_ammo -= 1
+func _fire_once(target_position: Vector2, start_cycle := true) -> void:
+	magazine_ammo -= _get_ammo_per_shot()
 	cooldown_timer = weapon_data.fire_cooldown
 
 	var origin := get_attack_origin()
@@ -130,27 +165,46 @@ func _fire_once(target_position: Vector2) -> void:
 		direction = Vector2.RIGHT
 	direction = _apply_spread(direction)
 
-	_spawn_projectile(origin, direction)
+	_fire_projectiles(origin, direction)
 	_spawn_muzzle_flash(origin, direction)
 	_play_audio(_shoot_audio)
 
 	emit_signal("ammo_changed", magazine_ammo, reserve_ammo)
 	emit_signal("fired")
 
+	if start_cycle:
+		_start_cycle_if_needed()
+
 func _fire_burst(target_position: Vector2) -> void:
 	burst_active = true
+	var fired_any := false
 	for index in range(weapon_data.burst_count):
-		if magazine_ammo <= 0:
+		if magazine_ammo < _get_ammo_per_shot():
 			break
 		if index > 0:
 			await get_tree().create_timer(weapon_data.burst_delay).timeout
 		if reloading or weapon_data == null:
 			break
-		_fire_once(target_position)
+		_fire_once(target_position, false)
+		fired_any = true
+	if fired_any:
+		_start_cycle_if_needed()
 	burst_active = false
 
+func _fire_projectiles(origin: Vector2, direction: Vector2) -> void:
+	var projectile_count: int = max(1, weapon_data.projectile_count)
+	if projectile_count == 1:
+		_spawn_projectile(origin, direction)
+		return
+
+	var total_spread: float = deg_to_rad(max(0.0, weapon_data.projectile_spread_degrees))
+	for index in range(projectile_count):
+		var spread_ratio: float = 0.5 if projectile_count == 1 else float(index) / float(projectile_count - 1)
+		var pellet_angle: float = lerp(-total_spread * 0.5, total_spread * 0.5, spread_ratio)
+		_spawn_projectile(origin, direction.rotated(pellet_angle).normalized())
+
 func _spawn_projectile(origin: Vector2, direction: Vector2) -> void:
-	if weapon_data.projectile_scene == null:
+	if weapon_data.projectile_scene == null or not is_inside_tree():
 		return
 
 	var projectile := weapon_data.projectile_scene.instantiate()
@@ -169,7 +223,7 @@ func _spawn_projectile(origin: Vector2, direction: Vector2) -> void:
 		})
 
 func _spawn_muzzle_flash(origin: Vector2, direction: Vector2) -> void:
-	if weapon_data.muzzle_flash_scene == null:
+	if weapon_data.muzzle_flash_scene == null or not is_inside_tree():
 		return
 
 	var fx := weapon_data.muzzle_flash_scene.instantiate()
@@ -181,10 +235,31 @@ func _apply_spread(direction: Vector2) -> Vector2:
 	var spread := deg_to_rad(weapon_data.spread_degrees)
 	return direction.rotated(randf_range(-spread, spread)).normalized()
 
+func _start_cycle_if_needed() -> void:
+	if weapon_data == null or weapon_data.cycle_time <= 0.0:
+		return
+
+	cycling = true
+	cycle_timer = weapon_data.cycle_time
+	emit_signal("cycle_started", cycle_timer)
+
+func _get_ammo_per_shot() -> int:
+	if weapon_data == null:
+		return 1
+	return max(1, weapon_data.ammo_per_shot)
+
 func _setup_audio_players() -> void:
 	_shoot_audio = _make_audio_player(weapon_data.shoot_sound if weapon_data else null)
 	_reload_audio = _make_audio_player(weapon_data.reload_sound if weapon_data else null)
 	_empty_audio = _make_audio_player(weapon_data.empty_sound if weapon_data else null)
+
+func _update_audio_streams() -> void:
+	if _shoot_audio == null or _reload_audio == null or _empty_audio == null:
+		return
+
+	_shoot_audio.stream = weapon_data.shoot_sound if weapon_data else null
+	_reload_audio.stream = weapon_data.reload_sound if weapon_data else null
+	_empty_audio.stream = weapon_data.empty_sound if weapon_data else null
 
 func _make_audio_player(stream: AudioStream) -> AudioStreamPlayer2D:
 	var player := AudioStreamPlayer2D.new()
