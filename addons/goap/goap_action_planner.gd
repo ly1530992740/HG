@@ -38,7 +38,7 @@ func _find_best_plan(goal, desired_state, blackboard):
 		"children": []
 	}
 
-	if _build_plans(root, blackboard.duplicate()):
+	if _build_plans(root, blackboard.duplicate(), {}):
 		var plans = _transform_tree_into_array(root, blackboard)
 		return _get_cheapest_plan(plans)
 
@@ -58,7 +58,7 @@ func _get_cheapest_plan(plans):
 
 ## Recursively expands the search tree, returning [code]true[/code] if at
 ## least one complete path to a satisfied state was found.
-func _build_plans(step, blackboard):
+func _build_plans(step, blackboard, visited_actions: Dictionary):
 	var has_followup = false
 
 	var state = step.state.duplicate()
@@ -77,6 +77,8 @@ func _build_plans(step, blackboard):
 	
 	for action in _actions:
 		if not action.is_valid():
+			continue
+		if visited_actions.has(action):
 			continue
 
 		var should_use_action = false
@@ -99,7 +101,9 @@ func _build_plans(step, blackboard):
 				"children": []
 				}
 
-			if desired_state.is_empty() or _build_plans(s, blackboard.duplicate()):
+			var branch_visited := visited_actions.duplicate()
+			branch_visited[action] = true
+			if desired_state.is_empty() or _build_plans(s, blackboard.duplicate(), branch_visited):
 				step.children.push_back(s)
 				has_followup = true
 

@@ -32,6 +32,9 @@ signal action_changed(new_action: GoapAction)
 ## When [code]true[/code], sends runtime data to the editor debugger panel.
 @export var debug_enabled := true
 
+## Rebuilds the active plan when a world-state value actually changes.
+@export var replan_on_world_state_change := true
+
 var _goals = []
 var _current_goal
 var _current_plan = []
@@ -41,6 +44,7 @@ var _world_state: GoapWorldState
 var _action_planner: GoapActionPlanner
 var _finished_last_plan = false
 var _last_blackboard = {}
+var _replan_requested := false
 
 ## The last [GoapAction] that finished executing.
 var previous_action: GoapAction = null
@@ -49,6 +53,17 @@ var _debug_id := ""
 
 ## Main tick — call once per frame from [code]_process[/code] or [code]_physics_process[/code].
 func process(delta):
+	if _replan_requested:
+		_replan_requested = false
+		if _current_goal != null:
+			_interrupt_current_action()
+			if _current_goal.has_method("exit"):
+				_current_goal.exit()
+			_current_goal = null
+			_current_plan = []
+			_current_plan_step = 0
+			plan_changed.emit([])
+
 	var goal = _get_best_goal()
 	if _finished_last_plan:
 		if _current_goal and _current_goal.has_method("exit"):
@@ -76,6 +91,8 @@ func process(delta):
 			_current_goal = goal
 			if _current_goal.has_method("enter"):
 				_current_goal.enter()
+			if _current_goal.has_method("prepare"):
+				_current_goal.prepare()
 
 			var blackboard = {
 				"global_position": _actor.global_position,
@@ -142,6 +159,22 @@ func init(actor):
 
 	_connect_debug_signals()
 	_send_debug_register(actions)
+
+
+## Requests that the active action be interrupted and the goal be planned again.
+## The request is processed at the start of the next GOAP tick.
+func request_replan() -> void:
+	_replan_requested = true
+
+
+func _interrupt_current_action() -> void:
+	if _current_plan.is_empty() or _current_plan_step >= _current_plan.size():
+		return
+	var running = _current_plan[_current_plan_step]
+	if running is GoapAction and running.get_meta("_entered", false):
+		running.exit()
+		running.set_meta("_entered", false)
+		action_changed.emit(null)
 
 
 ## Returns the highest-priority, valid, enabled [GoapGoal], or [code]null[/code].
@@ -286,7 +319,7 @@ func _connect_debug_signals():
 	goal_changed.connect(_on_debug_goal_changed)
 	plan_changed.connect(_on_debug_plan_changed)
 	action_changed.connect(_on_debug_action_changed)
-	_world_state.state_updated.connect(_on_debug_world_state_updated)
+	_world_state.state_updated.connect(_on_world_state_updated)
 
 
 func _send_debug_register(actions: Array):
@@ -340,5 +373,7 @@ func _on_debug_action_changed(new_action: GoapAction):
 	_send_debug("step", [_current_plan_step, _current_plan.size()])
 
 
-func _on_debug_world_state_updated():
+func _on_world_state_updated():
+	if replan_on_world_state_change:
+		request_replan()
 	_send_debug("world_state", [_world_state._state.duplicate()])

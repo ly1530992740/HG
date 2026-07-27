@@ -18,6 +18,7 @@ enum State { IDLE, RUN, USE, DEAD }
 @export var attack_repair_scene := preload("res://unit/pawn_/repair_effect.tscn")
 @export var skull_scene := preload("res://Materiels/skull/skull.tscn")
 @export var enable_player_firearm := true
+@export var firearm_test_invulnerable := false
 @export var firearm_data: WeaponData
 @export var firearm_muzzle_offset := Vector2(24, -8)
 
@@ -77,9 +78,14 @@ var knockback_velocity := Vector2.ZERO
 var last_input_dir := Vector2.DOWN
 var firearm_weapon: FirearmWeapon
 var firearm_muzzle: Marker2D
+var firearm_crosshair: WeaponCrosshair
 var firearm_tool_button: Button
 var firearm_selector_panel: PanelContainer
 var firearm_buttons: Array[Button] = []
+var cover_user: CoverUser
+var aim_component: AimComponent
+var concealment_component: ConcealmentComponent
+var recent_fire_threat_timer := 0.0
 
 # Inventory
 var collected := {
@@ -116,6 +122,9 @@ func _ready() -> void:
 	_setup_firearm()
 	_setup_firearm_tool_button()
 	_setup_firearm_selector()
+	_setup_cover_user()
+	_setup_aim_component()
+	_setup_concealment_component()
 
 # --------------------------------------------------
 # PICKUP RESOURCE FUNCTION
@@ -151,6 +160,18 @@ func _on_resource_entered(area: Area2D) -> void:
 func _input(event: InputEvent) -> void:
 	if not active or state == State.DEAD:
 		return
+
+	if event is InputEventKey and not event.echo:
+		var key_event := event as InputEventKey
+		if key_event.physical_keycode == KEY_C and key_event.pressed:
+			if cover_user:
+				cover_user.toggle_nearest_cover()
+			get_viewport().set_input_as_handled()
+			return
+		if key_event.physical_keycode == KEY_SPACE and cover_user and cover_user.is_in_cover():
+			cover_user.set_precision(key_event.pressed)
+			get_viewport().set_input_as_handled()
+			return
 
 	# Toggle toolbox with T key
 	if event.is_action_pressed("tools"):
@@ -191,6 +212,12 @@ func hide_toolbox_if_visible() -> void:
 # PHYSICS LOOP
 # --------------------------------------------------
 func _physics_process(delta: float) -> void:
+	recent_fire_threat_timer = maxf(0.0, recent_fire_threat_timer - delta)
+	if concealment_component:
+		concealment_component.process(delta)
+	if aim_component:
+		aim_component.set_aiming(active and current_tool == Tool.GUN and (Input.is_action_pressed("aim_weapon") or is_cover_precision()))
+		aim_component.process(delta, velocity.length_squared() > 25.0)
 	if active==true:
 		GlobalPlayer.active_player_position=global_position
 		if firearm_weapon and firearm_weapon.trigger_held:
@@ -220,6 +247,9 @@ func _physics_process(delta: float) -> void:
 		update_animation()
 		return
 
+	if cover_user and cover_user.is_in_cover():
+		cover_user.maintain_position()
+
 	if active and not busy:
 		handle_movement()
 	else:
@@ -235,6 +265,16 @@ func _physics_process(delta: float) -> void:
 # MOVEMENT LOGIC (ARROW KEYS ONLY)
 # --------------------------------------------------
 func handle_movement() -> void:
+	if cover_user and cover_user.is_in_cover():
+		var cover_input := _get_move_input_vector()
+		var lateral_strength := 0.0
+		if cover_input != Vector2.ZERO:
+			lateral_strength = cover_input.normalized().dot(cover_user.get_cover_axis())
+		cover_user.move_along_cover(lateral_strength, get_physics_process_delta_time())
+		velocity = Vector2.ZERO
+		state = State.RUN if absf(lateral_strength) > 0.1 else State.IDLE
+		return
+
 	if action_lock or is_guarding:
 		velocity = Vector2.ZERO
 		state = State.IDLE
@@ -248,7 +288,8 @@ func handle_movement() -> void:
 		return
 
 	last_input_dir = input_vector.normalized()
-	velocity = last_input_dir * speed
+	var aim_move_multiplier := aim_component.get_movement_speed_multiplier() if aim_component else 1.0
+	velocity = last_input_dir * speed * aim_move_multiplier
 	state = State.RUN
 	flip_sprite(last_input_dir)
 	_update_firearm_muzzle()
@@ -293,6 +334,48 @@ func _setup_firearm() -> void:
 	firearm_weapon.muzzle_path = NodePath("../WeaponMuzzle")
 	add_child(firearm_weapon)
 	firearm_weapon.equip(self)
+	firearm_crosshair = WeaponCrosshair.new()
+	firearm_crosshair.name = "WeaponCrosshair"
+	add_child(firearm_crosshair)
+	firearm_crosshair.setup(firearm_weapon, self)
+	if not firearm_weapon.fired.is_connected(_on_player_firearm_fired):
+		firearm_weapon.fired.connect(_on_player_firearm_fired)
+
+func _on_player_firearm_fired() -> void:
+	recent_fire_threat_timer = 0.9
+	report_weapon_fired()
+	reveal_from_concealment()
+	for listener in get_tree().get_nodes_in_group("perception_listener"):
+		if listener.has_method("hear_stimulus"):
+			listener.hear_stimulus(global_position, self, 1.0)
+
+func is_aiming_at(candidate: Node2D) -> bool:
+	if not active or firearm_weapon == null or candidate == null:
+		return false
+	if current_tool != Tool.GUN and not firearm_weapon.trigger_held and recent_fire_threat_timer <= 0.0:
+		return false
+	var aim_vector := get_global_mouse_position() - global_position
+	var target_vector := candidate.global_position - global_position
+	if aim_vector == Vector2.ZERO or target_vector == Vector2.ZERO or target_vector.length() > 900.0:
+		return false
+	var angle_difference := absf(wrapf(aim_vector.angle() - target_vector.angle(), -PI, PI))
+	return angle_difference <= deg_to_rad(11.0)
+
+func _setup_cover_user() -> void:
+	cover_user = CoverUser.new()
+	cover_user.name = "CoverUser"
+	add_child(cover_user)
+	cover_user.setup(self)
+
+func _setup_aim_component() -> void:
+	aim_component = AimComponent.new()
+	aim_component.name = "AimComponent"
+	add_child(aim_component)
+
+func _setup_concealment_component() -> void:
+	concealment_component = ConcealmentComponent.new()
+	concealment_component.name = "ConcealmentComponent"
+	add_child(concealment_component)
 
 func _setup_firearm_tool_button() -> void:
 	if not enable_player_firearm or toolbox_panel == null:
@@ -382,7 +465,7 @@ func _copy_button_styles(source: Button, target: Button) -> void:
 func _make_default_firearm_data() -> WeaponData:
 	var data := WeaponData.new()
 	data.weapon_name = "Prototype Rifle"
-	data.damage = 2
+	data.damage = 4
 	data.fire_mode = WeaponData.FireMode.SEMI_AUTO
 	data.fire_cooldown = 0.35
 	data.spread_degrees = 2.0
@@ -390,7 +473,7 @@ func _make_default_firearm_data() -> WeaponData:
 	data.reserve_ammo = 24
 	data.reload_time = 1.2
 	data.projectile_scene = DEFAULT_PROJECTILE_SCENE
-	data.projectile_speed = 1300.0
+	data.projectile_speed = 2600.0
 	data.projectile_lifetime = 0.45
 	data.hit_groups = ["goblin", "goblinbuildings"]
 	return data
@@ -403,29 +486,29 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 	match weapon_id:
 		"pistol":
 			data.weapon_name = "Pistol"
-			data.damage = 2
+			data.damage = 3
 			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
 			data.fire_cooldown = 0.28
 			data.spread_degrees = 2.0
 			data.magazine_size = 10
 			data.reserve_ammo = 50
 			data.reload_time = 1.0
-			data.projectile_speed = 1250.0
+			data.projectile_speed = 2500.0
 			data.projectile_lifetime = 0.45
 		"smg":
 			data.weapon_name = "SMG"
-			data.damage = 1
+			data.damage = 2
 			data.fire_mode = WeaponData.FireMode.AUTO
 			data.fire_cooldown = 0.09
 			data.spread_degrees = 5.5
 			data.magazine_size = 30
 			data.reserve_ammo = 120
 			data.reload_time = 1.4
-			data.projectile_speed = 1200.0
+			data.projectile_speed = 2400.0
 			data.projectile_lifetime = 0.42
 		"shotgun":
 			data.weapon_name = "Shotgun"
-			data.damage = 1
+			data.damage = 2
 			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
 			data.fire_cooldown = 0.85
 			data.spread_degrees = 1.5
@@ -434,11 +517,11 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 			data.magazine_size = 6
 			data.reserve_ammo = 36
 			data.reload_time = 1.7
-			data.projectile_speed = 1050.0
+			data.projectile_speed = 2100.0
 			data.projectile_lifetime = 0.30
 		"bolt_rifle":
 			data.weapon_name = "Bolt Rifle"
-			data.damage = 5
+			data.damage = 8
 			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
 			data.fire_cooldown = 0.1
 			data.spread_degrees = 0.5
@@ -446,18 +529,18 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 			data.magazine_size = 5
 			data.reserve_ammo = 25
 			data.reload_time = 1.6
-			data.projectile_speed = 1700.0
+			data.projectile_speed = 3400.0
 			data.projectile_lifetime = 0.70
 		"lmg":
 			data.weapon_name = "LMG"
-			data.damage = 2
+			data.damage = 3
 			data.fire_mode = WeaponData.FireMode.AUTO
 			data.fire_cooldown = 0.11
 			data.spread_degrees = 6.5
 			data.magazine_size = 70
 			data.reserve_ammo = 210
 			data.reload_time = 3.4
-			data.projectile_speed = 1300.0
+			data.projectile_speed = 2600.0
 			data.projectile_lifetime = 0.50
 		_:
 			return _make_default_firearm_data()
@@ -653,16 +736,29 @@ func spawn_repair_effect() -> void:
 # --------------------------------------------------
 func take_damage(amount: int, from_pos: Vector2) -> void:
 	show_combat_ui()
+	if amount <= 0:
+		if cover_user:
+			cover_user.show_blocked()
+		return
+	if firearm_test_invulnerable:
+		life = max_life
+		progress_bar.value = life
+		knockback_velocity = Vector2.ZERO
+		red_flash()
+		return
 	life -= amount
 	if GlobalPlayer.camera_shake_func.is_valid():
 		GlobalPlayer.camera_shake_func.call()
 	progress_bar.value = life
-	knockback_velocity = (global_position - from_pos).normalized() * knockback_force
+	knockback_velocity = Vector2.ZERO
 
 	red_flash()
 
 	if life <= 0:
 		die()
+
+func receive_projectile_hit(base_damage: int, source_position: Vector2, _projectile: Node = null) -> void:
+	take_damage(base_damage, source_position)
 
 func red_flash() -> void:
 	anim.modulate = Color.RED
@@ -838,6 +934,72 @@ func get_health() -> int:
 
 func get_max_health() -> int:
 	return max_life  # or whatever your max health variable is
+
+func register_cover_candidate(cover: Node) -> void:
+	if cover_user:
+		cover_user.register_cover(cover)
+
+func unregister_cover_candidate(cover: Node) -> void:
+	if cover_user:
+		cover_user.unregister_cover(cover)
+
+func enter_cover(cover: Node, precision := false) -> bool:
+	return cover_user != null and cover_user.enter_cover(cover, precision)
+
+func exit_cover() -> void:
+	if cover_user:
+		cover_user.exit_cover()
+
+func set_cover_precision(enabled: bool) -> void:
+	if cover_user:
+		cover_user.set_precision(enabled)
+
+func is_cover_precision() -> bool:
+	return cover_user != null and cover_user.is_precision()
+
+func get_active_cover() -> Node:
+	return cover_user.get_active_cover() if cover_user else null
+
+func get_weapon_spread_multiplier() -> float:
+	var cover_multiplier := cover_user.get_spread_multiplier() if cover_user else 1.0
+	var blind_firing := cover_user != null and cover_user.is_in_cover() and not cover_user.is_precision()
+	var aim_multiplier := 1.0
+	if aim_component and not blind_firing:
+		aim_multiplier = aim_component.get_spread_multiplier(velocity.length_squared() > 25.0)
+	return cover_multiplier * aim_multiplier
+
+func set_weapon_aiming(enabled: bool) -> void:
+	if aim_component:
+		aim_component.set_aiming(enabled)
+
+func is_weapon_aiming() -> bool:
+	return aim_component != null and aim_component.is_aiming()
+
+func get_aim_quality() -> float:
+	return aim_component.get_aim_quality() if aim_component else 0.0
+
+func report_weapon_fired() -> void:
+	if aim_component:
+		aim_component.report_shot()
+
+func register_concealment_source(source: Node) -> void:
+	if concealment_component:
+		concealment_component.register_source(source)
+
+func unregister_concealment_source(source: Node) -> void:
+	if concealment_component:
+		concealment_component.unregister_source(source)
+
+func reveal_from_concealment(duration := -1.0) -> void:
+	if concealment_component:
+		concealment_component.reveal(duration)
+
+func is_visually_concealed() -> bool:
+	return concealment_component != null and concealment_component.is_concealed()
+
+func on_cover_blocked_projectile() -> void:
+	if cover_user:
+		cover_user.show_blocked()
 
 func show_combat_ui():
 	ui_visible = true

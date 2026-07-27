@@ -1,91 +1,371 @@
-﻿[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://co7vhljuqux4f"]
 
-[ext_resource type="PackedScene" path="res://unit/pawn_/pawn black.tscn" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://3d8jko5yksla" path="res://unit/pawn_/pawn black.tscn" id="1_player"]
 [ext_resource type="PackedScene" path="res://unit/goblins/goblin shooter.tscn" id="2_enemy"]
-[ext_resource type="Script" path="res://tests/firearm_test/firearm_test_scene.gd" id="3_scene"]
+[ext_resource type="Script" uid="uid://hm07jp0x3lc3" path="res://tests/firearm_test/firearm_test_scene.gd" id="3_scene"]
+[ext_resource type="PackedScene" path="res://cover/low_wall.tscn" id="4_cover"]
+[ext_resource type="Script" uid="uid://d0ky8h02nnnuo" path="res://ai/squad/squad_coordinator.gd" id="5_squad"]
+[ext_resource type="PackedScene" path="res://cover/squad_low_wall.tscn" id="6_squad_cover"]
+[ext_resource type="PackedScene" path="res://environment/bush.tscn" id="7_bush"]
 
 [sub_resource type="NavigationPolygon" id="NavigationPolygon_test_area"]
-vertices = PackedVector2Array(-820, -460, 820, -460, 820, 460, -820, 460)
-polygons = [PackedInt32Array(0, 1, 2, 3)]
+vertices = PackedVector2Array(-1450, -800, 1450, -800, 1450, 800, -1450, 800)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3)])
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_bound_x"]
-size = Vector2(24, 1120)
+size = Vector2(24, 1740)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_bound_y"]
-size = Vector2(1840, 24)
+size = Vector2(3040, 24)
 
-[node name="FirearmTestScene" type="Node2D"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud"]
+bg_color = Color(0.055, 0.075, 0.065, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.48, 0.4, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_debug"]
+bg_color = Color(0.045, 0.055, 0.05, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.5, 0.45, 0.75)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="FirearmTestScene" type="Node2D" unique_id=1341423250]
 script = ExtResource("3_scene")
 
-[node name="Ground" type="Polygon2D" parent="."]
+[node name="BattleCamera" type="Camera2D" parent="." unique_id=571329602]
+zoom = Vector2(0.32, 0.32)
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+
+[node name="EnemySquadCoordinator" type="Node" parent="." unique_id=1877801924]
+script = ExtResource("5_squad")
+squad_id = &"alpha"
+combat_team = &"alpha"
+squad_display_name = "蓝队"
+can_target_players = false
+ambush_ready_ratio_required = 1.0
+search_direction_override = Vector2(1, 0)
+
+[node name="EnemySquadCoordinatorBravo" type="Node" parent="." unique_id=568770965]
+script = ExtResource("5_squad")
+squad_id = &"bravo"
+combat_team = &"bravo"
+squad_display_name = "红队"
+can_target_players = false
+search_movement_enabled = false
+
+[node name="Ground" type="Polygon2D" parent="." unique_id=1416501664]
 z_index = -20
 color = Color(0.22, 0.34, 0.25, 1)
-polygon = PackedVector2Array(-900, -540, 900, -540, 900, 540, -900, 540)
+polygon = PackedVector2Array(-1500, -850, 1500, -850, 1500, 850, -1500, 850)
 
-[node name="GroundInner" type="Polygon2D" parent="."]
+[node name="GroundInner" type="Polygon2D" parent="." unique_id=1057239044]
 z_index = -19
 color = Color(0.28, 0.42, 0.31, 1)
-polygon = PackedVector2Array(-820, -460, 820, -460, 820, 460, -820, 460)
+polygon = PackedVector2Array(-1450, -800, 1450, -800, 1450, 800, -1450, 800)
 
-[node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="." unique_id=2097730048]
+visible = false
 navigation_polygon = SubResource("NavigationPolygon_test_area")
 
-[node name="LeftBound" type="StaticBody2D" parent="."]
-position = Vector2(-912, 0)
+[node name="LeftBound" type="StaticBody2D" parent="." unique_id=508460291]
+position = Vector2(-1512, 0)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="LeftBound"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LeftBound" unique_id=1036621368]
 shape = SubResource("RectangleShape2D_bound_x")
 
-[node name="RightBound" type="StaticBody2D" parent="."]
-position = Vector2(912, 0)
+[node name="RightBound" type="StaticBody2D" parent="." unique_id=507248020]
+position = Vector2(1512, 0)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="RightBound"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RightBound" unique_id=1548886493]
 shape = SubResource("RectangleShape2D_bound_x")
 
-[node name="TopBound" type="StaticBody2D" parent="."]
-position = Vector2(0, -552)
+[node name="TopBound" type="StaticBody2D" parent="." unique_id=1863365883]
+position = Vector2(0, -862)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="TopBound"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TopBound" unique_id=1161517057]
 shape = SubResource("RectangleShape2D_bound_y")
 
-[node name="BottomBound" type="StaticBody2D" parent="."]
-position = Vector2(0, 552)
+[node name="BottomBound" type="StaticBody2D" parent="." unique_id=958030649]
+position = Vector2(0, 862)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="BottomBound"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BottomBound" unique_id=786112583]
 shape = SubResource("RectangleShape2D_bound_y")
 
-[node name="Player" parent="." instance=ExtResource("1_player")]
-position = Vector2(-260, 100)
-enable_player_firearm = true
+[node name="AlphaWallNorth" parent="." unique_id=662501091 instance=ExtResource("4_cover")]
+position = Vector2(-820, -470)
+rotation = 1.5707963
 
-[node name="Enemy" parent="." instance=ExtResource("2_enemy")]
-position = Vector2(290, 90)
+[node name="AlphaWallSouth" parent="." unique_id=354819127 instance=ExtResource("4_cover")]
+position = Vector2(-820, 470)
+rotation = 1.5707963
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
+[node name="AlphaForwardNorth" parent="." unique_id=1731989927 instance=ExtResource("4_cover")]
+position = Vector2(-420, -470)
+rotation = 1.5707963
 
-[node name="Hud" type="PanelContainer" parent="CanvasLayer"]
+[node name="AlphaForwardCenter" parent="." unique_id=1836577649 instance=ExtResource("4_cover")]
+position = Vector2(-420, 0)
+rotation = 1.5707963
+
+[node name="AlphaForwardSouth" parent="." unique_id=155324778 instance=ExtResource("4_cover")]
+position = Vector2(-420, 470)
+rotation = 1.5707963
+
+[node name="BravoBlindsideSquadCover" parent="." unique_id=393076326 instance=ExtResource("6_squad_cover")]
+position = Vector2(524, -260)
+rotation = 1.5867248
+
+[node name="BravoBlindsideSquadCover2" parent="." unique_id=1644013686 instance=ExtResource("6_squad_cover")]
+position = Vector2(544, 376)
+rotation = -5.0651035
+
+[node name="NorthFlankWall" parent="." unique_id=1254885817 instance=ExtResource("4_cover")]
+position = Vector2(0, -690)
+
+[node name="SouthFlankWall" parent="." unique_id=276104147 instance=ExtResource("4_cover")]
+position = Vector2(0, 590)
+
+[node name="PlayerWall" parent="." unique_id=1911245002 instance=ExtResource("4_cover")]
+position = Vector2(0, 755)
+
+[node name="Player" parent="." unique_id=1019546593 instance=ExtResource("1_player")]
+position = Vector2(0, 790)
+firearm_test_invulnerable = true
+
+[node name="PlayerBush" parent="." unique_id=549236576 instance=ExtResource("7_bush")]
+position = Vector2(0, 790)
+
+[node name="AlphaA" parent="." unique_id=817980324 instance=ExtResource("2_enemy")]
+position = Vector2(-1080, -360)
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="AlphaB" parent="." unique_id=1690685330 instance=ExtResource("2_enemy")]
+position = Vector2(-1120, 0)
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="AlphaC" parent="." unique_id=1903211459 instance=ExtResource("2_enemy")]
+position = Vector2(-1080, 360)
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="AlphaMarksman" parent="." unique_id=1263727084 instance=ExtResource("2_enemy")]
+position = Vector2(-1200, -610)
+combat_role = 1
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="AlphaMachineGunner" parent="." unique_id=1874395388 instance=ExtResource("2_enemy")]
+position = Vector2(-1180, 570)
+combat_role = 2
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="AlphaShotgunNorth" parent="." unique_id=1087485612 instance=ExtResource("2_enemy")]
+position = Vector2(-980, -180)
+combat_role = 3
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="AlphaShotgunSouth" parent="." unique_id=1182580922 instance=ExtResource("2_enemy")]
+position = Vector2(-980, 180)
+combat_role = 3
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="AlphaScout" parent="." unique_id=1706862052 instance=ExtResource("2_enemy")]
+position = Vector2(-1040, 690)
+combat_role = 4
+squad_id = &"alpha"
+lock_steady_morale = true
+combat_team = &"alpha"
+can_target_players = false
+team_display_name = "蓝队"
+team_color = Color(0.12, 0.55, 0.9, 1)
+
+[node name="BravoA" parent="." unique_id=1656645287 instance=ExtResource("2_enemy")]
+position = Vector2(1080, -360)
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="BravoB" parent="." unique_id=1323663343 instance=ExtResource("2_enemy")]
+position = Vector2(1120, 0)
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="BravoC" parent="." unique_id=1140134175 instance=ExtResource("2_enemy")]
+position = Vector2(1080, 360)
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="BravoMarksman" parent="." unique_id=135209754 instance=ExtResource("2_enemy")]
+position = Vector2(1133, 263.00003)
+combat_role = 1
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="BravoMachineGunner" parent="." unique_id=1513411514 instance=ExtResource("2_enemy")]
+position = Vector2(1125, -273.00003)
+combat_role = 2
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="BravoShotgunNorth" parent="." unique_id=1778819294 instance=ExtResource("2_enemy")]
+position = Vector2(980, -180)
+combat_role = 3
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="BravoShotgunSouth" parent="." unique_id=608212184 instance=ExtResource("2_enemy")]
+position = Vector2(980, 180)
+combat_role = 3
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="BravoScout" parent="." unique_id=1510376474 instance=ExtResource("2_enemy")]
+position = Vector2(889.0001, -334.00003)
+combat_role = 4
+squad_id = &"bravo"
+lock_steady_morale = true
+combat_team = &"bravo"
+can_target_players = false
+team_display_name = "红队"
+team_color = Color(0.86, 0.2, 0.17, 1)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1995488363]
+
+[node name="Hud" type="PanelContainer" parent="CanvasLayer" unique_id=1989833159]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 404.0
-offset_bottom = 118.0
+offset_right = 382.0
+offset_bottom = 102.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_hud")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/Hud"]
-offset_left = 7.0
-offset_top = 7.0
-offset_right = 381.0
-offset_bottom = 95.0
-
-[node name="AmmoLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/Hud" unique_id=453750978]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+
+[node name="AmmoLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer" unique_id=442574220]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
 text = "Ammo: -- / --"
+clip_text = true
 
-[node name="EnemyLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer"]
+[node name="EnemyLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer" unique_id=1811756435]
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 12
 text = "Enemy HP: -- / --"
+clip_text = true
 
-[node name="StatusLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer"]
+[node name="StatusLabel" type="Label" parent="CanvasLayer/Hud/VBoxContainer" unique_id=326139380]
 layout_mode = 2
-theme_override_font_sizes/font_size = 15
-text = "Arrow keys move | Mouse aims | F fires | R reloads"
+theme_override_font_sizes/font_size = 10
+text = "WASD | C Cover | Space Precise | F/Q Fire | R Reload"
+clip_text = true
+
+[node name="AiDebugPanel" type="PanelContainer" parent="CanvasLayer" unique_id=717430622]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -236.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 174.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_debug")
+
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/AiDebugPanel" unique_id=1242335227]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 5
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/AiDebugPanel/MarginContainer" unique_id=811483189]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Title" type="Label" parent="CanvasLayer/AiDebugPanel/MarginContainer/VBoxContainer" unique_id=454122473]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "AI 战场态势"
+
+[node name="Separator" type="HSeparator" parent="CanvasLayer/AiDebugPanel/MarginContainer/VBoxContainer" unique_id=831275856]
+layout_mode = 2
+
+[node name="AiStateLabel" type="Label" parent="CanvasLayer/AiDebugPanel/MarginContainer/VBoxContainer" unique_id=1444297820]
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "等待 AI 注册..."
+autowrap_mode = 2

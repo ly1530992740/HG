@@ -1,0 +1,83 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://cover/low_wall.gd" id="1_wall"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
+size = Vector2(380, 24)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_interaction"]
+size = Vector2(460, 160)
+
+[node name="SquadLowWall" type="StaticBody2D"]
+script = ExtResource("1_wall")
+cover_half_length = 170.0
+minimum_actor_spacing = 38.0
+
+[node name="Visual" type="Polygon2D" parent="."]
+color = Color(0.3, 0.34, 0.36, 1)
+polygon = PackedVector2Array(-190, -12, 190, -12, 190, 12, -190, 12)
+
+[node name="TopEdge" type="Line2D" parent="."]
+points = PackedVector2Array(-190, -12, 190, -12)
+width = 4.0
+default_color = Color(0.58, 0.62, 0.66, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="InteractionArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractionArea"]
+shape = SubResource("RectangleShape2D_interaction")
+
+[node name="CoverSlots" type="Node2D" parent="."]
+
+[node name="North1" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-140, -38)
+
+[node name="North2" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-100, -38)
+
+[node name="North3" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-60, -38)
+
+[node name="North4" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-20, -38)
+
+[node name="North5" type="Marker2D" parent="CoverSlots"]
+position = Vector2(20, -38)
+
+[node name="North6" type="Marker2D" parent="CoverSlots"]
+position = Vector2(60, -38)
+
+[node name="North7" type="Marker2D" parent="CoverSlots"]
+position = Vector2(100, -38)
+
+[node name="North8" type="Marker2D" parent="CoverSlots"]
+position = Vector2(140, -38)
+
+[node name="South1" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-140, 38)
+
+[node name="South2" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-100, 38)
+
+[node name="South3" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-60, 38)
+
+[node name="South4" type="Marker2D" parent="CoverSlots"]
+position = Vector2(-20, 38)
+
+[node name="South5" type="Marker2D" parent="CoverSlots"]
+position = Vector2(20, 38)
+
+[node name="South6" type="Marker2D" parent="CoverSlots"]
+position = Vector2(60, 38)
+
+[node name="South7" type="Marker2D" parent="CoverSlots"]
+position = Vector2(100, 38)
+
+[node name="South8" type="Marker2D" parent="CoverSlots"]
+position = Vector2(140, 38)

@@ -21,18 +21,24 @@ func get_state(state_name, default = null):
 
 ## Sets a state entry to [param value], creating it if it doesn't exist.
 func set_state(state_name, value):
+	if _state.has(state_name) and _state[state_name] == value:
+		return
 	_state[state_name] = value
 	state_updated.emit()
 
 
 ## Removes a single state entry by name.
 func erase_state(state_name):
+	if not _state.has(state_name):
+		return
 	_state.erase(state_name)
 	state_updated.emit()
 
 
 ## Removes all state entries.
 func clear_state():
+	if _state.is_empty():
+		return
 	_state = {}
 	state_updated.emit()
 

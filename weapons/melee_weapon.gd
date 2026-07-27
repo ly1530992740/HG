@@ -44,6 +44,7 @@ func _spawn_hitbox(origin: Vector2, direction: Vector2) -> void:
 	hitbox.rotation = direction.angle()
 	hitbox.monitoring = true
 	hitbox.monitorable = false
+	hitbox.set_meta("hit_targets", {})
 
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
@@ -66,6 +67,11 @@ func _on_hitbox_area_entered(area: Area2D, hitbox: Area2D) -> void:
 
 	if not _can_hit(target):
 		return
+	var hit_targets: Dictionary = hitbox.get_meta("hit_targets", {})
+	if hit_targets.has(target):
+		return
+	hit_targets[target] = true
+	hitbox.set_meta("hit_targets", hit_targets)
 
 	if target.has_method("take_damage"):
 		target.take_damage(weapon_data.damage, hitbox.global_position)
@@ -75,6 +81,9 @@ func _on_hitbox_area_entered(area: Area2D, hitbox: Area2D) -> void:
 func _can_hit(target: Node) -> bool:
 	if target == null:
 		return false
+	if wielder != null and is_instance_valid(wielder) and wielder.has_method("can_damage_target"):
+		if not wielder.can_damage_target(target):
+			return false
 
 	if weapon_data.hit_groups.is_empty():
 		return target.has_method("take_damage") or target.has_method("take_damages")

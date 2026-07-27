@@ -18,6 +18,7 @@ var cycling := false
 var trigger_held := false
 var trigger_target_position := Vector2.ZERO
 var burst_active := false
+var last_shot_spread_degrees := 0.0
 
 var _shoot_audio: AudioStreamPlayer2D
 var _reload_audio: AudioStreamPlayer2D
@@ -232,7 +233,11 @@ func _spawn_muzzle_flash(origin: Vector2, direction: Vector2) -> void:
 	fx.rotation = direction.angle()
 
 func _apply_spread(direction: Vector2) -> Vector2:
-	var spread := deg_to_rad(weapon_data.spread_degrees)
+	var spread_multiplier := 1.0
+	if wielder and wielder.has_method("get_weapon_spread_multiplier"):
+		spread_multiplier = wielder.get_weapon_spread_multiplier()
+	last_shot_spread_degrees = weapon_data.spread_degrees * spread_multiplier
+	var spread := deg_to_rad(last_shot_spread_degrees)
 	return direction.rotated(randf_range(-spread, spread)).normalized()
 
 func _start_cycle_if_needed() -> void:

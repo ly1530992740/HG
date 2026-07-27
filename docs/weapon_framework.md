@@ -242,14 +242,16 @@ Current behavior:
 - Finds the player inside `detect_range`.
 - Chases until `attack_range`.
 - Keeps a small distance from the player.
-- Fires `weapons/enemy_bullet.tscn` toward the player on a cooldown.
+- Owns a real `RifleWeapon` / `FirearmWeapon` component.
+- Uses `WeaponData` to select `weapons/enemy_bullet.tscn`.
+- Consumes a magazine and reloads from reserve ammo.
+- Calls `FirearmWeapon.try_attack(target.global_position)` instead of spawning projectiles directly.
 - Shows a runtime HP bar above its head.
 
 Current limitation:
 
-- It does not yet own a real `FirearmWeapon` component.
-- It spawns the enemy projectile directly as a temporary bridge.
-- The next AI weapon step should replace direct projectile spawning with `FirearmWeapon.try_attack(target.global_position)`.
+- Targeting and movement still use the simple shooter state machine.
+- Squad orders are available, but GOAP goals/actions do not consume them yet.
 
 ### Projectile Hitbox Rule
 
@@ -326,7 +328,7 @@ The important rule is that gun categories should remain data-driven until a real
 
 ### 1. AI Weapon Usage
 
-Not implemented yet.
+Implemented for `GoblinShooter`.
 
 Planned design:
 
@@ -342,7 +344,6 @@ AI should not duplicate ammo, reload, cooldown, or projectile logic.
 
 Pending AI tasks:
 
-- Add `EnemyWeaponController` or integrate with existing enemy state machines.
 - Add target selection helpers.
 - Add line-of-sight/range checks.
 - Add reload behavior when magazine is empty.
