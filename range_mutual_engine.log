@@ -1,0 +1,75 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+[BATTLE_TRACE t=0.00] SCENARIO_START mode=mutual_encounter alpha=search east bravo=search west cover=multi-position
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.03] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.13] SQUAD_STATE team=alpha phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.13] SQUAD_STATE team=bravo phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.14] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=2.94] REPORT_ACCEPTED team=alpha observer=AlphaShotgunSouth target=BravoShotgunSouth target_aware=false
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaA from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaB from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaC from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaMarksman from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaMachineGunner from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaShotgunNorth from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaShotgunSouth from=CONTACT to=COMBAT
+[BATTLE_TRACE t=2.94] ALERT team=alpha actor=AlphaScout from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.09] SQUAD_STATE team=alpha phase=COMBAT plan=CONTACT_TO_COVER roe=FREE known_hostiles=1 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=3.13] REPORT_ACCEPTED team=bravo observer=BravoB target=AlphaShotgunSouth target_aware=true
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoA from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoB from=CONTACT to=COMBAT
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoC from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoMarksman from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoMachineGunner from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoShotgunNorth from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoShotgunSouth from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.13] ALERT team=bravo actor=BravoScout from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=3.13] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=TAKE_COVER
+[BATTLE_TRACE t=3.26] FIRST_FIRE team=bravo actor=BravoB weapon=Service Rifle roe=FREE cover=NONE target=AlphaShotgunSouth aiming=true aim_quality=0.00 spread=2.70deg
+[BATTLE_TRACE t=3.59] SQUAD_STATE team=bravo phase=COMBAT plan=CONTACT_TO_COVER roe=FREE known_hostiles=1 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=3.60] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SUPPRESS
+[BATTLE_TRACE t=3.60] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=TAKE_COVER
+[BATTLE_TRACE t=3.81] HIT team=bravo shooter=BravoB weapon=Service Rifle victim=AlphaMachineGunner location=ARM fatal=false damage=4 hp=6
+[BATTLE_TRACE t=7.21] ALPHA_FIRST_FIRE_GATE all_in_cover_at_open=false bravo_phase=COMBAT bravo_early_order=true
+[BATTLE_TRACE t=7.21] FIRST_FIRE team=alpha actor=AlphaMachineGunner weapon=Tactical SMG roe=FREE cover=AlphaForwardSouth target=BravoA aiming=false aim_quality=0.00 spread=10.40deg
+[BATTLE_TRACE t=7.71] BRAVO_RESPONSE_CONFIRMED order=SUPPRESS alpha_hits=0 alpha_fatal_hits=0
+[BATTLE_TRACE t=9.66] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoShotgunNorth location=ARM fatal=false damage=3 hp=6
+[BATTLE_TRACE t=10.81] SQUAD_STATE team=alpha phase=COMBAT plan=CONTACT_BASE_OF_FIRE roe=FREE known_hostiles=2 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=11.41] FIRST_FIRE team=bravo actor=BravoMachineGunner weapon=Light Machine Gun roe=FREE cover=NONE target=AlphaC aiming=true aim_quality=0.00 spread=5.40deg
+[BATTLE_TRACE t=11.84] SQUAD_STATE team=bravo phase=COMBAT plan=AGGRESSIVE_ENVELOPMENT roe=FREE known_hostiles=2 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=12.34] SQUAD_STATE team=alpha phase=COMBAT plan=SUPPRESS_AND_FLANK roe=FREE known_hostiles=3 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=13.55] DEATH team=bravo actor=BravoShotgunNorth
+[BATTLE_TRACE t=13.55] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoShotgunNorth location=HEAD fatal=true damage=90 hp=0
+[BATTLE_TRACE t=13.88] SQUAD_STATE team=bravo phase=COMBAT plan=SUPPRESS_AND_FLANK roe=FREE known_hostiles=3 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=14.39] SQUAD_STATE team=alpha phase=COMBAT plan=AGGRESSIVE_ENVELOPMENT roe=FREE known_hostiles=2 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=14.39] SQUAD_STATE team=bravo phase=COMBAT plan=AGGRESSIVE_ENVELOPMENT roe=FREE known_hostiles=1 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=14.91] SQUAD_STATE team=alpha phase=COMBAT plan=SUPPRESS_AND_FLANK roe=FREE known_hostiles=3 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=15.44] FIRST_FIRE team=bravo actor=BravoScout weapon=Service Pistol roe=FREE cover=NONE target=AlphaShotgunNorth aiming=true aim_quality=0.11 spread=6.78deg
+[BATTLE_TRACE t=15.95] SQUAD_STATE team=bravo phase=COMBAT plan=SUPPRESS_AND_FLANK roe=FREE known_hostiles=4 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=17.11] FIRST_FIRE team=bravo actor=BravoC weapon=Service Rifle roe=FREE cover=BravoBlindsideSquadCover2 target=AlphaShotgunNorth aiming=false aim_quality=0.00 spread=6.25deg
+[BATTLE_TRACE t=17.12] FIRST_FIRE team=bravo actor=BravoShotgunSouth weapon=Combat Shotgun roe=FREE cover=NONE target=AlphaShotgunNorth aiming=false aim_quality=0.00 spread=17.29deg
+[BATTLE_TRACE t=17.70] DEATH team=alpha actor=AlphaShotgunNorth
+[BATTLE_TRACE t=17.70] HIT team=bravo shooter=BravoScout weapon=Service Pistol victim=AlphaShotgunNorth location=HEAD fatal=true damage=90 hp=0
+[BATTLE_TRACE t=18.88] DEATH team=alpha actor=AlphaScout
+[BATTLE_TRACE t=18.88] HIT team=bravo shooter=BravoScout weapon=Service Pistol victim=AlphaScout location=HEAD fatal=true damage=70 hp=0
+[BATTLE_TRACE t=20.03] FIRST_FIRE team=alpha actor=AlphaShotgunSouth weapon=Tactical SMG roe=FREE cover=NONE target=BravoShotgunSouth aiming=false aim_quality=0.00 spread=7.18deg
+[BATTLE_TRACE t=20.11] HIT team=alpha shooter=AlphaShotgunSouth weapon=Tactical SMG victim=BravoShotgunSouth location=TORSO fatal=false damage=3 hp=6
+[BATTLE_TRACE t=20.22] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoShotgunSouth location=ARM fatal=false damage=3 hp=3
+[BATTLE_TRACE t=20.40] DEATH team=bravo actor=BravoShotgunSouth
+[BATTLE_TRACE t=20.40] HIT team=alpha shooter=AlphaShotgunSouth weapon=Tactical SMG victim=BravoShotgunSouth location=LEG fatal=false damage=3 hp=0
+[BATTLE_TRACE t=21.23] FIRST_FIRE team=alpha actor=AlphaB weapon=Tactical SMG roe=FREE cover=AlphaForwardCenter target=BravoShotgunSouth aiming=false aim_quality=0.00 spread=5.38deg
+[BATTLE_TRACE t=21.65] HIT team=alpha shooter=AlphaB weapon=Tactical SMG victim=BravoScout location=TORSO fatal=false damage=3 hp=4

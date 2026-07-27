@@ -29,14 +29,22 @@ enum ContactPhase { SEARCH, AMBUSH, COMBAT }
 @export var search_order_interval := 5.0
 @export var search_step_distance := 340.0
 @export var search_movement_enabled := true
+@export var hold_search_until_first_contact := false
 @export var search_direction_override := Vector2.ZERO
+@export var search_expansion_step := 150.0
+@export var search_max_expansion_rings := 3
+@export var shared_target_memory_seconds := 7.5
+@export var surprise_command_delay_min := 0.5
+@export var surprise_command_delay_max := 0.8
+@export var allow_silent_ambush := true
 @export var use_shared_ambush_cover := true
 @export var ambush_opening_volley_duration := 2.5
 @export_range(0.5, 1.0) var ambush_aim_quality_required := 0.9
 @export var ambush_aim_timeout := 2.5
 @export var ambush_max_cover_groups := 3
 @export var ambush_cover_score_tolerance := 700.0
-@export var ambush_load_balance_weight := 0.0
+@export var ambush_load_balance_weight := 220.0
+@export var ambush_formation_identification_radius := 850.0
 @export_range(0.0, 1.0) var ambush_min_approach_progress := 0.55
 
 var blackboard := SquadBlackboard.new()
@@ -64,9 +72,12 @@ var _active_ambush_cover: Node = null
 var _active_ambush_covers: Array[Node] = []
 var _ambush_cover_assignments: Dictionary = {}
 var _ambush_target_assignments: Dictionary = {}
+var _ambush_target_snapshot: Array[Node2D] = []
 var _ambush_assignment_target_count := 0
 var _ambush_aim_started_msec := 0
 var _opening_volley_until_msec := 0
+var _shared_target_last_confirmed_msec := 0
+var _has_ever_engaged := false
 
 func _ready() -> void:
 	add_to_group("squad_coordinator")
@@ -183,6 +194,8 @@ func report_contact(observer: SquadMember, contact: CombatContact, delay_overrid
 		if pending.get("observer") == observer and pending.get("target") == contact.target:
 			return
 	var delay := delay_override if delay_override >= 0.0 else _rng.randf_range(contact_report_delay_min, contact_report_delay_max)
+	if _contact_phase == ContactPhase.SEARCH and (contact.stimulus_type == &"gunshot" or contact.estimated_enemy_awareness):
+		delay = maxf(delay, _rng.randf_range(surprise_command_delay_min, surprise_command_delay_max))
 	_pending_contact_reports.append({
 		"observer": observer,
 		"contact": contact,
@@ -230,6 +243,7 @@ func _cleanup_members() -> void:
 	blackboard.set_members(members)
 
 func _refresh_context() -> void:
+	_refresh_shared_target_memory()
 	var hostile_count := _collect_known_hostile_targets().size()
 	var ally_count := members.size()
 	var force_ratio := float(ally_count) / float(max(1, hostile_count))
@@ -333,6 +347,9 @@ func _issue_combined_arms_plan(target: Node2D, aggressive: bool) -> void:
 	for index in flankers.size():
 		var flanker := flankers[index]
 		assigned[flanker] = true
+		if _member_can_fire_from_cover(flanker, target):
+			issue_order(SquadOrder.Type.FOCUS_FIRE, target, Vector2.ZERO, null, 94, order_interval, [flanker])
+			continue
 		var side := -1 if index % 2 == 0 else 1
 		var order_type := SquadOrder.Type.FLANK_LEFT if side < 0 else SquadOrder.Type.FLANK_RIGHT
 		var destination := _calculate_flank_position(target, flanker, side, index / 2, aggressive)
@@ -345,6 +362,17 @@ func _issue_combined_arms_plan(target: Node2D, aggressive: bool) -> void:
 	for member in members:
 		if not assigned.has(member):
 			issue_order(SquadOrder.Type.FOCUS_FIRE, target, Vector2.ZERO, null, 82, order_interval, [member])
+
+func _member_can_fire_from_cover(member: SquadMember, target: Node2D) -> bool:
+	if not is_instance_valid(member) or not is_instance_valid(member.actor) or not is_instance_valid(target):
+		return false
+	if member.actor.get_active_cover() == null:
+		return false
+	var effective_range := float(member.actor.get("attack_range"))
+	if effective_range <= 0.0 or member.actor.global_position.distance_to(target.global_position) > effective_range:
+		return false
+	var perception := member.actor.get("perception_component") as PerceptionComponent
+	return perception == null or perception.is_currently_visible(target)
 
 func _issue_defensive_plan(target: Node2D) -> void:
 	blackboard.set_fact(&"tactical_plan", "HOLD_DEFENSIVE_LINE")
@@ -460,7 +488,7 @@ func _issue_search_sweep() -> void:
 	if members.is_empty():
 		return
 	var center := _get_squad_center()
-	if not search_movement_enabled:
+	if not search_movement_enabled or (hold_search_until_first_contact and not _has_ever_engaged):
 		blackboard.set_fact(&"tactical_plan", "SEARCH_HALT")
 		blackboard.set_fact(&"roe", RulesOfEngagement.Type.WEAPONS_HOLD)
 		_set_squad_searching(center)
@@ -477,13 +505,19 @@ func _issue_search_sweep() -> void:
 			forward = leader.actor.get_facing_direction()
 	if forward == Vector2.ZERO:
 		forward = Vector2.RIGHT
-	if _last_contact_position != Vector2.ZERO and center.distance_to(_last_contact_position) <= 120.0:
-		var sweep_angle := deg_to_rad(-42.0 + float(_search_sweep_index % 4) * 28.0)
-		forward = forward.rotated(sweep_angle).normalized()
-	var step_distance := search_step_distance
-	if _last_contact_position != Vector2.ZERO:
-		step_distance = minf(step_distance, maxf(140.0, center.distance_to(_last_contact_position)))
-	var formation_center := center + forward * step_distance
+	var close_to_last_contact := _last_contact_position != Vector2.ZERO and center.distance_to(_last_contact_position) <= 120.0
+	var formation_center := Vector2.ZERO
+	if close_to_last_contact:
+		var sweep_sector := _search_sweep_index % 6
+		var sweep_ring := mini(search_max_expansion_rings, 1 + int(_search_sweep_index / 6))
+		var sweep_angle := deg_to_rad(-150.0 + float(sweep_sector) * 60.0)
+		forward = Vector2.RIGHT.rotated(sweep_angle)
+		formation_center = _last_contact_position + forward * (140.0 + float(sweep_ring) * search_expansion_step)
+	else:
+		var step_distance := search_step_distance
+		if _last_contact_position != Vector2.ZERO:
+			step_distance = minf(step_distance, maxf(140.0, center.distance_to(_last_contact_position)))
+		formation_center = center + forward * step_distance
 	var lateral := Vector2(-forward.y, forward.x)
 	blackboard.set_fact(&"tactical_plan", "SEARCH_SWEEP")
 	blackboard.set_fact(&"roe", RulesOfEngagement.Type.WEAPONS_HOLD)
@@ -544,13 +578,15 @@ func _is_observer_able_to_report(observer: SquadMember) -> bool:
 
 func _accept_contact_report(observer: SquadMember, contact: CombatContact) -> void:
 	_last_contact_position = contact.last_known_position
+	_shared_target_last_confirmed_msec = Time.get_ticks_msec()
+	_search_sweep_index = 0
 	blackboard.set_shared_target(contact.target)
 	blackboard.set_fact(&"contact_confidence", contact.confidence)
 	blackboard.set_fact(&"contact_last_position", contact.last_known_position)
 	blackboard.set_fact(&"estimated_enemy_awareness", contact.estimated_enemy_awareness)
 	contact_report_accepted.emit(observer, contact)
 	if _contact_phase == ContactPhase.SEARCH:
-		if contact.stimulus_type == &"gunshot" or _is_target_combat_aware(contact.target) or contact.estimated_enemy_awareness:
+		if not allow_silent_ambush or contact.stimulus_type == &"gunshot" or _is_target_combat_aware(contact.target) or contact.estimated_enemy_awareness:
 			_begin_direct_contact(contact.target)
 		else:
 			_begin_ambush(contact.target)
@@ -558,6 +594,7 @@ func _accept_contact_report(observer: SquadMember, contact: CombatContact) -> vo
 		_open_ambush(&"compromised")
 
 func _begin_direct_contact(target: Node2D) -> void:
+	_has_ever_engaged = true
 	_contact_phase = ContactPhase.COMBAT
 	_engagement_active = true
 	_engagement_time = 0.0
@@ -585,7 +622,11 @@ func _begin_ambush(target: Node2D) -> void:
 	blackboard.set_fact(&"ambush_ready_ratio", 0.0)
 	blackboard.set_fact(&"ambush_aim_ready_ratio", 0.0)
 	_ambush_target_assignments.clear()
+	_ambush_target_snapshot.clear()
+	if is_instance_valid(target):
+		_ambush_target_snapshot.append(target)
 	_ambush_assignment_target_count = 0
+	_refresh_ambush_target_assignments(target)
 	_ambush_aim_started_msec = 0
 	_ensure_ambush_cover_assignments(target)
 	blackboard.set_fact(&"ambush_cover", _get_ambush_cover_summary())
@@ -672,6 +713,7 @@ func _open_ambush(reason: StringName) -> void:
 	if target == null:
 		_reset_contact_state()
 		return
+	_has_ever_engaged = true
 	_contact_phase = ContactPhase.COMBAT
 	blackboard.set_fact(&"contact_phase", _contact_phase)
 	blackboard.set_fact(&"roe", RulesOfEngagement.Type.WEAPONS_FREE)
@@ -708,9 +750,16 @@ func get_ambush_target_for(member: SquadMember) -> Node2D:
 	return target_value as Node2D if is_instance_valid(target_value) else null
 
 func _refresh_ambush_target_assignments(fallback_target: Node2D) -> bool:
-	var targets := _collect_known_hostile_targets()
-	if is_instance_valid(fallback_target) and not targets.has(fallback_target):
-		targets.append(fallback_target)
+	for known_target in _collect_known_hostile_targets():
+		if is_instance_valid(known_target) and not _ambush_target_snapshot.has(known_target):
+			_ambush_target_snapshot.append(known_target)
+	if is_instance_valid(fallback_target) and not _ambush_target_snapshot.has(fallback_target):
+		_ambush_target_snapshot.append(fallback_target)
+	_expand_ambush_formation_snapshot()
+	for snapshot_target in _ambush_target_snapshot.duplicate():
+		if not _is_hostile_target(snapshot_target):
+			_ambush_target_snapshot.erase(snapshot_target)
+	var targets: Array[Node2D] = _ambush_target_snapshot.duplicate()
 	if targets.is_empty():
 		return false
 	var assignments_valid := targets.size() == _ambush_assignment_target_count
@@ -737,6 +786,30 @@ func _refresh_ambush_target_assignments(fallback_target: Node2D) -> bool:
 			available.erase(selected)
 	_ambush_assignment_target_count = targets.size()
 	blackboard.set_fact(&"ambush_assigned_target_count", _ambush_target_assignments.size())
+	return true
+
+func _expand_ambush_formation_snapshot() -> void:
+	if _ambush_target_snapshot.is_empty() or ambush_formation_identification_radius <= 0.0:
+		return
+	var identified_seeds: Array[Node2D] = _ambush_target_snapshot.duplicate()
+	for candidate_value in get_tree().get_nodes_in_group("combatant"):
+		if not candidate_value is Node2D:
+			continue
+		var candidate := candidate_value as Node2D
+		if _ambush_target_snapshot.has(candidate) or not _is_hostile_target(candidate):
+			continue
+		if candidate.has_method("is_visually_concealed") and bool(candidate.is_visually_concealed()):
+			continue
+		for seed in identified_seeds:
+			if not _same_combat_formation(seed, candidate):
+				continue
+			if seed.global_position.distance_to(candidate.global_position) <= ambush_formation_identification_radius:
+				_ambush_target_snapshot.append(candidate)
+				break
+
+func _same_combat_formation(first: Node2D, second: Node2D) -> bool:
+	if first.has_method("get_combat_team") and second.has_method("get_combat_team"):
+		return first.get_combat_team() == second.get_combat_team()
 	return true
 
 func _select_role_ambush_target(member: SquadMember, candidates: Array[Node2D]) -> Node2D:
@@ -913,14 +986,20 @@ func _reset_contact_state() -> void:
 	_active_ambush_covers.clear()
 	_ambush_cover_assignments.clear()
 	_ambush_target_assignments.clear()
+	_ambush_target_snapshot.clear()
 	_ambush_assignment_target_count = 0
 	_ambush_aim_started_msec = 0
 	_opening_volley_until_msec = 0
 	blackboard.set_shared_target(null)
+	_shared_target_last_confirmed_msec = 0
 	blackboard.set_fact(&"contact_phase", _contact_phase)
 	blackboard.set_fact(&"roe", RulesOfEngagement.Type.WEAPONS_HOLD)
 	blackboard.set_fact(&"ambush_ready_ratio", 0.0)
 	blackboard.set_fact(&"ambush_aim_ready_ratio", 0.0)
+	blackboard.set_fact(&"ambush_assigned_target_count", 0)
+	blackboard.set_fact(&"ambush_cover", "NONE")
+	blackboard.set_fact(&"ambush_cover_count", 0)
+	blackboard.set_fact(&"hostile_alive_count", 0)
 	blackboard.set_fact(&"tactical_plan", "SEARCH_SWEEP")
 	_set_squad_searching(_last_contact_position)
 	_issue_search_sweep()
@@ -948,6 +1027,34 @@ func _update_engagement(delta: float) -> void:
 			return
 	_reset_contact_state()
 
+func _refresh_shared_target_memory() -> void:
+	var shared_target := blackboard.shared_target
+	if not _is_hostile_target(shared_target):
+		blackboard.set_shared_target(null)
+		_shared_target_last_confirmed_msec = 0
+		return
+	var latest_confirmation := _shared_target_last_confirmed_msec
+	var latest_position := _last_contact_position
+	for member in members:
+		if not is_instance_valid(member) or not is_instance_valid(member.actor):
+			continue
+		var perception := member.actor.get("perception_component") as PerceptionComponent
+		if perception == null:
+			continue
+		var contact := perception.get_contact(shared_target)
+		if contact != null and contact.last_seen_time_msec > latest_confirmation:
+			latest_confirmation = contact.last_seen_time_msec
+			latest_position = contact.last_known_position
+	if latest_confirmation > _shared_target_last_confirmed_msec:
+		_shared_target_last_confirmed_msec = latest_confirmation
+		_last_contact_position = latest_position
+		blackboard.set_fact(&"contact_last_position", latest_position)
+	if _shared_target_last_confirmed_msec <= 0:
+		_shared_target_last_confirmed_msec = Time.get_ticks_msec()
+	var shared_age := float(Time.get_ticks_msec() - _shared_target_last_confirmed_msec) / 1000.0
+	if shared_age > shared_target_memory_seconds:
+		blackboard.set_shared_target(null)
+
 func _find_primary_target() -> Node2D:
 	var origin := Vector2.ZERO
 	if leader != null and is_instance_valid(leader) and leader.actor != null and is_instance_valid(leader.actor):
@@ -957,6 +1064,14 @@ func _find_primary_target() -> Node2D:
 	if _is_hostile_target(blackboard.shared_target):
 		nearest = blackboard.shared_target
 		nearest_distance = origin.distance_to(nearest.global_position)
+	if _contact_phase == ContactPhase.AMBUSH or Time.get_ticks_msec() <= _opening_volley_until_msec:
+		for snapshot_target in _ambush_target_snapshot:
+			if not _is_hostile_target(snapshot_target):
+				continue
+			var snapshot_distance := origin.distance_to(snapshot_target.global_position)
+			if snapshot_distance < nearest_distance:
+				nearest = snapshot_target
+				nearest_distance = snapshot_distance
 	for member in members:
 		if not is_instance_valid(member) or not is_instance_valid(member.actor):
 			continue

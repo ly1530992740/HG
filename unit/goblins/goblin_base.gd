@@ -2,6 +2,7 @@ extends CharacterBody2D
 class_name GoblinBase
 
 signal died(actor: Node)
+signal projectile_hit_resolved(victim: Node, shooter: Node, location: int, fatal: bool, damage: int)
 
 enum State { IDLE, CHASE, ATTACK, HIT, DEAD }
 
@@ -30,6 +31,8 @@ const DETOUR_DISTANCE := 60.0
 @export var team_display_name := "敌军"
 @export var team_color := Color(0.72, 0.16, 0.16, 1.0)
 @export var initial_facing_direction := Vector2.RIGHT
+@export var death_cleanup_delay := 0.0
+@export var death_audio_enabled := true
 
 @onready var anim: AnimatedSprite2D = get_node_or_null("anim")
 @onready var nav: NavigationAgent2D = get_node_or_null("NavigationAgent2D")
@@ -331,18 +334,20 @@ func take_damage(damage: int, source_position: Vector2 = Vector2.ZERO) -> void:
 	if health <= 0:
 		die()
 
-func receive_projectile_hit(base_damage: int, source_position: Vector2, _projectile: Node = null) -> void:
+func receive_projectile_hit(base_damage: int, source_position: Vector2, projectile: Node = null) -> void:
 	if state == State.DEAD:
 		return
 	direct_threat_timer = 2.5
 	var hit := injury_component.resolve_hit(base_damage, -1, max_health) if injury_component else {
+		"location": InjuryComponent.HitLocation.TORSO,
 		"damage": base_damage,
 		"fatal": false,
 	}
-	if bool(hit.get("fatal", false)):
-		take_damage(max_health * 10, source_position)
-	else:
-		take_damage(int(hit.get("damage", base_damage)), source_position)
+	var fatal := bool(hit.get("fatal", false))
+	var resolved_damage := max_health * 10 if fatal else int(hit.get("damage", base_damage))
+	var shooter: Node = projectile.get("shooter") as Node if is_instance_valid(projectile) else null
+	projectile_hit_resolved.emit(self, shooter, int(hit.get("location", InjuryComponent.HitLocation.TORSO)), fatal, resolved_damage)
+	take_damage(resolved_damage, source_position)
 
 func start_flashing() -> void:
 	if is_flashing or anim == null:
@@ -367,10 +372,34 @@ func die() -> void:
 	rebalance_pack()
 	cleanup_reserved_targets()
 
-	if death_audio and not death_audio.playing:
+	if death_audio_enabled and death_audio and not death_audio.playing:
 		death_audio.play()
 
-	queue_free()
+	_disable_dead_actor()
+	if death_cleanup_delay < 0.0:
+		return
+	if death_cleanup_delay == 0.0:
+		queue_free()
+		return
+	await get_tree().create_timer(death_cleanup_delay).timeout
+	if is_instance_valid(self):
+		queue_free()
+
+func _disable_dead_actor() -> void:
+	velocity = Vector2.ZERO
+	knockback_velocity = Vector2.ZERO
+	active_enemies.erase(self)
+	collision_layer = 0
+	collision_mask = 0
+	remove_from_group("combatant")
+	remove_from_group("goblin")
+	set_physics_process(false)
+	for node in find_children("*", "CollisionShape2D", true, false):
+		var shape := node as CollisionShape2D
+		if shape:
+			shape.set_deferred("disabled", true)
+	if nav:
+		nav.avoidance_enabled = false
 
 func avoid_obstacles(_delta: float) -> void:
 	if predictcast == null:

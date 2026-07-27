@@ -473,8 +473,9 @@ func _make_default_firearm_data() -> WeaponData:
 	data.reserve_ammo = 24
 	data.reload_time = 1.2
 	data.projectile_scene = DEFAULT_PROJECTILE_SCENE
+	data.effective_range = 1800.0
 	data.projectile_speed = 2600.0
-	data.projectile_lifetime = 0.45
+	data.projectile_lifetime = 0.8
 	data.hit_groups = ["goblin", "goblinbuildings"]
 	return data
 
@@ -493,8 +494,9 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 			data.magazine_size = 10
 			data.reserve_ammo = 50
 			data.reload_time = 1.0
+			data.effective_range = 1200.0
 			data.projectile_speed = 2500.0
-			data.projectile_lifetime = 0.45
+			data.projectile_lifetime = 0.55
 		"smg":
 			data.weapon_name = "SMG"
 			data.damage = 2
@@ -504,8 +506,9 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 			data.magazine_size = 30
 			data.reserve_ammo = 120
 			data.reload_time = 1.4
+			data.effective_range = 1600.0
 			data.projectile_speed = 2400.0
-			data.projectile_lifetime = 0.42
+			data.projectile_lifetime = 0.75
 		"shotgun":
 			data.weapon_name = "Shotgun"
 			data.damage = 2
@@ -517,8 +520,9 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 			data.magazine_size = 6
 			data.reserve_ammo = 36
 			data.reload_time = 1.7
+			data.effective_range = 850.0
 			data.projectile_speed = 2100.0
-			data.projectile_lifetime = 0.30
+			data.projectile_lifetime = 0.45
 		"bolt_rifle":
 			data.weapon_name = "Bolt Rifle"
 			data.damage = 8
@@ -529,8 +533,9 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 			data.magazine_size = 5
 			data.reserve_ammo = 25
 			data.reload_time = 1.6
+			data.effective_range = 2400.0
 			data.projectile_speed = 3400.0
-			data.projectile_lifetime = 0.70
+			data.projectile_lifetime = 0.8
 		"lmg":
 			data.weapon_name = "LMG"
 			data.damage = 3
@@ -540,8 +545,9 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 			data.magazine_size = 70
 			data.reserve_ammo = 210
 			data.reload_time = 3.4
+			data.effective_range = 1900.0
 			data.projectile_speed = 2600.0
-			data.projectile_lifetime = 0.50
+			data.projectile_lifetime = 0.8
 		_:
 			return _make_default_firearm_data()
 

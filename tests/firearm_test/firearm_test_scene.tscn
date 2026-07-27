@@ -56,7 +56,7 @@ squad_id = &"alpha"
 combat_team = &"alpha"
 squad_display_name = "蓝队"
 can_target_players = false
-ambush_ready_ratio_required = 1.0
+allow_silent_ambush = false
 search_direction_override = Vector2(1, 0)
 
 [node name="EnemySquadCoordinatorBravo" type="Node" parent="." unique_id=568770965]
@@ -65,7 +65,8 @@ squad_id = &"bravo"
 combat_team = &"bravo"
 squad_display_name = "红队"
 can_target_players = false
-search_movement_enabled = false
+allow_silent_ambush = false
+search_direction_override = Vector2(-1, 0)
 
 [node name="Ground" type="Polygon2D" parent="." unique_id=1416501664]
 z_index = -20
@@ -151,6 +152,7 @@ position = Vector2(0, 790)
 
 [node name="AlphaA" parent="." unique_id=817980324 instance=ExtResource("2_enemy")]
 position = Vector2(-1080, -360)
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -160,6 +162,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 
 [node name="AlphaB" parent="." unique_id=1690685330 instance=ExtResource("2_enemy")]
 position = Vector2(-1120, 0)
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -169,6 +172,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 
 [node name="AlphaC" parent="." unique_id=1903211459 instance=ExtResource("2_enemy")]
 position = Vector2(-1080, 360)
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -179,6 +183,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 [node name="AlphaMarksman" parent="." unique_id=1263727084 instance=ExtResource("2_enemy")]
 position = Vector2(-1200, -610)
 combat_role = 1
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -189,6 +194,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 [node name="AlphaMachineGunner" parent="." unique_id=1874395388 instance=ExtResource("2_enemy")]
 position = Vector2(-1180, 570)
 combat_role = 2
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -199,6 +205,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 [node name="AlphaShotgunNorth" parent="." unique_id=1087485612 instance=ExtResource("2_enemy")]
 position = Vector2(-980, -180)
 combat_role = 3
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -209,6 +216,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 [node name="AlphaShotgunSouth" parent="." unique_id=1182580922 instance=ExtResource("2_enemy")]
 position = Vector2(-980, 180)
 combat_role = 3
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -219,6 +227,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 [node name="AlphaScout" parent="." unique_id=1706862052 instance=ExtResource("2_enemy")]
 position = Vector2(-1040, 690)
 combat_role = 4
+firearm_loadout = 1
 squad_id = &"alpha"
 lock_steady_morale = true
 combat_team = &"alpha"
@@ -228,6 +237,7 @@ team_color = Color(0.12, 0.55, 0.9, 1)
 
 [node name="BravoA" parent="." unique_id=1656645287 instance=ExtResource("2_enemy")]
 position = Vector2(1080, -360)
+initial_facing_direction = Vector2(-1, 0)
 squad_id = &"bravo"
 lock_steady_morale = true
 combat_team = &"bravo"
@@ -237,6 +247,7 @@ team_color = Color(0.86, 0.2, 0.17, 1)
 
 [node name="BravoB" parent="." unique_id=1323663343 instance=ExtResource("2_enemy")]
 position = Vector2(1120, 0)
+initial_facing_direction = Vector2(-1, 0)
 squad_id = &"bravo"
 lock_steady_morale = true
 combat_team = &"bravo"
@@ -246,6 +257,7 @@ team_color = Color(0.86, 0.2, 0.17, 1)
 
 [node name="BravoC" parent="." unique_id=1140134175 instance=ExtResource("2_enemy")]
 position = Vector2(1080, 360)
+initial_facing_direction = Vector2(-1, 0)
 squad_id = &"bravo"
 lock_steady_morale = true
 combat_team = &"bravo"
@@ -255,6 +267,7 @@ team_color = Color(0.86, 0.2, 0.17, 1)
 
 [node name="BravoMarksman" parent="." unique_id=135209754 instance=ExtResource("2_enemy")]
 position = Vector2(1133, 263.00003)
+initial_facing_direction = Vector2(-1, 0)
 combat_role = 1
 squad_id = &"bravo"
 lock_steady_morale = true
@@ -265,6 +278,7 @@ team_color = Color(0.86, 0.2, 0.17, 1)
 
 [node name="BravoMachineGunner" parent="." unique_id=1513411514 instance=ExtResource("2_enemy")]
 position = Vector2(1125, -273.00003)
+initial_facing_direction = Vector2(-1, 0)
 combat_role = 2
 squad_id = &"bravo"
 lock_steady_morale = true
@@ -275,6 +289,7 @@ team_color = Color(0.86, 0.2, 0.17, 1)
 
 [node name="BravoShotgunNorth" parent="." unique_id=1778819294 instance=ExtResource("2_enemy")]
 position = Vector2(980, -180)
+initial_facing_direction = Vector2(-1, 0)
 combat_role = 3
 squad_id = &"bravo"
 lock_steady_morale = true
@@ -285,6 +300,7 @@ team_color = Color(0.86, 0.2, 0.17, 1)
 
 [node name="BravoShotgunSouth" parent="." unique_id=608212184 instance=ExtResource("2_enemy")]
 position = Vector2(980, 180)
+initial_facing_direction = Vector2(-1, 0)
 combat_role = 3
 squad_id = &"bravo"
 lock_steady_morale = true
@@ -295,6 +311,7 @@ team_color = Color(0.86, 0.2, 0.17, 1)
 
 [node name="BravoScout" parent="." unique_id=1510376474 instance=ExtResource("2_enemy")]
 position = Vector2(889.0001, -334.00003)
+initial_facing_direction = Vector2(-1, 0)
 combat_role = 4
 squad_id = &"bravo"
 lock_steady_morale = true

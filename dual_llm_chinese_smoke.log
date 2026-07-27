@@ -1,0 +1,60 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+[BATTLE_TRACE t=0.00] SCENARIO_START mode=mutual_encounter alpha=search east bravo=search west cover=multi-position
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.04] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] SQUAD_STATE team=alpha phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.16] SQUAD_STATE team=bravo phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=0.16] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SEARCH_AREA
+[BATTLE_TRACE t=2.65] REPORT_ACCEPTED team=alpha observer=AlphaShotgunSouth target=BravoShotgunSouth target_aware=false
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaA from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaB from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaC from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaMarksman from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaMachineGunner from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaShotgunNorth from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaShotgunSouth from=CONTACT to=COMBAT
+[BATTLE_TRACE t=2.65] ALERT team=alpha actor=AlphaScout from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.02] SQUAD_STATE team=alpha phase=COMBAT plan=CONTACT_TO_COVER roe=FREE known_hostiles=2 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=3.15] REPORT_ACCEPTED team=bravo observer=BravoB target=AlphaShotgunSouth target_aware=true
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoA from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoB from=CONTACT to=COMBAT
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoC from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoMarksman from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoMachineGunner from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoShotgunNorth from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoShotgunSouth from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=3.15] ALERT team=bravo actor=BravoScout from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=3.15] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=TAKE_COVER
+[BATTLE_TRACE t=3.21] FIRST_FIRE team=bravo actor=BravoB weapon=Service Rifle roe=FREE cover=NONE target=AlphaShotgunSouth aiming=true aim_quality=0.00 spread=2.70deg
+[BATTLE_TRACE t=3.52] SQUAD_STATE team=bravo phase=COMBAT plan=CONTACT_TO_COVER roe=FREE known_hostiles=1 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=SUPPRESS
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=RETREAT
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=RETREAT
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=RETREAT
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=RETREAT
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=RETREAT
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=RETREAT
+[BATTLE_TRACE t=3.76] INVARIANT_VIOLATION rule=bravo ordered before alpha fire order=RETREAT
+[LLM COMMANDER] plan=RETREAT latency=238ms 命令：压制射击 x1，撤退 x7 state={"上次模型指令":"等待","交战时间秒":0,"任务目标":"在保存兵力的前提下击败敌军","侦察判定可保持隐蔽":false,"候选指令":["寻找掩体","压制包抄","强攻合围","防守反击","掩护撤退"],"兵种编成":{"手枪侦察员":1,"机枪手":1,"步枪手":3,"精确射手":1,"霰弹突击手":2},"初始兵力":8,"可用隐蔽掩体组":1,"已知敌军":3,"平均生命比例":1.0,"总弹药":877,"我方存活":8,"我方阵亡":0,"掩体内人数":2,"敌军是否警觉":true,"敌军正面朝向我方":true,"敌我兵力比":2.67,"暴露人数":6,"目标距离":1151,"程序建议姿态":"均衡","隐蔽掩体总容量":2} reason=在保存兵力的前提下击败敌军，当前兵力和状态均处劣势，应保存剩余兵力。
+[BATTLE_TRACE t=3.89] FIRST_FIRE team=bravo actor=BravoMachineGunner weapon=Light Machine Gun roe=FREE cover=NONE target=AlphaShotgunNorth aiming=true aim_quality=0.00 spread=5.40deg
+[BATTLE_TRACE t=4.05] SQUAD_STATE team=bravo phase=COMBAT plan=COVERING_RETREAT roe=FREE known_hostiles=3 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[LLM COMMANDER] plan=RETREAT latency=528ms 命令：压制射击 x1，撤退 x7 state={"上次模型指令":"等待","交战时间秒":1,"任务目标":"在保存兵力的前提下击败敌军","侦察判定可保持隐蔽":false,"候选指令":["寻找掩体","压制包抄","强攻合围","防守反击","掩护撤退"],"兵种编成":{"手枪侦察员":1,"机枪手":1,"步枪手":3,"精确射手":1,"霰弹突击手":2},"初始兵力":8,"可用隐蔽掩体组":0,"已知敌军":4,"平均生命比例":1.0,"总弹药":1536,"我方存活":8,"我方阵亡":0,"掩体内人数":3,"敌军是否警觉":true,"敌军正面朝向我方":true,"敌我兵力比":2.0,"暴露人数":5,"目标距离":1380,"程序建议姿态":"均衡","隐蔽掩体总容量":0} reason=我方存活兵力8人，敌军4人，敌军已警觉且正面朝我方，暴露人数5人，兵力占优且掩体内人数3人，应优先保存兵力并撤退以避免进一步损失。
+[BATTLE_TRACE t=4.14] ALPHA_FIRST_FIRE_GATE all_in_cover_at_open=false bravo_phase=COMBAT bravo_early_order=true
+[BATTLE_TRACE t=4.14] FIRST_FIRE team=alpha actor=AlphaMachineGunner weapon=Tactical SMG roe=FREE cover=NONE target=BravoB aiming=true aim_quality=0.00 spread=2.40deg
+Dual LLM commander smoke test passed:
+  Alpha plan=RETREAT latency=528ms 命令：压制射击 x1，撤退 x7
+  Bravo plan=RETREAT latency=238ms 命令：压制射击 x1，撤退 x7

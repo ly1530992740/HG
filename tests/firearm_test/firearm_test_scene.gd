@@ -36,16 +36,21 @@ var alpha_opening_volley_targets: Dictionary = {}
 var alpha_opening_volley_aim_quality: Dictionary = {}
 var alpha_opening_volley_shot_counts: Dictionary = {}
 var alpha_ambush_open_reason: StringName = &""
+var alpha_hits_before_bravo_response := 0
+var alpha_fatal_hits_before_bravo_response := 0
+var team_hit_counts: Dictionary = {}
+var team_fatal_hit_counts: Dictionary = {}
+var battle_result_logged := false
 
 func _ready() -> void:
 	battle_started_msec = Time.get_ticks_msec()
 	var trace_path := ProjectSettings.globalize_path("res://.godot/ambush_timeline.log")
 	battle_trace_file = FileAccess.open(trace_path, FileAccess.WRITE)
 	_trace_event("SCENARIO_START", {
+		"mode": "ambush" if _uses_ambush_test_setup() else "mutual_encounter",
 		"alpha": "search east",
-		"bravo": "hold facing east",
-		"cover": "multi blind-side assignment",
-		"required_ready": "100%",
+		"bravo": "hold facing east" if _uses_ambush_test_setup() else "search west",
+		"cover": "multi-position",
 	})
 	GlobalPlayer.set_active_pawn(player)
 	var player_camera := player.get_node_or_null("Camera2D") as Camera2D
@@ -69,7 +74,7 @@ func _process(delta: float) -> void:
 		_trace_squad_state(bravo_coordinator)
 		_trace_alpha_ambush_members()
 	prefire_guard_timer -= delta
-	if not alpha_first_fire_observed and prefire_guard_timer <= 0.0:
+	if _uses_ambush_test_setup() and not alpha_first_fire_observed and prefire_guard_timer <= 0.0:
 		prefire_guard_timer = 2.0
 		_trace_prefire_guard()
 	ai_hud_timer -= delta
@@ -81,6 +86,10 @@ func _process(delta: float) -> void:
 	if battle_trace_file and trace_flush_timer <= 0.0:
 		trace_flush_timer = 1.0
 		battle_trace_file.flush()
+	_check_battle_result()
+
+func _uses_ambush_test_setup() -> bool:
+	return alpha_coordinator.allow_silent_ambush and bravo_coordinator.hold_search_until_first_contact
 
 func _bind_player_weapon() -> void:
 	var weapon := player.get("firearm_weapon") as FirearmWeapon
@@ -118,6 +127,8 @@ func _bind_enemies() -> void:
 			weapon.fired.connect(_on_ai_weapon_fired.bind(enemy))
 		if enemy.has_signal("died") and not enemy.died.is_connected(_on_traced_actor_died):
 			enemy.died.connect(_on_traced_actor_died)
+		if enemy.has_signal("projectile_hit_resolved") and not enemy.projectile_hit_resolved.is_connected(_on_projectile_hit_resolved):
+			enemy.projectile_hit_resolved.connect(_on_projectile_hit_resolved)
 		if enemy.has_signal("surprise_reaction_started") and not enemy.surprise_reaction_started.is_connected(_on_surprise_reaction_started):
 			enemy.surprise_reaction_started.connect(_on_surprise_reaction_started.bind(enemy))
 	_update_enemy_hud()
@@ -179,7 +190,11 @@ func _on_traced_order_issued(order: SquadOrder, coordinator: SquadCoordinator) -
 	if coordinator.squad_id == &"bravo" and order.type != SquadOrder.Type.HOLD:
 		if alpha_first_fire_observed:
 			if not bravo_responded_after_alpha_fire:
-				_trace_event("BRAVO_RESPONSE_CONFIRMED", {"order": order.get_type_name()})
+				_trace_event("BRAVO_RESPONSE_CONFIRMED", {
+					"order": order.get_type_name(),
+					"alpha_hits": alpha_hits_before_bravo_response,
+					"alpha_fatal_hits": alpha_fatal_hits_before_bravo_response,
+				})
 			bravo_responded_after_alpha_fire = true
 		else:
 			bravo_combat_order_before_alpha_fire = true
@@ -192,7 +207,7 @@ func _on_ambush_opened(_target: Node2D, reason: StringName, coordinator: SquadCo
 		if not is_instance_valid(member) or not is_instance_valid(member.actor) or not is_instance_valid(assigned_cover) or member.actor.get_active_cover() != assigned_cover:
 			all_in_cover = false
 			break
-	if coordinator.squad_id == &"alpha":
+	if coordinator.squad_id == &"alpha" and alpha_ambush_open_reason == &"":
 		alpha_ambush_opened_all_in_cover = all_in_cover
 		alpha_ambush_opened_cover_count = coordinator.get_active_ambush_covers().size()
 		alpha_ambush_open_reason = reason
@@ -228,6 +243,12 @@ func _on_ai_weapon_fired(actor: Node2D) -> void:
 		alpha_opening_volley_aim_quality[actor] = aim_quality
 	if firing_team == &"alpha" and String(alpha_coordinator.get_blackboard().get_fact(&"tactical_plan", "")) == "AMBUSH_VOLLEY":
 		alpha_opening_volley_shot_counts[actor.name] = int(alpha_opening_volley_shot_counts.get(actor.name, 0)) + 1
+		_trace_event("VOLLEY_SHOT", {
+			"actor": actor.name,
+			"index": int(alpha_opening_volley_shot_counts[actor.name]),
+			"aim_quality": "%.2f" % aim_quality,
+			"spread": "%.2fdeg" % final_spread,
+		})
 	if firing_team == &"alpha" and not alpha_first_fire_observed:
 		alpha_first_fire_observed = true
 		alpha_first_fire_msec = Time.get_ticks_msec()
@@ -245,12 +266,43 @@ func _on_ai_weapon_fired(actor: Node2D) -> void:
 	_trace_event("FIRST_FIRE", {
 		"team": firing_team,
 		"actor": actor.name,
+		"weapon": weapon.weapon_data.weapon_name if weapon and weapon.weapon_data else "NONE",
 		"roe": RulesOfEngagement.get_label(actor._get_rules_of_engagement()) if actor.has_method("_get_rules_of_engagement") else "UNKNOWN",
 		"cover": actor.get_active_cover().name if actor.has_method("get_active_cover") and is_instance_valid(actor.get_active_cover()) else "NONE",
 		"target": fire_target.name if is_instance_valid(fire_target) else "NONE",
 		"aiming": actor.is_weapon_aiming() if actor.has_method("is_weapon_aiming") else false,
 		"aim_quality": "%.2f" % aim_quality,
 		"spread": "%.2fdeg" % final_spread,
+	})
+
+func _on_projectile_hit_resolved(victim: Node, shooter: Node, location: int, fatal: bool, damage: int) -> void:
+	call_deferred("_trace_projectile_hit_after_damage", victim, shooter, location, fatal, damage)
+
+func _trace_projectile_hit_after_damage(victim: Node, shooter: Node, location: int, fatal: bool, damage: int) -> void:
+	if not is_instance_valid(victim):
+		return
+	var firing_team: StringName = shooter.get_combat_team() if is_instance_valid(shooter) and shooter.has_method("get_combat_team") else &"unknown"
+	team_hit_counts[firing_team] = int(team_hit_counts.get(firing_team, 0)) + 1
+	if fatal:
+		team_fatal_hit_counts[firing_team] = int(team_fatal_hit_counts.get(firing_team, 0)) + 1
+	if firing_team == &"alpha" and not bravo_responded_after_alpha_fire:
+		alpha_hits_before_bravo_response += 1
+		if fatal:
+			alpha_fatal_hits_before_bravo_response += 1
+	var weapon_name := "UNKNOWN"
+	if is_instance_valid(shooter):
+		var weapon := shooter.get("firearm_weapon") as FirearmWeapon
+		if weapon and weapon.weapon_data:
+			weapon_name = weapon.weapon_data.weapon_name
+	_trace_event("HIT", {
+		"team": firing_team,
+		"shooter": shooter.name if is_instance_valid(shooter) else "UNKNOWN",
+		"weapon": weapon_name,
+		"victim": victim.name,
+		"location": InjuryComponent.HitLocation.keys()[location] if location >= 0 and location < InjuryComponent.HitLocation.size() else "UNKNOWN",
+		"fatal": fatal,
+		"damage": damage,
+		"hp": int(victim.get("health")),
 	})
 
 func _on_surprise_reaction_started(duration: float, actor: Node2D) -> void:
@@ -423,9 +475,29 @@ func _get_team_stats(team: StringName) -> Dictionary:
 			continue
 		if enemy.get_combat_team() != team:
 			continue
+		if enemy.has_method("is_combat_alive") and not enemy.is_combat_alive():
+			continue
 		alive += 1
 		health += int(enemy.get("health"))
 	return {"alive": alive, "health": health}
+
+func _check_battle_result() -> void:
+	if battle_result_logged or initial_team_counts.is_empty():
+		return
+	var alpha_stats := _get_team_stats(&"alpha")
+	var bravo_stats := _get_team_stats(&"bravo")
+	if int(alpha_stats.alive) > 0 and int(bravo_stats.alive) > 0:
+		return
+	battle_result_logged = true
+	_trace_event("BATTLE_END", {
+		"winner": "alpha" if int(alpha_stats.alive) > 0 else ("bravo" if int(bravo_stats.alive) > 0 else "draw"),
+		"alpha_alive": int(alpha_stats.alive),
+		"bravo_alive": int(bravo_stats.alive),
+		"alpha_hits": int(team_hit_counts.get(&"alpha", 0)),
+		"bravo_hits": int(team_hit_counts.get(&"bravo", 0)),
+		"alpha_fatal_hits": int(team_fatal_hit_counts.get(&"alpha", 0)),
+		"bravo_fatal_hits": int(team_fatal_hit_counts.get(&"bravo", 0)),
+	})
 
 func _update_ai_state_hud() -> void:
 	if ai_state_label == null or alpha_coordinator == null or bravo_coordinator == null:

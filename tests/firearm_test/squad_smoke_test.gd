@@ -30,7 +30,10 @@ func _ready() -> void:
 
 func _run() -> void:
 	var scene := $Scenario
+	_assert_mutual_encounter_config(scene)
+	_configure_ambush_test_scenario(scene)
 	await get_tree().process_frame
+	_configure_ambush_test_scenario(scene)
 	await get_tree().process_frame
 
 	var alpha := scene.get_node("EnemySquadCoordinator") as SquadCoordinator
@@ -66,7 +69,7 @@ func _run() -> void:
 	for member in bravo.members:
 		assert((member.actor.get("initial_facing_direction") as Vector2).x > 0.0, "Bravo must begin with its back toward Alpha.")
 	assert(alpha.search_direction_override.is_equal_approx(Vector2.RIGHT), "Alpha search direction is not fixed toward the ambush target.")
-	assert(not bravo.search_movement_enabled, "Bravo should remain stationary during the ambush setup.")
+	assert(bravo.search_movement_enabled and bravo.hold_search_until_first_contact, "Bravo should hold only until its first combat contact.")
 	for member in alpha.members:
 		assert(member.current_order != null and member.current_order.type == SquadOrder.Type.SEARCH_AREA, "An Alpha search member remained on HOLD.")
 		assert(member.current_order.target_position.x > member.actor.global_position.x, "Alpha received a search destination that is not eastward.")
@@ -124,6 +127,7 @@ func _run() -> void:
 	var alpha_actor := alpha.members[0].actor
 	var alpha_friend := alpha.members[1].actor
 	var bravo_actor := bravo.members[0].actor
+	assert(bravo_actor.get_facing_direction().x > 0.8, "Bravo HOLD drifted away from its initial east-facing direction.")
 	assert(alpha_actor.can_damage_target(bravo_actor), "Opposing factions must be damageable.")
 	assert(not alpha_actor.can_damage_target(alpha_friend), "Friendly damage filtering failed.")
 	assert(not alpha_actor.can_damage_target(player), "The observer player must not be targeted.")
@@ -141,6 +145,10 @@ func _run() -> void:
 		assert(member.actor.enter_cover_against(assigned_cover, bravo_actor.global_position), "An Alpha member could not reserve its assigned ambush wall.")
 	assert(assigned_cover_counts.size() == 2, "Alpha did not distribute across both viable blind-side covers.")
 	assert(blindside_cover.assignments.size() + blindside_cover_2.assignments.size() == 8, "Not every Alpha member entered an assigned ambush wall.")
+	var setup_targets: Dictionary = {}
+	for member in alpha.members:
+		setup_targets[alpha.get_ambush_target_for(member)] = true
+	assert(setup_targets.size() == 8, "Alpha did not identify and assign the full nearby hostile formation.")
 	alpha._open_ambush(&"test_ready")
 	assert(int(alpha.get_blackboard().get_fact(&"roe")) == RulesOfEngagement.Type.WEAPONS_FREE, "Opening the ambush did not release weapon hold.")
 	assert(String(alpha.get_blackboard().get_fact(&"tactical_plan")) == "AMBUSH_VOLLEY", "Ambush did not begin with a shared-cover opening volley.")
@@ -178,15 +186,34 @@ func _run() -> void:
 			SquadCombatRole.Type.MARKSMAN:
 				assert(order.type == SquadOrder.Type.OVERWATCH, "Marksman was not assigned overwatch.")
 			SquadCombatRole.Type.SHOTGUNNER, SquadCombatRole.Type.PISTOL_SCOUT:
-				assert(order.type in [SquadOrder.Type.FLANK_LEFT, SquadOrder.Type.FLANK_RIGHT], "Mobile specialist was not assigned a flank.")
-				assert(order.target_position != Vector2.ZERO, "Flank order has no tactical destination.")
-				if order.type == SquadOrder.Type.FLANK_LEFT:
-					left_flank_count += 1
+				if alpha._member_can_fire_from_cover(member, bravo_actor):
+					assert(order.type == SquadOrder.Type.FOCUS_FIRE, "A mobile specialist abandoned effective cover to flank.")
 				else:
-					right_flank_count += 1
+					assert(order.type in [SquadOrder.Type.FLANK_LEFT, SquadOrder.Type.FLANK_RIGHT], "An out-of-range mobile specialist was not assigned a flank.")
+					assert(order.target_position != Vector2.ZERO, "Flank order has no tactical destination.")
+					if order.type == SquadOrder.Type.FLANK_LEFT:
+						left_flank_count += 1
+					else:
+						right_flank_count += 1
 			_:
 				assert(order.type == SquadOrder.Type.FOCUS_FIRE, "Rifleman was not assigned to fix the enemy.")
-	assert(left_flank_count > 0 and right_flank_count > 0, "The plan did not use both flanks.")
+	if left_flank_count + right_flank_count > 0:
+		assert(left_flank_count > 0 and right_flank_count > 0, "The plan did not use both flanks when maneuver was required.")
+	var original_bravo_position := bravo_actor.global_position
+	bravo_actor.global_position = Vector2(3200.0, original_bravo_position.y)
+	alpha._issue_combined_arms_plan(bravo_actor, false)
+	left_flank_count = 0
+	right_flank_count = 0
+	for member in alpha.members:
+		if member.actor.get_combat_role() not in [SquadCombatRole.Type.SHOTGUNNER, SquadCombatRole.Type.PISTOL_SCOUT]:
+			continue
+		assert(member.current_order.type in [SquadOrder.Type.FLANK_LEFT, SquadOrder.Type.FLANK_RIGHT], "An out-of-range mobile specialist remained in static fire mode.")
+		if member.current_order.type == SquadOrder.Type.FLANK_LEFT:
+			left_flank_count += 1
+		else:
+			right_flank_count += 1
+	assert(left_flank_count > 0 and right_flank_count > 0, "Out-of-range specialists were not assigned to both flanks.")
+	bravo_actor.global_position = original_bravo_position
 
 	var shotgun_member := _find_role_member(alpha, SquadCombatRole.Type.SHOTGUNNER)
 	var shotgun_actor := shotgun_member.actor
@@ -226,13 +253,20 @@ func _run() -> void:
 	assert(ai_label.get_theme_font_size("font_size") <= 9, "AI debug text was not reduced.")
 	assert(ai_label.text.contains("编成") and ai_label.text.contains("计划"), "Role-aware tactical HUD was not updated.")
 
+	alpha._reset_contact_state()
+	assert(int(alpha.get_blackboard().get_fact(&"hostile_alive_count", -1)) == 0, "Contact reset kept a stale hostile count.")
+	assert(int(alpha.get_blackboard().get_fact(&"ambush_assigned_target_count", -1)) == 0, "Contact reset kept stale ambush targets.")
+	assert(String(alpha.get_blackboard().get_fact(&"ambush_cover", "")) == "NONE", "Contact reset kept a stale ambush cover summary.")
+
 	scene.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var battle_scene: Node = (load("res://tests/firearm_test/firearm_test_scene.tscn") as PackedScene).instantiate()
 	battle_scene.name = "AutonomousRoleBattle"
 	add_child(battle_scene)
+	_configure_ambush_test_scenario(battle_scene)
 	await get_tree().process_frame
+	_configure_ambush_test_scenario(battle_scene)
 	await get_tree().process_frame
 	var battle_alpha := battle_scene.get_node("EnemySquadCoordinator") as SquadCoordinator
 	var battle_bravo := battle_scene.get_node("EnemySquadCoordinatorBravo") as SquadCoordinator
@@ -261,12 +295,12 @@ func _run() -> void:
 	for quality in volley_aim_quality.values():
 		assert(float(quality) >= battle_alpha.ambush_aim_quality_required, "An Alpha shooter fired before reaching the required aim quality.")
 	var volley_shot_counts := battle_scene.get("alpha_opening_volley_shot_counts") as Dictionary
-	assert(int(volley_shot_counts.get("AlphaMachineGunner", 0)) >= 3, "The machine gunner did not execute an opening short burst.")
-	for actor_name in ["AlphaA", "AlphaB", "AlphaC", "AlphaMarksman", "AlphaShotgunNorth", "AlphaShotgunSouth", "AlphaScout"]:
-		assert(int(volley_shot_counts.get(actor_name, 0)) >= 1, "%s missed the opening volley." % actor_name)
+	for actor_name in ["AlphaA", "AlphaB", "AlphaC", "AlphaMarksman", "AlphaMachineGunner", "AlphaShotgunNorth", "AlphaShotgunSouth", "AlphaScout"]:
+		assert(int(volley_shot_counts.get(actor_name, 0)) >= 3, "%s did not execute the SMG opening burst." % actor_name)
 	assert(bool(battle_scene.get("bravo_unaware_at_alpha_first_fire")), "Bravo detected Alpha before the opening shot.")
 	assert(not bool(battle_scene.get("bravo_combat_order_before_alpha_fire")), "Bravo issued a combat order before Alpha attacked.")
-	assert(bool(battle_scene.get("bravo_responded_after_alpha_fire")), "Bravo did not issue a combat response after Alpha attacked.")
+	var bravo_eliminated_during_reaction := not _has_living_member(battle_bravo)
+	assert(bool(battle_scene.get("bravo_responded_after_alpha_fire")) or bravo_eliminated_during_reaction, "Bravo neither responded after the ambush nor was eliminated during its reaction delay.")
 	assert(int(battle_scene.get("bravo_surprise_reaction_count")) > 0, "No Bravo soldier entered the surprise reaction after the ambush shot.")
 	var alpha_fire_msec := int(battle_scene.get("alpha_first_fire_msec"))
 	var bravo_fire_msec := int(battle_scene.get("bravo_first_fire_msec"))
@@ -275,6 +309,42 @@ func _run() -> void:
 
 	print("Role battle smoke test passed: 8v8 loadouts, melee, morale lock, role orders, flanks, retreat, camera, HUD, and autonomous fire verified.")
 	get_tree().quit(0)
+
+func _configure_ambush_test_scenario(scene: Node) -> void:
+	var alpha := scene.get_node("EnemySquadCoordinator") as SquadCoordinator
+	var bravo := scene.get_node("EnemySquadCoordinatorBravo") as SquadCoordinator
+	alpha.allow_silent_ambush = true
+	alpha.ambush_ready_ratio_required = 1.0
+	alpha.search_direction_override = Vector2.RIGHT
+	bravo.allow_silent_ambush = true
+	bravo.hold_search_until_first_contact = true
+	bravo.search_direction_override = Vector2.ZERO
+	for child in scene.get_children():
+		if not child is GoblinBase:
+			continue
+		var actor := child as GoblinBase
+		actor.initial_facing_direction = Vector2.RIGHT
+		actor.last_move_dir = Vector2.RIGHT
+	if not alpha.members.is_empty():
+		alpha._issue_search_sweep()
+	if not bravo.members.is_empty():
+		bravo._issue_search_sweep()
+
+func _assert_mutual_encounter_config(scene: Node) -> void:
+	var alpha := scene.get_node("EnemySquadCoordinator") as SquadCoordinator
+	var bravo := scene.get_node("EnemySquadCoordinatorBravo") as SquadCoordinator
+	assert(not alpha.allow_silent_ambush and not bravo.allow_silent_ambush, "The playable scene still permits a silent ambush.")
+	assert(not bravo.hold_search_until_first_contact, "Bravo still waits motionless for an ambush.")
+	assert(alpha.search_direction_override.is_equal_approx(Vector2.RIGHT), "Alpha does not search toward Bravo.")
+	assert(bravo.search_direction_override.is_equal_approx(Vector2.LEFT), "Bravo does not search toward Alpha.")
+	for child in scene.get_children():
+		if not child is GoblinBase:
+			continue
+		var actor := child as GoblinBase
+		if actor.combat_team == &"alpha":
+			assert(actor.initial_facing_direction.x > 0.0, "An Alpha soldier does not face the encounter.")
+		elif actor.combat_team == &"bravo":
+			assert(actor.initial_facing_direction.x < 0.0, "A Bravo soldier does not face the encounter.")
 
 func _assert_role_composition(coordinator: SquadCoordinator) -> void:
 	var actual: Dictionary = {}
@@ -289,17 +359,22 @@ func _assert_member_loadout(member: SquadMember) -> void:
 	var role: SquadCombatRole.Type = actor.get_combat_role()
 	var firearm := actor.get("firearm_weapon") as FirearmWeapon
 	assert(firearm != null, "A combat role has no firearm.")
-	match role:
-		SquadCombatRole.Type.MARKSMAN:
-			assert(firearm is BoltActionRifleWeapon, "Marksman does not use BoltActionRifleWeapon.")
-		SquadCombatRole.Type.MACHINE_GUNNER:
-			assert(firearm is LmgWeapon, "Machine gunner does not use LmgWeapon.")
-		SquadCombatRole.Type.SHOTGUNNER:
-			assert(firearm is ShotgunWeapon and firearm.weapon_data.projectile_count > 1, "Shotgunner does not use a pellet shotgun.")
-		SquadCombatRole.Type.PISTOL_SCOUT:
-			assert(firearm is PistolWeapon, "Pistol scout does not use PistolWeapon.")
-		_:
-			assert(firearm is RifleWeapon, "Rifleman does not use RifleWeapon.")
+	assert(is_equal_approx(float(actor.get("attack_range")), firearm.weapon_data.effective_range), "AI fire authorization is not synchronized with WeaponData effective range.")
+	assert(firearm.weapon_data.projectile_speed * firearm.weapon_data.projectile_lifetime >= firearm.weapon_data.effective_range, "A projectile expires before reaching its weapon's effective range.")
+	if actor.get_combat_team() == &"alpha":
+		assert(firearm is SmgWeapon and firearm.weapon_data.weapon_name == "Tactical SMG", "An Alpha soldier does not use the scenario SMG loadout.")
+	else:
+		match role:
+			SquadCombatRole.Type.MARKSMAN:
+				assert(firearm is BoltActionRifleWeapon, "Marksman does not use BoltActionRifleWeapon.")
+			SquadCombatRole.Type.MACHINE_GUNNER:
+				assert(firearm is LmgWeapon, "Machine gunner does not use LmgWeapon.")
+			SquadCombatRole.Type.SHOTGUNNER:
+				assert(firearm is ShotgunWeapon and firearm.weapon_data.projectile_count > 1, "Shotgunner does not use a pellet shotgun.")
+			SquadCombatRole.Type.PISTOL_SCOUT:
+				assert(firearm is PistolWeapon, "Pistol scout does not use PistolWeapon.")
+			_:
+				assert(firearm is RifleWeapon, "Rifleman does not use RifleWeapon.")
 	assert(actor.get("melee_weapon") is MeleeWeapon, "Every AI role must carry a melee weapon.")
 	assert(actor.find_child("MeleeEngageAction", true, false) is MeleeEngageAction, "Every AI role must have melee GOAP.")
 	assert(actor.get("goap_agent") is GoapAgent, "A combat role has no GOAP agent.")
@@ -415,6 +490,12 @@ func _all_survivors_steady(coordinator: SquadCoordinator) -> bool:
 		if will == null or will.mental_state != WillComponent.MentalState.STEADY:
 			return false
 	return true
+
+func _has_living_member(coordinator: SquadCoordinator) -> bool:
+	for member in coordinator.members:
+		if is_instance_valid(member) and is_instance_valid(member.actor) and int(member.actor.get("health")) > 0:
+			return true
+	return false
 
 func _assert_dead_observer_report_is_discarded() -> void:
 	var coordinator := SquadCoordinator.new()

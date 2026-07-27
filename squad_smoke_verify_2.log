@@ -1,0 +1,237 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+
+[BATTLE_TRACE t=0.00] SCENARIO_START mode=mutual_encounter alpha=search east bravo=search west cover=multi-position
+[BATTLE_TRACE t=0.14] SQUAD_STATE team=alpha phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.14] SQUAD_STATE team=bravo phase=SEARCH plan=SEARCH_HALT roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.14] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=1.25] REPORT_ACCEPTED team=alpha observer=AlphaMarksman target=BravoA target_aware=false
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaA cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaB cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaC cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMarksman cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMachineGunner cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunNorth cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunSouth cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.25] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaScout cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaA cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaB cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaC cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMarksman cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMachineGunner cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunNorth cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunSouth cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.27] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaScout cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaA from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaB from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaC from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaMarksman from=CONTACT to=COMBAT
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaMachineGunner from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaShotgunNorth from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaShotgunSouth from=OBSERVING to=COMBAT
+[BATTLE_TRACE t=1.27] ALERT team=alpha actor=AlphaScout from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=1.27] AMBUSH_OPEN team=alpha reason=test_ready ready=0% cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2 all_in_cover=true
+[BATTLE_TRACE t=0.00] SCENARIO_START mode=mutual_encounter alpha=search east bravo=search west cover=multi-position
+[BATTLE_TRACE t=0.03] SQUAD_STATE team=alpha phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.03] SQUAD_STATE team=bravo phase=SEARCH plan=SEARCH_HALT roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=0.03] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=1.96] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=4.00] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=6.00] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=8.01] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=8.03] REPORT_ACCEPTED team=alpha observer=AlphaA target=BravoShotgunSouth target_aware=false
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaA cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaB cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaC cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMarksman cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMachineGunner cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunNorth cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunSouth cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=8.03] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaScout cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=8.20] SQUAD_STATE team=alpha phase=AMBUSH plan=AMBUSH_SETUP roe=HOLD known_hostiles=1 ready=0% aim_ready=0% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaA state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=850 action=-1 speed=210 detour=(0.0, 0.0) target=BravoShotgunNorth aim_quality=0.00
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaB state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1103 action=-1 speed=210 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.00
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaC state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1060 action=-1 speed=210 detour=(0.0, 0.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=1177 action=-1 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1117 action=-1 speed=175 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaShotgunNorth state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=924 action=-1 speed=235 detour=(0.0, 0.0) target=BravoC aim_quality=0.00
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaShotgunSouth state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=863 action=-1 speed=235 detour=(0.0, 0.0) target=BravoB aim_quality=0.00
+[BATTLE_TRACE t=8.20] AMBUSH_MEMBER actor=AlphaScout state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=770 action=-1 speed=245 detour=(0.0, 0.0) target=BravoMachineGunner aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaA state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=742 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunNorth aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaB state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1107 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaC state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1067 action=10 speed=73 detour=(-552.0, 208.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=1132 action=10 speed=180 detour=(-552.0, -208.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1079 action=10 speed=288 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaShotgunNorth state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=803 action=10 speed=235 detour=(0.0, 0.0) target=BravoC aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaShotgunSouth state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=741 action=10 speed=235 detour=(0.0, 0.0) target=BravoB aim_quality=0.00
+[BATTLE_TRACE t=8.72] AMBUSH_MEMBER actor=AlphaScout state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=637 action=10 speed=245 detour=(0.0, 0.0) target=BravoMachineGunner aim_quality=0.00
+[BATTLE_TRACE t=9.23] AMBUSH_MEMBER actor=AlphaB state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=998 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.00
+[BATTLE_TRACE t=9.23] AMBUSH_MEMBER actor=AlphaC state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1042 action=10 speed=210 detour=(0.0, 0.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=9.23] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=1089 action=10 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=9.24] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=1004 action=10 speed=175 detour=(-552.0, 262.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=9.24] AMBUSH_MEMBER actor=AlphaShotgunNorth state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=687 action=10 speed=235 detour=(0.0, 0.0) target=BravoC aim_quality=0.00
+[BATTLE_TRACE t=9.24] AMBUSH_MEMBER actor=AlphaScout state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=511 action=10 speed=245 detour=(0.0, 0.0) target=BravoMachineGunner aim_quality=0.00
+[BATTLE_TRACE t=9.75] AMBUSH_MEMBER actor=AlphaA state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=525 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunNorth aim_quality=0.00
+[BATTLE_TRACE t=9.75] AMBUSH_MEMBER actor=AlphaB state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=892 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.00
+[BATTLE_TRACE t=9.75] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=996 action=10 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=9.75] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=937 action=-1 speed=175 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=9.75] AMBUSH_MEMBER actor=AlphaShotgunNorth state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=567 action=10 speed=235 detour=(0.0, 0.0) target=BravoC aim_quality=0.00
+[BATTLE_TRACE t=9.75] AMBUSH_MEMBER actor=AlphaShotgunSouth state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=503 action=10 speed=235 detour=(0.0, 0.0) target=BravoB aim_quality=0.00
+[BATTLE_TRACE t=9.75] AMBUSH_MEMBER actor=AlphaScout state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=385 action=10 speed=245 detour=(0.0, 0.0) target=BravoMachineGunner aim_quality=0.00
+[BATTLE_TRACE t=10.02] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=10.27] AMBUSH_MEMBER actor=AlphaA state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=417 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunNorth aim_quality=0.00
+[BATTLE_TRACE t=10.27] AMBUSH_MEMBER actor=AlphaC state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=829 action=10 speed=210 detour=(0.0, 0.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=10.27] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=847 action=10 speed=175 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=10.27] AMBUSH_MEMBER actor=AlphaShotgunNorth state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=447 action=10 speed=235 detour=(0.0, 0.0) target=BravoC aim_quality=0.00
+[BATTLE_TRACE t=10.27] AMBUSH_MEMBER actor=AlphaShotgunSouth state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=381 action=10 speed=235 detour=(0.0, 0.0) target=BravoB aim_quality=0.00
+[BATTLE_TRACE t=10.27] AMBUSH_MEMBER actor=AlphaScout state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=259 action=10 speed=245 detour=(0.0, 0.0) target=BravoMachineGunner aim_quality=0.00
+[BATTLE_TRACE t=10.79] AMBUSH_MEMBER actor=AlphaB state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=675 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.00
+[BATTLE_TRACE t=10.79] AMBUSH_MEMBER actor=AlphaC state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=721 action=10 speed=210 detour=(0.0, 0.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=10.79] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=814 action=10 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=10.79] AMBUSH_MEMBER actor=AlphaShotgunSouth state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=260 action=10 speed=235 detour=(0.0, 0.0) target=BravoB aim_quality=0.00
+[BATTLE_TRACE t=10.79] AMBUSH_MEMBER actor=AlphaScout state=READY assigned=BravoBlindsideSquadCover2 active=BravoBlindsideSquadCover2 distance=43 action=-1 speed=0 detour=(0.0, 0.0) target=BravoMachineGunner aim_quality=0.00
+[BATTLE_TRACE t=11.30] SQUAD_STATE team=alpha phase=AMBUSH plan=AMBUSH_SETUP roe=HOLD known_hostiles=8 ready=13% aim_ready=0% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=11.30] AMBUSH_MEMBER actor=AlphaA state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=214 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunNorth aim_quality=0.00
+[BATTLE_TRACE t=11.30] AMBUSH_MEMBER actor=AlphaB state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=568 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.00
+[BATTLE_TRACE t=11.30] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=723 action=10 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=11.30] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=667 action=10 speed=175 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=11.30] AMBUSH_MEMBER actor=AlphaShotgunNorth state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=219 action=10 speed=279 detour=(0.0, 0.0) target=BravoC aim_quality=0.00
+[BATTLE_TRACE t=11.30] AMBUSH_MEMBER actor=AlphaShotgunSouth state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=173 action=-1 speed=235 detour=(0.0, 0.0) target=BravoB aim_quality=0.00
+[BATTLE_TRACE t=11.82] SQUAD_STATE team=alpha phase=AMBUSH plan=AMBUSH_SETUP roe=HOLD known_hostiles=8 ready=50% aim_ready=0% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=11.82] AMBUSH_MEMBER actor=AlphaA state=READY assigned=BravoBlindsideSquadCover active=BravoBlindsideSquadCover distance=43 action=-1 speed=0 detour=(0.0, 0.0) target=BravoShotgunNorth aim_quality=0.38
+[BATTLE_TRACE t=11.82] AMBUSH_MEMBER actor=AlphaC state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=502 action=10 speed=210 detour=(0.0, 0.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=11.82] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=576 action=10 speed=175 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=11.82] AMBUSH_MEMBER actor=AlphaShotgunNorth state=READY assigned=BravoBlindsideSquadCover active=BravoBlindsideSquadCover distance=107 action=-1 speed=0 detour=(0.0, 0.0) target=BravoC aim_quality=0.67
+[BATTLE_TRACE t=11.82] AMBUSH_MEMBER actor=AlphaShotgunSouth state=READY assigned=BravoBlindsideSquadCover2 active=BravoBlindsideSquadCover2 distance=43 action=-1 speed=0 detour=(0.0, 0.0) target=BravoB aim_quality=0.00
+[BATTLE_TRACE t=12.04] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=12.34] AMBUSH_MEMBER actor=AlphaB state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=344 action=10 speed=210 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.00
+[BATTLE_TRACE t=12.34] AMBUSH_MEMBER actor=AlphaC state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=408 action=10 speed=210 detour=(0.0, 0.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=12.34] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=541 action=10 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=12.85] SQUAD_STATE team=alpha phase=AMBUSH plan=AMBUSH_SETUP roe=HOLD known_hostiles=8 ready=63% aim_ready=0% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=12.85] AMBUSH_MEMBER actor=AlphaB state=READY assigned=BravoBlindsideSquadCover2 active=BravoBlindsideSquadCover2 distance=145 action=-1 speed=0 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.27
+[BATTLE_TRACE t=12.85] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=396 action=10 speed=175 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=13.37] SQUAD_STATE team=alpha phase=AMBUSH plan=AMBUSH_SETUP roe=HOLD known_hostiles=8 ready=75% aim_ready=0% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=13.37] AMBUSH_MEMBER actor=AlphaC state=READY assigned=BravoBlindsideSquadCover2 active=BravoBlindsideSquadCover2 distance=107 action=-1 speed=0 detour=(0.0, 0.0) target=BravoA aim_quality=0.00
+[BATTLE_TRACE t=13.37] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=365 action=10 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=13.89] AMBUSH_MEMBER actor=AlphaMarksman state=MOVING assigned=BravoBlindsideSquadCover active=NONE distance=281 action=10 speed=180 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.00
+[BATTLE_TRACE t=13.89] AMBUSH_MEMBER actor=AlphaMachineGunner state=MOVING assigned=BravoBlindsideSquadCover2 active=NONE distance=217 action=10 speed=175 detour=(0.0, 0.0) target=BravoScout aim_quality=0.00
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaA cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaB cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaC cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMarksman cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaMachineGunner cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunNorth cover=BravoBlindsideSquadCover
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaShotgunSouth cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=14.02] ORDER team=alpha type=AMBUSH_POSITION recipients=AlphaScout cover=BravoBlindsideSquadCover2
+[BATTLE_TRACE t=14.05] PREFIRE_GUARD bravo_phase=SEARCH known_hostiles=0 non_hold_orders=NONE
+[BATTLE_TRACE t=14.42] SQUAD_STATE team=alpha phase=AMBUSH plan=AMBUSH_SETUP roe=HOLD known_hostiles=8 ready=100% aim_ready=0% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=14.42] AMBUSH_MEMBER actor=AlphaMarksman state=READY assigned=BravoBlindsideSquadCover active=BravoBlindsideSquadCover distance=145 action=-1 speed=0 detour=(0.0, 0.0) target=BravoMarksman aim_quality=0.18
+[BATTLE_TRACE t=14.42] AMBUSH_MEMBER actor=AlphaMachineGunner state=READY assigned=BravoBlindsideSquadCover2 active=BravoBlindsideSquadCover2 distance=71 action=-1 speed=0 detour=(0.0, 0.0) target=BravoShotgunSouth aim_quality=0.18
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaA from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaB from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaC from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaMarksman from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaMachineGunner from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaShotgunNorth from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaShotgunSouth from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] ALERT team=alpha actor=AlphaScout from=CONTACT to=COMBAT
+[BATTLE_TRACE t=14.95] AMBUSH_OPEN team=alpha reason=aimed_ready ready=100% cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2 all_in_cover=true
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoA duration=0.55
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoB duration=0.67
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoC duration=0.65
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoMarksman duration=0.52
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoMachineGunner duration=0.72
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoShotgunNorth duration=0.65
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoShotgunSouth duration=0.54
+[BATTLE_TRACE t=14.96] SURPRISE_REACTION team=bravo actor=BravoScout duration=0.77
+[BATTLE_TRACE t=14.96] VOLLEY_SHOT actor=AlphaA index=1 aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.96] ALPHA_FIRST_FIRE_GATE all_in_cover_at_open=true bravo_phase=SEARCH bravo_early_order=false
+[BATTLE_TRACE t=14.96] FIRST_FIRE team=alpha actor=AlphaA weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover target=BravoScout aiming=true aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.96] VOLLEY_SHOT actor=AlphaB index=1 aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.96] FIRST_FIRE team=alpha actor=AlphaB weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover2 target=BravoC aiming=true aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.96] VOLLEY_SHOT actor=AlphaC index=1 aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.96] FIRST_FIRE team=alpha actor=AlphaC weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover2 target=BravoShotgunNorth aiming=true aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.97] VOLLEY_SHOT actor=AlphaMarksman index=1 aim_quality=0.91 spread=0.94deg
+[BATTLE_TRACE t=14.97] FIRST_FIRE team=alpha actor=AlphaMarksman weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover target=BravoMarksman aiming=true aim_quality=0.91 spread=0.94deg
+[BATTLE_TRACE t=14.97] VOLLEY_SHOT actor=AlphaMachineGunner index=1 aim_quality=0.91 spread=0.94deg
+[BATTLE_TRACE t=14.97] FIRST_FIRE team=alpha actor=AlphaMachineGunner weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover2 target=BravoShotgunSouth aiming=true aim_quality=0.91 spread=0.94deg
+[BATTLE_TRACE t=14.97] VOLLEY_SHOT actor=AlphaShotgunNorth index=1 aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.97] FIRST_FIRE team=alpha actor=AlphaShotgunNorth weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover target=BravoA aiming=true aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.97] VOLLEY_SHOT actor=AlphaShotgunSouth index=1 aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.97] FIRST_FIRE team=alpha actor=AlphaShotgunSouth weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover2 target=BravoB aiming=true aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.97] VOLLEY_SHOT actor=AlphaScout index=1 aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=14.97] FIRST_FIRE team=alpha actor=AlphaScout weapon=Tactical SMG roe=FREE cover=BravoBlindsideSquadCover2 target=BravoMachineGunner aiming=true aim_quality=0.93 spread=0.91deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaA index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaB index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaC index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaMarksman index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaMachineGunner index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaShotgunNorth index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaShotgunSouth index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.05] VOLLEY_SHOT actor=AlphaScout index=2 aim_quality=1.00 spread=0.98deg
+[BATTLE_TRACE t=15.10] ALERT team=bravo actor=BravoScout from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.10] HIT team=alpha shooter=AlphaA weapon=Tactical SMG victim=BravoScout location=TORSO fatal=false damage=3 hp=4
+[BATTLE_TRACE t=15.13] ALERT team=bravo actor=BravoShotgunSouth from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.13] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoShotgunSouth location=TORSO fatal=false damage=3 hp=6
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaA index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaB index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaC index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaMarksman index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaMachineGunner index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaShotgunNorth index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaShotgunSouth index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] VOLLEY_SHOT actor=AlphaScout index=3 aim_quality=1.00 spread=1.12deg
+[BATTLE_TRACE t=15.15] ALERT team=bravo actor=BravoC from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.15] ALERT team=bravo actor=BravoA from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.17] HIT team=alpha shooter=AlphaB weapon=Tactical SMG victim=BravoC location=TORSO fatal=false damage=3 hp=5
+[BATTLE_TRACE t=15.17] HIT team=alpha shooter=AlphaShotgunNorth weapon=Tactical SMG victim=BravoA location=TORSO fatal=false damage=3 hp=5
+[BATTLE_TRACE t=15.20] HIT team=alpha shooter=AlphaA weapon=Tactical SMG victim=BravoScout location=ARM fatal=false damage=3 hp=1
+[BATTLE_TRACE t=15.20] ALERT team=bravo actor=BravoShotgunNorth from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.20] ALERT team=bravo actor=BravoB from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.20] HIT team=alpha shooter=AlphaC weapon=Tactical SMG victim=BravoShotgunNorth location=LEG fatal=false damage=3 hp=6
+[BATTLE_TRACE t=15.20] HIT team=alpha shooter=AlphaShotgunSouth weapon=Tactical SMG victim=BravoB location=TORSO fatal=false damage=3 hp=5
+[BATTLE_TRACE t=15.22] ALERT team=bravo actor=BravoMarksman from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.22] HIT team=alpha shooter=AlphaMarksman weapon=Tactical SMG victim=BravoMarksman location=TORSO fatal=false damage=3 hp=4
+[BATTLE_TRACE t=15.23] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoShotgunSouth location=TORSO fatal=false damage=3 hp=3
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaA index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaB index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaC index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaMarksman index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaMachineGunner index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaShotgunNorth index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaShotgunSouth index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.25] VOLLEY_SHOT actor=AlphaScout index=4 aim_quality=1.00 spread=1.28deg
+[BATTLE_TRACE t=15.28] ALERT team=bravo actor=BravoMachineGunner from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.30] DEATH team=bravo actor=BravoB
+[BATTLE_TRACE t=15.30] DEATH team=bravo actor=BravoScout
+[BATTLE_TRACE t=15.30] HIT team=alpha shooter=AlphaC weapon=Tactical SMG victim=BravoShotgunNorth location=LEG fatal=false damage=3 hp=3
+[BATTLE_TRACE t=15.30] HIT team=alpha shooter=AlphaShotgunSouth weapon=Tactical SMG victim=BravoB location=HEAD fatal=true damage=80 hp=0
+[BATTLE_TRACE t=15.30] HIT team=alpha shooter=AlphaA weapon=Tactical SMG victim=BravoScout location=ARM fatal=false damage=3 hp=0
+[BATTLE_TRACE t=15.32] HIT team=alpha shooter=AlphaMarksman weapon=Tactical SMG victim=BravoMarksman location=TORSO fatal=false damage=3 hp=1
+[BATTLE_TRACE t=15.35] DEATH team=bravo actor=BravoShotgunSouth
+[BATTLE_TRACE t=15.35] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoShotgunSouth location=TORSO fatal=false damage=3 hp=0
+[BATTLE_TRACE t=15.38] DEATH team=bravo actor=BravoC
+[BATTLE_TRACE t=15.38] HIT team=alpha shooter=AlphaScout weapon=Tactical SMG victim=BravoMachineGunner location=ARM fatal=false damage=4 hp=6
+[BATTLE_TRACE t=15.38] HIT team=alpha shooter=AlphaB weapon=Tactical SMG victim=BravoC location=HEART fatal=true damage=80 hp=0
+[BATTLE_TRACE t=15.38] HIT team=alpha shooter=AlphaShotgunNorth weapon=Tactical SMG victim=BravoA location=ARM fatal=false damage=3 hp=2
+[BATTLE_TRACE t=15.40] SQUAD_STATE team=alpha phase=COMBAT plan=AMBUSH_VOLLEY roe=FREE known_hostiles=8 ready=100% aim_ready=100% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=15.41] ALERT team=bravo actor=BravoShotgunNorth from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.42] DEATH team=bravo actor=BravoShotgunNorth
+[BATTLE_TRACE t=15.42] HIT team=alpha shooter=AlphaC weapon=Tactical SMG victim=BravoShotgunNorth location=LEG fatal=false damage=3 hp=0
+[BATTLE_TRACE t=15.43] ALERT team=bravo actor=BravoMarksman from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.43] DEATH team=bravo actor=BravoMarksman
+[BATTLE_TRACE t=15.43] HIT team=alpha shooter=AlphaMarksman weapon=Tactical SMG victim=BravoMarksman location=TORSO fatal=false damage=3 hp=0
+[BATTLE_TRACE t=15.47] ALERT team=bravo actor=BravoA from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.48] DEATH team=bravo actor=BravoA
+[BATTLE_TRACE t=15.48] HIT team=alpha shooter=AlphaShotgunNorth weapon=Tactical SMG victim=BravoA location=TORSO fatal=false damage=3 hp=0
+[BATTLE_TRACE t=15.50] ALERT team=bravo actor=BravoMachineGunner from=SEARCHING to=COMBAT
+[BATTLE_TRACE t=15.60] REPORT_ACCEPTED team=bravo observer=BravoMachineGunner target=AlphaScout target_aware=true
+[BATTLE_TRACE t=15.60] BRAVO_RESPONSE_CONFIRMED order=TAKE_COVER alpha_hits=20 alpha_fatal_hits=2
+[BATTLE_TRACE t=15.91] SQUAD_STATE team=bravo phase=COMBAT plan=CONTACT_TO_COVER roe=FREE known_hostiles=8 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=17.98] SQUAD_STATE team=alpha phase=COMBAT plan=CONTACT_BASE_OF_FIRE roe=FREE known_hostiles=1 ready=100% aim_ready=100% assigned_targets=8 cover=BravoBlindsideSquadCover,BravoBlindsideSquadCover2
+[BATTLE_TRACE t=18.10] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoMachineGunner location=LEG fatal=false damage=4 hp=2
+[BATTLE_TRACE t=18.90] DEATH team=bravo actor=BravoMachineGunner
+[BATTLE_TRACE t=18.90] HIT team=alpha shooter=AlphaMachineGunner weapon=Tactical SMG victim=BravoMachineGunner location=ARM fatal=false damage=4 hp=0
+[BATTLE_TRACE t=18.90] BATTLE_END winner=alpha alpha_alive=8 bravo_alive=0 alpha_hits=22 bravo_hits=0 alpha_fatal_hits=2 bravo_fatal_hits=0
+[BATTLE_TRACE t=19.02] SQUAD_STATE team=alpha phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+[BATTLE_TRACE t=26.25] SQUAD_STATE team=bravo phase=SEARCH plan=SEARCH_SWEEP roe=HOLD known_hostiles=0 ready=0% aim_ready=0% assigned_targets=0 cover=NONE
+Role battle smoke test passed: 8v8 loadouts, melee, morale lock, role orders, flanks, retreat, camera, HUD, and autonomous fire verified.

@@ -268,6 +268,8 @@ radius = 15.0
 [node name="GoblinShooter" type="CharacterBody2D" unique_id=1326828298 groups=["block_building", "goblin"]]
 scale = Vector2(0.7, 0.7)
 script = ExtResource("1_shooter")
+death_cleanup_delay = -1.0
+death_audio_enabled = false
 
 [node name="anim" type="AnimatedSprite2D" parent="." unique_id=1630397953]
 sprite_frames = SubResource("SpriteFrames_4a3t1")

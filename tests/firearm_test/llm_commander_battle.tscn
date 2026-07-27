@@ -1,0 +1,186 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://tests/firearm_test/firearm_test_scene.tscn" id="1_battle"]
+[ext_resource type="Script" path="res://ai/squad/llm_squad_coordinator.gd" id="2_llm"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_alpha"]
+bg_color = Color(0.035, 0.05, 0.045, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.72, 0.48, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bravo"]
+bg_color = Color(0.055, 0.04, 0.04, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.9, 0.3, 0.24, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="LlmCommanderBattle" instance=ExtResource("1_battle")]
+
+[node name="EnemySquadCoordinator" parent="." index="1"]
+script = ExtResource("2_llm")
+order_interval = 4.0
+llm_timeout_seconds = 3.0
+commander_display_name = "蓝队"
+status_label_path = NodePath("../CanvasLayer/AlphaQwenPanel/Margin/VBox/Status")
+input_label_path = NodePath("../CanvasLayer/AlphaQwenPanel/Margin/VBox/Input")
+output_label_path = NodePath("../CanvasLayer/AlphaQwenPanel/Margin/VBox/Output")
+orders_label_path = NodePath("../CanvasLayer/AlphaQwenPanel/Margin/VBox/Orders")
+
+[node name="EnemySquadCoordinatorBravo" parent="." index="2"]
+script = ExtResource("2_llm")
+order_interval = 4.0
+llm_timeout_seconds = 3.0
+commander_display_name = "红队"
+status_label_path = NodePath("../CanvasLayer/BravoQwenPanel/Margin/VBox/Status")
+input_label_path = NodePath("../CanvasLayer/BravoQwenPanel/Margin/VBox/Input")
+output_label_path = NodePath("../CanvasLayer/BravoQwenPanel/Margin/VBox/Output")
+orders_label_path = NodePath("../CanvasLayer/BravoQwenPanel/Margin/VBox/Orders")
+
+[node name="AlphaQwenPanel" type="PanelContainer" parent="CanvasLayer" index="2"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -238.0
+offset_right = 359.0
+offset_bottom = -16.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_alpha")
+
+[node name="Margin" type="MarginContainer" parent="CanvasLayer/AlphaQwenPanel" index="0"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="CanvasLayer/AlphaQwenPanel/Margin" index="0"]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="CanvasLayer/AlphaQwenPanel/Margin/VBox" index="0"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 7
+text = "蓝队｜本地Qwen 0.6B｜等待接敌"
+autowrap_mode = 2
+
+[node name="InputTitle" type="Label" parent="CanvasLayer/AlphaQwenPanel/Margin/VBox" index="1"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+text = "完整中文输入：角色、范例样本、当前态势（可滚动/复制）"
+
+[node name="Input" type="RichTextLabel" parent="CanvasLayer/AlphaQwenPanel/Margin/VBox" index="2"]
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/normal_font_size = 6
+text = "等待确认敌情。"
+autowrap_mode = 2
+scroll_active = true
+selection_enabled = true
+
+[node name="OutputTitle" type="Label" parent="CanvasLayer/AlphaQwenPanel/Margin/VBox" index="3"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+text = "模型原始中文输出"
+
+[node name="Output" type="RichTextLabel" parent="CanvasLayer/AlphaQwenPanel/Margin/VBox" index="4"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 6
+text = "尚无模型输出。"
+autowrap_mode = 2
+scroll_active = true
+selection_enabled = true
+
+[node name="Orders" type="Label" parent="CanvasLayer/AlphaQwenPanel/Margin/VBox" index="5"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 1, 0.7, 1)
+theme_override_font_sizes/font_size = 6
+text = "实际交给GOAP：命令：无"
+autowrap_mode = 2
+
+[node name="BravoQwenPanel" type="PanelContainer" parent="CanvasLayer" index="3"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -359.0
+offset_top = -238.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_bravo")
+
+[node name="Margin" type="MarginContainer" parent="CanvasLayer/BravoQwenPanel" index="0"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="CanvasLayer/BravoQwenPanel/Margin" index="0"]
+layout_mode = 2
+
+[node name="Status" type="Label" parent="CanvasLayer/BravoQwenPanel/Margin/VBox" index="0"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.8, 0.76, 1)
+theme_override_font_sizes/font_size = 7
+text = "红队｜本地Qwen 0.6B｜等待接敌"
+autowrap_mode = 2
+
+[node name="InputTitle" type="Label" parent="CanvasLayer/BravoQwenPanel/Margin/VBox" index="1"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+text = "完整中文输入：角色、范例样本、当前态势（可滚动/复制）"
+
+[node name="Input" type="RichTextLabel" parent="CanvasLayer/BravoQwenPanel/Margin/VBox" index="2"]
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/normal_font_size = 6
+text = "等待确认敌情。"
+autowrap_mode = 2
+scroll_active = true
+selection_enabled = true
+
+[node name="OutputTitle" type="Label" parent="CanvasLayer/BravoQwenPanel/Margin/VBox" index="3"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+text = "模型原始中文输出"
+
+[node name="Output" type="RichTextLabel" parent="CanvasLayer/BravoQwenPanel/Margin/VBox" index="4"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 6
+text = "尚无模型输出。"
+autowrap_mode = 2
+scroll_active = true
+selection_enabled = true
+
+[node name="Orders" type="Label" parent="CanvasLayer/BravoQwenPanel/Margin/VBox" index="5"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.56, 0.5, 1)
+theme_override_font_sizes/font_size = 6
+text = "实际交给GOAP：命令：无"
+autowrap_mode = 2
+
+[editable path="EnemySquadCoordinator"]
+[editable path="EnemySquadCoordinatorBravo"]

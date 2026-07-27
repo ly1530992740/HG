@@ -26,7 +26,7 @@ func launch(config: Dictionary) -> void:
 	damage = int(config.get("damage", 1))
 	lifetime = float(config.get("lifetime", 1.0))
 	shooter = config.get("shooter", null)
-	hit_groups = config.get("hit_groups", [])
+	hit_groups.assign(config.get("hit_groups", []))
 	knockback = float(config.get("knockback", 0.0))
 	rotation = direction.angle()
 
@@ -35,11 +35,47 @@ func launch(config: Dictionary) -> void:
 		queue_free()
 
 func _physics_process(delta: float) -> void:
-	global_position += velocity * delta
+	_sweep_motion(global_position + velocity * delta)
+	if not alive:
+		return
 	_near_miss_scan_timer -= delta
 	if _near_miss_scan_timer <= 0.0:
 		_near_miss_scan_timer = 0.06
 		_report_near_misses()
+
+func _sweep_motion(destination: Vector2) -> void:
+	if not alive or destination.is_equal_approx(global_position) or get_world_2d() == null:
+		global_position = destination
+		return
+	var exclusions: Array[RID] = [get_rid()]
+	if shooter is CollisionObject2D:
+		exclusions.append((shooter as CollisionObject2D).get_rid())
+	var segment_start := global_position
+	for _attempt in 12:
+		var query := PhysicsRayQueryParameters2D.create(segment_start, destination)
+		query.collide_with_areas = true
+		query.collide_with_bodies = true
+		query.collision_mask = collision_mask
+		query.exclude = exclusions
+		var hit := get_world_2d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			break
+		var collider := hit.get("collider") as Node
+		if collider == null or not collider is Node2D:
+			break
+		global_position = hit.get("position", segment_start) as Vector2
+		var target: Node2D = collider as Node2D
+		if collider is Area2D:
+			var area_target := _get_damage_area_target(collider as Area2D)
+			if area_target is Node2D:
+				target = area_target as Node2D
+		_try_hit(target)
+		if not alive:
+			return
+		if collider is CollisionObject2D:
+			exclusions.append((collider as CollisionObject2D).get_rid())
+		segment_start = global_position + (destination - global_position).normalized() * 0.5
+	global_position = destination
 
 func _report_near_misses() -> void:
 	if not alive or hit_groups.is_empty():

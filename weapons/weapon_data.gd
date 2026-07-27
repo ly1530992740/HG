@@ -37,6 +37,7 @@ enum ReloadType {
 
 @export_category("Projectile")
 @export var projectile_scene: PackedScene
+@export var effective_range := 1200.0
 @export var projectile_speed := 2400.0
 @export var projectile_lifetime := 0.6
 @export var hit_groups: Array[String] = ["goblin"]

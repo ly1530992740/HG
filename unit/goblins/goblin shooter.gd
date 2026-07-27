@@ -3,8 +3,10 @@ extends "res://unit/goblins/goblin_base.gd"
 signal surprise_reaction_started(duration: float)
 
 enum ThreatResponse { WAIT, BLIND_FIRE, PRECISE_FIRE }
+enum FirearmLoadout { ROLE_DEFAULT, SMG }
 
 @export var combat_role: SquadCombatRole.Type = SquadCombatRole.Type.RIFLEMAN
+@export var firearm_loadout: FirearmLoadout = FirearmLoadout.ROLE_DEFAULT
 @export var detect_range := 420.0
 @export var attack_range := 330.0
 @export var keep_distance := 230.0
@@ -30,14 +32,33 @@ enum ThreatResponse { WAIT, BLIND_FIRE, PRECISE_FIRE }
 @export var marksman_aim_field_of_view := 35.0
 
 const PROJECTILE_SCENE := preload("res://weapons/enemy_bullet.tscn")
+const RIFLE_TEXTURE := preload("res://weapons/visuals/rifle_simple.svg")
+const SMG_TEXTURE := preload("res://weapons/visuals/smg_simple.svg")
+const MARKSMAN_TEXTURE := preload("res://weapons/visuals/marksman_simple.svg")
+const LMG_TEXTURE := preload("res://weapons/visuals/lmg_simple.svg")
+const SHOTGUN_TEXTURE := preload("res://weapons/visuals/shotgun_simple.svg")
+const PISTOL_TEXTURE := preload("res://weapons/visuals/pistol_simple.svg")
 
 var target: Node2D = null
 var firearm_weapon: FirearmWeapon
 var melee_weapon: MeleeWeapon
 var current_combat_weapon: Weapon
 var hp_bar: ProgressBar
+var anatomy_root: Node2D
 var body_visual: Polygon2D
+var head_visual: Polygon2D
+var back_arm_visual: Line2D
+var weapon_arm_visual: Line2D
+var left_leg_visual: Line2D
+var right_leg_visual: Line2D
+var wound_layer: Node2D
+var head_wound_visual: Polygon2D
+var heart_wound_visual: Polygon2D
+var arm_wound_visual: Polygon2D
+var leg_wound_visual: Polygon2D
 var gun_visual: Polygon2D
+var gun_sprite: Sprite2D
+var muzzle_flash_visual: Polygon2D
 var melee_visual: Polygon2D
 var muzzle: Marker2D
 var goap_agent: GoapAgent
@@ -65,6 +86,10 @@ var _surprise_reaction_timer := 0.0
 var _prepared_ambush_target: Node2D = null
 var _ambush_followup_active := false
 var _ambush_followup_shots_fired := 0
+var _torso_wound_count := 0
+var _walk_phase := 0.0
+var _visual_recoil := 0.0
+var _muzzle_flash_remaining := 0.0
 
 func _ready() -> void:
 	_apply_combat_role_profile()
@@ -80,6 +105,7 @@ func _ready() -> void:
 		anim.visible = false
 
 	_setup_visual()
+	_setup_injury_visuals()
 	_apply_combat_role_visual()
 	_setup_firearm()
 	_setup_melee_weapon()
@@ -93,9 +119,10 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		state = State.IDLE
 		super._physics_process(delta)
-		_update_visual()
+		_update_visual(delta)
 		_update_hp_bar()
 		return
+	_process_ambush_followup()
 	_target_refresh_timer -= delta
 	if _target_refresh_timer <= 0.0:
 		_target_refresh_timer = target_refresh_interval
@@ -114,13 +141,20 @@ func _physics_process(delta: float) -> void:
 	else:
 		_update_ai_state()
 	super._physics_process(delta)
-	_update_visual()
+	_update_visual(delta)
 	_update_hp_bar()
 
 func idle_state() -> void:
 	if _goap_controls_actor:
 		return
 	super.idle_state()
+
+func separation_vector() -> Vector2:
+	if squad_member != null:
+		var order := squad_member.get_current_order()
+		if (order == null and target == null) or (order != null and order.type == SquadOrder.Type.HOLD):
+			return Vector2.ZERO
+	return super.separation_vector()
 
 func _find_combat_target() -> void:
 	var best: Node2D = null
@@ -203,15 +237,46 @@ func _try_fire_at(target_position: Vector2) -> void:
 	firearm_weapon.try_attack(target_position)
 
 func _setup_visual() -> void:
+	anatomy_root = Node2D.new()
+	anatomy_root.name = "VisualAnatomy"
+	anatomy_root.z_index = 4
+	add_child(anatomy_root)
+
+	var limb_color := team_color.darkened(0.18)
+	back_arm_visual = _make_limb("BackArm", PackedVector2Array([
+		Vector2(-9, -7), Vector2(-21, 2), Vector2(-15, 15)
+	]), 6.0, limb_color, 1)
+	weapon_arm_visual = _make_limb("WeaponArm", PackedVector2Array([
+		Vector2(-7, -6), Vector2(7, -1), Vector2(20, 0)
+	]), 6.0, team_color.lightened(0.05), 5)
+	left_leg_visual = _make_limb("LeftLeg", PackedVector2Array([
+		Vector2(-7, 13), Vector2(-10, 27), Vector2(-16, 38)
+	]), 7.0, limb_color, 2)
+	right_leg_visual = _make_limb("RightLeg", PackedVector2Array([
+		Vector2(7, 13), Vector2(10, 27), Vector2(17, 37)
+	]), 7.0, limb_color, 2)
+
 	body_visual = Polygon2D.new()
 	body_visual.name = "VisualBody"
 	body_visual.color = team_color
 	body_visual.polygon = PackedVector2Array([
-		Vector2(0, -22), Vector2(16, -8), Vector2(15, 14),
-		Vector2(0, 23), Vector2(-15, 14), Vector2(-16, -8)
+		Vector2(-12, -13), Vector2(12, -13), Vector2(16, 10),
+		Vector2(8, 20), Vector2(-8, 20), Vector2(-16, 10)
 	])
-	body_visual.z_index = 4
-	add_child(body_visual)
+	body_visual.z_index = 3
+	anatomy_root.add_child(body_visual)
+
+	head_visual = Polygon2D.new()
+	head_visual.name = "Head"
+	head_visual.color = team_color.lightened(0.12)
+	head_visual.polygon = _make_circle_polygon(Vector2(0, -27), 12.0, 14)
+	head_visual.z_index = 4
+	anatomy_root.add_child(head_visual)
+
+	wound_layer = Node2D.new()
+	wound_layer.name = "Wounds"
+	wound_layer.z_index = 8
+	anatomy_root.add_child(wound_layer)
 
 	gun_visual = Polygon2D.new()
 	gun_visual.name = "VisualGun"
@@ -221,6 +286,25 @@ func _setup_visual() -> void:
 	])
 	gun_visual.z_index = 5
 	add_child(gun_visual)
+	gun_visual.visible = false
+
+	gun_sprite = Sprite2D.new()
+	gun_sprite.name = "VisualGunSprite"
+	gun_sprite.texture = RIFLE_TEXTURE
+	gun_sprite.position = Vector2(20, 0)
+	gun_sprite.z_index = 6
+	add_child(gun_sprite)
+
+	muzzle_flash_visual = Polygon2D.new()
+	muzzle_flash_visual.name = "MuzzleFlash"
+	muzzle_flash_visual.color = Color(1.0, 0.82, 0.2, 0.95)
+	muzzle_flash_visual.polygon = PackedVector2Array([
+		Vector2(0, -3), Vector2(10, -7), Vector2(7, 0),
+		Vector2(13, 4), Vector2(0, 3),
+	])
+	muzzle_flash_visual.z_index = 8
+	muzzle_flash_visual.visible = false
+	add_child(muzzle_flash_visual)
 
 	melee_visual = Polygon2D.new()
 	melee_visual.name = "VisualMeleeWeapon"
@@ -235,31 +319,183 @@ func _setup_visual() -> void:
 
 	muzzle = Marker2D.new()
 	muzzle.name = "Muzzle"
-	muzzle.position = Vector2(34, 0)
+	muzzle.position = Vector2(44, 0)
 	add_child(muzzle)
+
+func _make_limb(node_name: String, limb_points: PackedVector2Array, width: float, color: Color, layer: int) -> Line2D:
+	var limb := Line2D.new()
+	limb.name = node_name
+	limb.points = limb_points
+	limb.width = width
+	limb.default_color = color
+	limb.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	limb.end_cap_mode = Line2D.LINE_CAP_ROUND
+	limb.joint_mode = Line2D.LINE_JOINT_ROUND
+	limb.antialiased = true
+	limb.z_index = layer
+	anatomy_root.add_child(limb)
+	return limb
+
+func _make_circle_polygon(center: Vector2, radius: float, point_count: int) -> PackedVector2Array:
+	var result := PackedVector2Array()
+	for index in point_count:
+		var angle := TAU * float(index) / float(point_count)
+		result.append(center + Vector2(cos(angle), sin(angle)) * radius)
+	return result
+
+func _setup_injury_visuals() -> void:
+	head_wound_visual = _make_wound("HeadWound", Vector2(7, -31), 5.0)
+	heart_wound_visual = _make_wound("HeartWound", Vector2(-5, -6), 4.5)
+	arm_wound_visual = _make_wound("ArmWound", Vector2(10, 0), 3.5)
+	leg_wound_visual = _make_wound("LegWound", Vector2(10, 25), 4.0)
+	if injury_component != null and not injury_component.injury_received.is_connected(_on_injury_received):
+		injury_component.injury_received.connect(_on_injury_received)
+	if not died.is_connected(_on_visual_death):
+		died.connect(_on_visual_death)
+
+func _make_wound(node_name: String, center: Vector2, radius: float) -> Polygon2D:
+	var wound := Polygon2D.new()
+	wound.name = node_name
+	wound.color = Color(0.42, 0.015, 0.01, 1.0)
+	wound.polygon = _make_circle_polygon(center, radius, 9)
+	wound.visible = false
+	wound_layer.add_child(wound)
+	return wound
+
+func _on_injury_received(location: InjuryComponent.HitLocation, _fatal: bool) -> void:
+	match location:
+		InjuryComponent.HitLocation.HEAD:
+			_apply_head_wound()
+		InjuryComponent.HitLocation.HEART:
+			heart_wound_visual.visible = true
+		InjuryComponent.HitLocation.TORSO:
+			_add_torso_wound()
+		InjuryComponent.HitLocation.ARM:
+			_apply_arm_wound()
+		InjuryComponent.HitLocation.LEG:
+			_apply_leg_wound()
+	_emit_blood_droplets(location)
+
+func _apply_head_wound() -> void:
+	# The concave right edge reads as a missing section even at overview zoom.
+	head_visual.polygon = PackedVector2Array([
+		Vector2(-11, -32), Vector2(-6, -38), Vector2(1, -40),
+		Vector2(7, -37), Vector2(4, -32), Vector2(10, -28),
+		Vector2(4, -24), Vector2(10, -20), Vector2(3, -16),
+		Vector2(-5, -16), Vector2(-11, -21), Vector2(-13, -27),
+	])
+	head_wound_visual.visible = true
+
+func _add_torso_wound() -> void:
+	var wound_positions := [
+		Vector2(4, -6), Vector2(-7, 2), Vector2(7, 8),
+		Vector2(-3, 13), Vector2(0, -10), Vector2(10, 2),
+	]
+	var wound := _make_wound("TorsoWound%d" % (_torso_wound_count + 1), wound_positions[_torso_wound_count % wound_positions.size()], 2.8)
+	wound.visible = true
+	_torso_wound_count += 1
+
+func _apply_arm_wound() -> void:
+	arm_wound_visual.visible = true
+	if injury_component != null and injury_component.arm_wounds > 1:
+		back_arm_visual.default_color = Color(0.42, 0.06, 0.05, 1.0)
+		back_arm_visual.points = PackedVector2Array([
+			Vector2(-9, -7), Vector2(-20, 3), Vector2(-12, 20),
+		])
+	else:
+		weapon_arm_visual.default_color = Color(0.48, 0.07, 0.05, 1.0)
+		weapon_arm_visual.points = PackedVector2Array([
+			Vector2(-7, -6), Vector2(6, 0), Vector2(14, 15),
+		])
+
+func _apply_leg_wound() -> void:
+	leg_wound_visual.visible = true
+	if injury_component != null and injury_component.leg_wounds > 1:
+		left_leg_visual.default_color = Color(0.42, 0.06, 0.05, 1.0)
+		left_leg_visual.points = PackedVector2Array([
+			Vector2(-7, 13), Vector2(-13, 27), Vector2(-9, 39),
+		])
+	else:
+		right_leg_visual.default_color = Color(0.48, 0.07, 0.05, 1.0)
+		right_leg_visual.points = PackedVector2Array([
+			Vector2(7, 13), Vector2(15, 25), Vector2(10, 37),
+		])
+
+func _emit_blood_droplets(location: InjuryComponent.HitLocation) -> void:
+	var origin := Vector2.ZERO
+	match location:
+		InjuryComponent.HitLocation.HEAD:
+			origin = Vector2(6, -30)
+		InjuryComponent.HitLocation.HEART:
+			origin = Vector2(-5, -6)
+		InjuryComponent.HitLocation.ARM:
+			origin = Vector2(10, 0)
+		InjuryComponent.HitLocation.LEG:
+			origin = Vector2(10, 25)
+		_:
+			origin = Vector2(0, 2)
+	for index in 3:
+		var droplet := Polygon2D.new()
+		droplet.name = "BloodDroplet"
+		droplet.color = Color(0.5, 0.01, 0.01, 0.95)
+		droplet.polygon = _make_circle_polygon(Vector2.ZERO, 1.8 + float(index) * 0.4, 7)
+		droplet.position = origin
+		wound_layer.add_child(droplet)
+		var travel := Vector2(randf_range(-18.0, 18.0), randf_range(-20.0, 10.0))
+		var tween := droplet.create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(droplet, "position", origin + travel, 0.3)
+		tween.tween_property(droplet, "modulate:a", 0.0, 0.3)
+		tween.chain().tween_callback(droplet.queue_free)
+
+func _on_visual_death(_actor: Node) -> void:
+	if hp_bar:
+		hp_bar.visible = false
+	for control in find_children("*", "Control", true, false):
+		if control is CanvasItem:
+			(control as CanvasItem).visible = false
+	var facing := -1.0 if anatomy_root.scale.x < 0.0 else 1.0
+	anatomy_root.rotation = facing * PI * 0.5
+	anatomy_root.position = Vector2(0, 16)
+	anatomy_root.modulate = Color(0.58, 0.52, 0.52, 1.0)
+	gun_visual.position = Vector2(5.0 * facing, 22.0)
+	gun_visual.rotation = facing * 0.65
+	gun_visual.modulate = Color(0.65, 0.65, 0.65, 1.0)
+	gun_sprite.position = Vector2(6.0 * facing, 23.0)
+	gun_sprite.rotation = facing * 0.7
+	gun_sprite.modulate = Color(0.62, 0.62, 0.62, 1.0)
+	muzzle_flash_visual.visible = false
+	melee_visual.position = Vector2(-4.0 * facing, 20.0)
+	melee_visual.rotation = facing * -0.8
+	z_index = 1
 
 func _setup_firearm() -> void:
 	var data := WeaponData.new()
 	data.knockback = 0.0
 	data.projectile_scene = PROJECTILE_SCENE
 	data.hit_groups = hit_groups
-	_configure_role_weapon_data(data)
-
-	match combat_role:
-		SquadCombatRole.Type.MARKSMAN:
-			firearm_weapon = BoltActionRifleWeapon.new()
-		SquadCombatRole.Type.MACHINE_GUNNER:
-			firearm_weapon = LmgWeapon.new()
-		SquadCombatRole.Type.SHOTGUNNER:
-			firearm_weapon = ShotgunWeapon.new()
-		SquadCombatRole.Type.PISTOL_SCOUT:
-			firearm_weapon = PistolWeapon.new()
-		_:
-			firearm_weapon = RifleWeapon.new()
+	if firearm_loadout == FirearmLoadout.SMG:
+		_configure_smg_weapon_data(data)
+		firearm_weapon = SmgWeapon.new()
+	else:
+		_configure_role_weapon_data(data)
+		match combat_role:
+			SquadCombatRole.Type.MARKSMAN:
+				firearm_weapon = BoltActionRifleWeapon.new()
+			SquadCombatRole.Type.MACHINE_GUNNER:
+				firearm_weapon = LmgWeapon.new()
+			SquadCombatRole.Type.SHOTGUNNER:
+				firearm_weapon = ShotgunWeapon.new()
+			SquadCombatRole.Type.PISTOL_SCOUT:
+				firearm_weapon = PistolWeapon.new()
+			_:
+				firearm_weapon = RifleWeapon.new()
 	firearm_weapon.name = "FirearmWeapon"
 	firearm_weapon.weapon_data = data
 	firearm_weapon.muzzle_path = NodePath("../Muzzle")
 	add_child(firearm_weapon)
+	attack_range = data.effective_range
+	ATTACK_DISTANCE = attack_range
 	firearm_weapon.equip(self)
 	if not firearm_weapon.fired.is_connected(_on_firearm_fired):
 		firearm_weapon.fired.connect(_on_firearm_fired)
@@ -271,32 +507,42 @@ func _apply_combat_role_profile() -> void:
 			max_health = 7
 			SPEED = 180.0
 			detect_range = 1800.0
-			attack_range = 1100.0
-			keep_distance = 850.0
+			keep_distance = 1200.0
 		SquadCombatRole.Type.MACHINE_GUNNER:
 			max_health = 10
 			SPEED = 175.0
 			detect_range = 1800.0
-			attack_range = 780.0
-			keep_distance = 580.0
+			keep_distance = 950.0
 		SquadCombatRole.Type.SHOTGUNNER:
 			max_health = 9
 			SPEED = 235.0
 			detect_range = 1800.0
-			attack_range = 340.0
-			keep_distance = 250.0
+			keep_distance = 500.0
 		SquadCombatRole.Type.PISTOL_SCOUT:
 			max_health = 7
 			SPEED = 245.0
 			detect_range = 1800.0
-			attack_range = 500.0
-			keep_distance = 350.0
+			keep_distance = 650.0
 		_:
 			max_health = 8
 			SPEED = 210.0
 			detect_range = 1800.0
-			attack_range = 720.0
-			keep_distance = 520.0
+			keep_distance = 900.0
+	if firearm_loadout == FirearmLoadout.SMG:
+		keep_distance = 800.0
+
+func _configure_smg_weapon_data(data: WeaponData) -> void:
+	data.weapon_name = "Tactical SMG"
+	data.damage = 2
+	data.fire_mode = WeaponData.FireMode.AUTO
+	data.fire_cooldown = 0.1
+	data.spread_degrees = 0.8
+	data.magazine_size = 32
+	data.reserve_ammo = 160
+	data.reload_time = 1.55
+	data.effective_range = 1600.0
+	data.projectile_speed = 2600.0
+	data.projectile_lifetime = 0.85
 
 func _configure_role_weapon_data(data: WeaponData) -> void:
 	match combat_role:
@@ -310,6 +556,7 @@ func _configure_role_weapon_data(data: WeaponData) -> void:
 			data.magazine_size = 5
 			data.reserve_ammo = 35
 			data.reload_time = 2.6
+			data.effective_range = 2400.0
 			data.projectile_speed = 3100.0
 			data.projectile_lifetime = 1.35
 		SquadCombatRole.Type.MACHINE_GUNNER:
@@ -321,6 +568,7 @@ func _configure_role_weapon_data(data: WeaponData) -> void:
 			data.magazine_size = 50
 			data.reserve_ammo = 200
 			data.reload_time = 3.4
+			data.effective_range = 1900.0
 			data.projectile_speed = 2500.0
 			data.projectile_lifetime = 1.2
 		SquadCombatRole.Type.SHOTGUNNER:
@@ -334,6 +582,7 @@ func _configure_role_weapon_data(data: WeaponData) -> void:
 			data.magazine_size = 6
 			data.reserve_ammo = 36
 			data.reload_time = 2.4
+			data.effective_range = 850.0
 			data.projectile_speed = 1900.0
 			data.projectile_lifetime = 0.48
 		SquadCombatRole.Type.PISTOL_SCOUT:
@@ -345,6 +594,7 @@ func _configure_role_weapon_data(data: WeaponData) -> void:
 			data.magazine_size = 12
 			data.reserve_ammo = 72
 			data.reload_time = 1.35
+			data.effective_range = 1200.0
 			data.projectile_speed = 2100.0
 			data.projectile_lifetime = 0.7
 		_:
@@ -356,23 +606,34 @@ func _configure_role_weapon_data(data: WeaponData) -> void:
 			data.magazine_size = 20
 			data.reserve_ammo = 120
 			data.reload_time = 1.9
+			data.effective_range = 1800.0
 			data.projectile_speed = 2600.0
 			data.projectile_lifetime = 1.15
 
 func _apply_combat_role_visual() -> void:
-	if gun_visual == null:
+	if gun_visual == null or gun_sprite == null:
+		return
+	gun_sprite.texture = SMG_TEXTURE if firearm_loadout == FirearmLoadout.SMG else RIFLE_TEXTURE
+	gun_sprite.scale = Vector2(0.9, 0.9)
+	if firearm_loadout == FirearmLoadout.SMG:
+		gun_visual.color = Color(0.2, 0.22, 0.24, 1.0)
+		_gun_length_scale = 0.9
 		return
 	match combat_role:
 		SquadCombatRole.Type.MARKSMAN:
+			gun_sprite.texture = MARKSMAN_TEXTURE
 			gun_visual.color = Color(0.22, 0.32, 0.2, 1.0)
 			_gun_length_scale = 1.35
 		SquadCombatRole.Type.MACHINE_GUNNER:
+			gun_sprite.texture = LMG_TEXTURE
 			gun_visual.color = Color(0.16, 0.18, 0.2, 1.0)
 			gun_visual.scale.y = 1.65
 		SquadCombatRole.Type.SHOTGUNNER:
+			gun_sprite.texture = SHOTGUN_TEXTURE
 			gun_visual.color = Color(0.42, 0.27, 0.12, 1.0)
 			_gun_length_scale = 0.9
 		SquadCombatRole.Type.PISTOL_SCOUT:
+			gun_sprite.texture = PISTOL_TEXTURE
 			gun_visual.color = Color(0.35, 0.35, 0.38, 1.0)
 			_gun_length_scale = 0.55
 
@@ -408,7 +669,9 @@ func _equip_combat_weapon(weapon: Weapon) -> void:
 	current_combat_weapon = weapon
 	current_combat_weapon.equip(self)
 	if gun_visual:
-		gun_visual.visible = current_combat_weapon == firearm_weapon
+		gun_visual.visible = false
+	if gun_sprite:
+		gun_sprite.visible = current_combat_weapon == firearm_weapon
 	if melee_visual:
 		melee_visual.visible = current_combat_weapon == melee_weapon
 
@@ -901,9 +1164,35 @@ func _choose_threat_response() -> ThreatResponse:
 
 func _get_order_target() -> Node2D:
 	var order := squad_member.get_current_order() if squad_member else null
-	if order and is_instance_valid(order.target):
+	if order and _is_live_combat_target(order.target):
 		return order.target
-	return target
+	if _is_live_combat_target(target):
+		return target
+	if squad_member != null and squad_member.blackboard != null:
+		var shared_target := squad_member.blackboard.shared_target
+		if _is_live_combat_target(shared_target) and can_damage_target(shared_target):
+			return shared_target
+	return null
+
+func _is_live_combat_target(candidate: Node) -> bool:
+	if candidate == null or not is_instance_valid(candidate) or candidate.is_queued_for_deletion():
+		return false
+	return not candidate.has_method("is_combat_alive") or bool(candidate.is_combat_alive())
+
+func _process_ambush_followup() -> void:
+	if not _ambush_followup_active:
+		return
+	if _ambush_followup_shots_fired >= _get_ambush_opening_shot_limit():
+		_ambush_followup_active = false
+		return
+	var order := squad_member.get_current_order() if squad_member else null
+	if order == null or order.type != SquadOrder.Type.FOCUS_FIRE or firearm_weapon == null or firearm_weapon.reloading:
+		_ambush_followup_active = false
+		return
+	var followup_target := _get_order_target()
+	if followup_target == null or not can_damage_target(followup_target):
+		return
+	firearm_weapon.try_attack(followup_target.global_position)
 
 func _get_base_action_cost(order_type: SquadOrder.Type) -> int:
 	match order_type:
@@ -1037,6 +1326,10 @@ func get_surprise_reaction_remaining() -> float:
 func _on_firearm_fired() -> void:
 	if _ambush_followup_active:
 		_ambush_followup_shots_fired += 1
+	_visual_recoil = 1.0
+	_muzzle_flash_remaining = 0.075
+	if muzzle_flash_visual:
+		muzzle_flash_visual.visible = true
 	report_weapon_fired()
 	reveal_from_concealment()
 	if alert_component:
@@ -1099,6 +1392,8 @@ func release_ambush_shot(assigned_target: Node2D) -> bool:
 	return fired
 
 func _get_ambush_opening_shot_limit() -> int:
+	if firearm_weapon is SmgWeapon:
+		return 4
 	match combat_role:
 		SquadCombatRole.Type.MACHINE_GUNNER:
 			return 4
@@ -1113,22 +1408,60 @@ func _get_assigned_ambush_target(fallback: Node2D) -> Node2D:
 			return assigned
 	return fallback
 
-func _update_visual() -> void:
-	if target == null or body_visual == null or gun_visual == null or muzzle == null:
+func _update_visual(delta: float) -> void:
+	if state == State.DEAD or anatomy_root == null or gun_sprite == null or muzzle == null:
 		return
 
+	_update_movement_animation(delta)
 	var dir := get_facing_direction()
-	if perception_component != null and perception_component.is_currently_visible(target):
+	if target != null and perception_component != null and perception_component.is_currently_visible(target):
 		dir = target.global_position - global_position
 		if dir != Vector2.ZERO:
 			last_move_dir = dir.normalized()
 	var facing := -1.0 if dir.x < 0.0 else 1.0
-	body_visual.scale.x = facing
-	gun_visual.scale.x = facing * _gun_length_scale
+	anatomy_root.scale.x = facing
 	melee_visual.scale.x = facing
-	gun_visual.position.x = 0.0 if facing > 0.0 else -32.0
+	_visual_recoil = move_toward(_visual_recoil, 0.0, delta * 12.0)
+	_muzzle_flash_remaining = maxf(0.0, _muzzle_flash_remaining - delta)
+	var visual_y := anatomy_root.position.y
+	gun_sprite.flip_h = facing < 0.0
+	gun_sprite.position = Vector2((20.0 - _visual_recoil * 6.0) * facing, visual_y)
+	gun_sprite.rotation = -0.04 * _visual_recoil * facing
 	melee_visual.position.x = 0.0 if facing > 0.0 else -34.0
-	muzzle.position.x = 34.0 if facing > 0.0 else -34.0
+	muzzle.position = Vector2(44.0 * facing, visual_y)
+	muzzle_flash_visual.position = muzzle.position
+	muzzle_flash_visual.rotation = 0.0 if facing > 0.0 else PI
+	muzzle_flash_visual.visible = _muzzle_flash_remaining > 0.0 and current_combat_weapon == firearm_weapon
+	muzzle_flash_visual.scale = Vector2.ONE * (0.85 + _visual_recoil * 0.35)
+	if injury_component == null or injury_component.arm_wounds == 0:
+		weapon_arm_visual.points = PackedVector2Array([
+			Vector2(-7, -6), Vector2(7, -1), Vector2(20.0 - _visual_recoil * 4.0, -_visual_recoil * 2.0),
+		])
+
+func _update_movement_animation(delta: float) -> void:
+	var moving := velocity.length_squared() > 100.0
+	if moving:
+		_walk_phase += delta * 10.0
+		var stride := sin(_walk_phase) * 6.0
+		anatomy_root.position.y = sin(_walk_phase * 2.0) * 1.6
+		anatomy_root.rotation = sin(_walk_phase) * 0.025
+		if injury_component == null or injury_component.leg_wounds == 0:
+			left_leg_visual.points = PackedVector2Array([
+				Vector2(-7, 13), Vector2(-10, 27), Vector2(-16 + stride, 38),
+			])
+			right_leg_visual.points = PackedVector2Array([
+				Vector2(7, 13), Vector2(10, 27), Vector2(17 - stride, 37),
+			])
+	else:
+		anatomy_root.position.y = move_toward(anatomy_root.position.y, 0.0, delta * 18.0)
+		anatomy_root.rotation = move_toward(anatomy_root.rotation, 0.0, delta * 8.0)
+		if injury_component == null or injury_component.leg_wounds == 0:
+			left_leg_visual.points = PackedVector2Array([
+				Vector2(-7, 13), Vector2(-10, 27), Vector2(-16, 38),
+			])
+			right_leg_visual.points = PackedVector2Array([
+				Vector2(7, 13), Vector2(10, 27), Vector2(17, 37),
+			])
 
 func _setup_hp_bar() -> void:
 	hp_bar = ProgressBar.new()
@@ -1149,9 +1482,9 @@ func _update_hp_bar() -> void:
 	hp_bar.visible = health > 0
 
 func start_flashing() -> void:
-	if body_visual == null:
+	if anatomy_root == null:
 		super.start_flashing()
 		return
-	body_visual.color = Color(1.0, 0.25, 0.15, 1.0)
+	anatomy_root.modulate = Color(1.0, 0.3, 0.24, 1.0)
 	var tween := create_tween()
-	tween.tween_property(body_visual, "color", team_color, 0.12)
+	tween.tween_property(anatomy_root, "modulate", Color.WHITE, 0.12)
