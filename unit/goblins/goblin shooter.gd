@@ -5,11 +5,14 @@ signal surprise_reaction_started(duration: float)
 enum ThreatResponse { WAIT, BLIND_FIRE, PRECISE_FIRE }
 enum FirearmLoadout { ROLE_DEFAULT, SMG }
 
+@export_group("兵种与武器")
 @export var combat_role: SquadCombatRole.Type = SquadCombatRole.Type.RIFLEMAN
 @export var firearm_loadout: FirearmLoadout = FirearmLoadout.ROLE_DEFAULT
 @export var detect_range := 420.0
 @export var attack_range := 330.0
 @export var keep_distance := 230.0
+
+@export_group("射击参数")
 @export var fire_cooldown := 0.85
 @export var projectile_damage := 3
 @export var projectile_speed := 2000.0
@@ -19,13 +22,19 @@ enum FirearmLoadout { ROLE_DEFAULT, SMG }
 @export var reserve_ammo := 96
 @export var reload_time := 1.6
 @export var hit_groups: Array[String] = ["player", "pawn", "combatant"]
+
+@export_group("近战参数")
 @export var melee_trigger_distance := 92.0
 @export var melee_attack_distance := 58.0
 @export var melee_damage := 4
+
+@export_group("AI 反应")
 @export var ai_decision_interval := 0.12
 @export var target_refresh_interval := 0.18
 @export var surprise_reaction_min := 0.5
 @export var surprise_reaction_max := 0.8
+
+@export_group("视野参数")
 @export var standard_sight_range := 1800.0
 @export var standard_field_of_view := 110.0
 @export var marksman_aim_sight_range := 3000.0
@@ -65,6 +74,7 @@ var goap_agent: GoapAgent
 
 var _goap_controls_actor := false
 var _active_squad_action := -1
+var _active_task_operation := -1
 var _action_elapsed := 0.0
 var _selected_cover: Node = null
 var _threat_response: ThreatResponse = ThreatResponse.WAIT
@@ -701,6 +711,24 @@ func _setup_squad_goap() -> void:
 		action.cost = _get_base_action_cost(order_type)
 		actions.add_child(action)
 
+	var task_operations := [
+		SquadTaskAction.Operation.MOVE_DIRECT,
+		SquadTaskAction.Operation.MOVE_SAFE,
+		SquadTaskAction.Operation.ENTER_COVER,
+		SquadTaskAction.Operation.COMPLETE_MOVE,
+		SquadTaskAction.Operation.ACQUIRE_TARGET,
+		SquadTaskAction.Operation.AIM_TARGET,
+		SquadTaskAction.Operation.SUPPRESS_TARGET,
+		SquadTaskAction.Operation.NEUTRALIZE_TARGET,
+		SquadTaskAction.Operation.GUARD_AREA,
+	]
+	for operation in task_operations:
+		var task_action := SquadTaskAction.new()
+		task_action.name = "%sAction" % SquadTaskAction.Operation.keys()[operation].to_pascal_case()
+		task_action.operation = operation
+		task_action.cost = 3
+		actions.add_child(task_action)
+
 	var seek_safety := SeekSafetyAction.new()
 	seek_safety.name = "SeekSafetyAction"
 	seek_safety.cost = 3
@@ -716,6 +744,10 @@ func _setup_squad_goap() -> void:
 	var order_goal := SquadOrderGoal.new()
 	order_goal.name = "ObeySquadOrderGoal"
 	goals.add_child(order_goal)
+	var task_goal := SquadTaskGoal.new()
+	task_goal.name = "ObeySquadTaskGoal"
+	task_goal.priority = 150
+	goals.add_child(task_goal)
 	var survival_goal := PreserveLifeGoal.new()
 	survival_goal.name = "PreserveLifeGoal"
 	goals.add_child(survival_goal)
@@ -725,6 +757,7 @@ func _setup_squad_goap() -> void:
 
 	goap_agent = GoapAgent.new()
 	goap_agent.name = "GoapAgent"
+	goap_agent.replan_on_world_state_change = false
 	goap_agent.actions_node = actions
 	goap_agent.goals_node = goals
 	goap_agent.debug_enabled = false
@@ -778,6 +811,165 @@ func get_squad_action_cost(order_type: SquadOrder.Type, base_cost: int) -> int:
 	if will_component:
 		return will_component.get_command_cost(adjusted_cost)
 	return adjusted_cost
+
+func get_task_action_cost(operation: SquadTaskAction.Operation, base_cost: int) -> int:
+	var adjusted_cost := base_cost
+	var pressured := is_pinned_by_fire() or get_suppression() >= 18.0
+	var assignment := squad_member.get_current_task() if squad_member else null
+	var task_type := assignment.task.type if assignment and assignment.task else -1
+	match operation:
+		SquadTaskAction.Operation.MOVE_SAFE:
+			adjusted_cost = 1 if pressured or get_active_cover() != null or task_type in [SquadTask.Type.OCCUPY_COVER, SquadTask.Type.MOVE_TO_ZONE, SquadTask.Type.WITHDRAW_TO_ZONE] else 3
+		SquadTaskAction.Operation.MOVE_DIRECT:
+			adjusted_cost = 18 if pressured or task_type in [SquadTask.Type.OCCUPY_COVER, SquadTask.Type.MOVE_TO_ZONE] else (1 if task_type == SquadTask.Type.GUARD_AREA else 2)
+		SquadTaskAction.Operation.SUPPRESS_TARGET:
+			adjusted_cost = 1 if combat_role == SquadCombatRole.Type.MACHINE_GUNNER else 4
+		SquadTaskAction.Operation.AIM_TARGET:
+			adjusted_cost = 1 if combat_role == SquadCombatRole.Type.MARKSMAN else 3
+		SquadTaskAction.Operation.NEUTRALIZE_TARGET:
+			adjusted_cost = 2
+	if will_component:
+		return will_component.get_command_cost(adjusted_cost)
+	return adjusted_cost
+
+func begin_task_action(operation: SquadTaskAction.Operation) -> void:
+	_equip_combat_weapon(firearm_weapon)
+	_goap_controls_actor = true
+	_active_task_operation = operation
+	_action_elapsed = 0.0
+	_selected_cover = null
+	_threat_response = _choose_threat_response()
+	_threat_response_timer = 0.0
+	_peek_window_remaining = 0.0
+	_concealment_remaining = randf_range(0.2, 0.55)
+	_cover_strafe_target = randf_range(-70.0, 70.0)
+	_cover_reposition_wait = randf_range(0.15, 0.45)
+	var assignment := squad_member.get_current_task() if squad_member else null
+	if squad_member and assignment:
+		squad_member.set_ai_status("执行任务图", _get_task_action_name(operation), "%s -> %s" % [assignment.task.task_id, assignment.task.get_type_name()])
+
+func perform_task_action(operation: SquadTaskAction.Operation, delta: float) -> bool:
+	_action_elapsed += delta
+	var assignment := squad_member.get_current_task() if squad_member else null
+	if assignment == null or assignment.task == null:
+		return false
+	var member_id := String(name)
+	var task := assignment.task
+	var task_target := task.get_target_for(member_id)
+	var destination := task.get_position_for(member_id)
+	var assigned_cover := task.get_cover_for(member_id)
+	if destination == Vector2.ZERO and is_instance_valid(assigned_cover) and assigned_cover is Node2D:
+		destination = (assigned_cover as Node2D).global_position
+	match operation:
+		SquadTaskAction.Operation.MOVE_DIRECT:
+			var arrival_radius := 190.0 if task.type == SquadTask.Type.OCCUPY_COVER else (130.0 if task.type == SquadTask.Type.GUARD_AREA else 90.0)
+			if destination == Vector2.ZERO or global_position.distance_to(destination) <= arrival_radius:
+				velocity = Vector2.ZERO
+				return true
+			exit_cover()
+			_move_directly_toward_position(destination, SPEED * get_movement_speed_multiplier())
+			return false
+		SquadTaskAction.Operation.MOVE_SAFE:
+			var arrival_radius := 190.0 if task.type == SquadTask.Type.OCCUPY_COVER else (130.0 if task.type == SquadTask.Type.GUARD_AREA else 90.0)
+			if destination == Vector2.ZERO or global_position.distance_to(destination) <= arrival_radius:
+				velocity = Vector2.ZERO
+				return true
+			exit_cover()
+			if task.type in [SquadTask.Type.MOVE_TO_ZONE, SquadTask.Type.WITHDRAW_TO_ZONE]:
+				# The commander already compiled an analyzed multi-stage route. Applying
+				# the legacy cover-detour search here makes the two route systems fight.
+				_move_directly_toward_position(destination, SPEED * 0.82 * get_movement_speed_multiplier())
+			else:
+				_move_toward_position(destination, SPEED * 0.82 * get_movement_speed_multiplier())
+			return false
+		SquadTaskAction.Operation.ENTER_COVER:
+			_selected_cover = assigned_cover
+			if not is_instance_valid(_selected_cover):
+				return false
+			if get_active_cover() == _selected_cover:
+				velocity = Vector2.ZERO
+				set_cover_precision(false)
+				return true
+			if _selected_cover is Node2D and global_position.distance_to((_selected_cover as Node2D).global_position) <= 230.0:
+				var threat_position := task_target.global_position if is_instance_valid(task_target) else global_position + last_move_dir * 500.0
+				if enter_cover_against(_selected_cover, threat_position, false):
+					set_cover_precision(false)
+					velocity = Vector2.ZERO
+					return true
+			return _move_into_cover()
+		SquadTaskAction.Operation.COMPLETE_MOVE:
+			velocity = Vector2.ZERO
+			return true
+		SquadTaskAction.Operation.ACQUIRE_TARGET:
+			if not _is_live_combat_target(task_target):
+				return false
+			target = task_target
+			current_target = task_target
+			return true
+		SquadTaskAction.Operation.AIM_TARGET:
+			if not _is_live_combat_target(task_target):
+				return false
+			prepare_ambush_shot(task_target)
+			return is_ambush_shot_ready(0.9)
+		SquadTaskAction.Operation.SUPPRESS_TARGET:
+			if not _is_live_combat_target(task_target):
+				return true
+			if get_active_cover() == null:
+				_move_into_cover()
+			else:
+				_fire_for_command(false, delta)
+				if _action_elapsed >= 0.35:
+					squad_member.report_task_ready("掩体火力已建立")
+			return false
+		SquadTaskAction.Operation.NEUTRALIZE_TARGET:
+			if not _is_live_combat_target(task_target):
+				return true
+			if _action_elapsed <= 0.25 and is_ambush_shot_ready(0.9):
+				release_ambush_shot(task_target)
+			_fire_for_command(true, delta)
+			return false
+		SquadTaskAction.Operation.GUARD_AREA:
+			velocity = Vector2.ZERO
+			set_cover_precision(false)
+			set_weapon_aiming(false)
+			if task_target != null and is_instance_valid(task_target):
+				last_move_dir = (task_target.global_position - global_position).normalized()
+			elif destination != Vector2.ZERO:
+				var squad_center: Vector2 = squad_member.coordinator._get_squad_center() if squad_member.coordinator else Vector2.ZERO
+				var outward: Vector2 = (destination - squad_center).normalized()
+				if outward != Vector2.ZERO:
+					last_move_dir = outward
+			if _action_elapsed >= 0.25:
+				squad_member.report_task_ready("警戒扇区已建立")
+			return false
+	return false
+
+func end_task_action(operation: SquadTaskAction.Operation) -> void:
+	if _active_task_operation != operation:
+		return
+	_active_task_operation = -1
+	_goap_controls_actor = false
+	velocity = Vector2.ZERO
+
+func _get_task_action_name(operation: SquadTaskAction.Operation) -> String:
+	match operation:
+		SquadTaskAction.Operation.MOVE_DIRECT:
+			return "快速直达"
+		SquadTaskAction.Operation.MOVE_SAFE:
+			return "沿掩体机动"
+		SquadTaskAction.Operation.ENTER_COVER:
+			return "进入指定掩体"
+		SquadTaskAction.Operation.COMPLETE_MOVE:
+			return "确认到达"
+		SquadTaskAction.Operation.ACQUIRE_TARGET:
+			return "确认指定目标"
+		SquadTaskAction.Operation.AIM_TARGET:
+			return "稳定瞄准"
+		SquadTaskAction.Operation.SUPPRESS_TARGET:
+			return "持续压制"
+		SquadTaskAction.Operation.NEUTRALIZE_TARGET:
+			return "消灭指定目标"
+	return "扇区警戒"
 
 func begin_squad_action(order_type: SquadOrder.Type) -> void:
 	_equip_combat_weapon(firearm_weapon)
@@ -1049,6 +1241,15 @@ func _move_toward_position(destination: Vector2, move_speed: float) -> void:
 			direction = (next_point - global_position).normalized()
 	velocity = direction * move_speed
 
+func _move_directly_toward_position(destination: Vector2, move_speed: float) -> void:
+	var direction := (destination - global_position).normalized()
+	if nav:
+		nav.target_position = destination
+		var next_point := nav.get_next_path_position()
+		if next_point != global_position:
+			direction = (next_point - global_position).normalized()
+	velocity = direction * move_speed
+
 func _find_cover_detour(destination: Vector2) -> Vector2:
 	var best_waypoint := Vector2.ZERO
 	var nearest_distance := INF
@@ -1163,6 +1364,11 @@ func _choose_threat_response() -> ThreatResponse:
 			return ThreatResponse.BLIND_FIRE if roll < 0.62 else ThreatResponse.WAIT
 
 func _get_order_target() -> Node2D:
+	var assignment := squad_member.get_current_task() if squad_member else null
+	if assignment != null:
+		var task_target := assignment.task.get_target_for(String(name))
+		if _is_live_combat_target(task_target):
+			return task_target
 	var order := squad_member.get_current_order() if squad_member else null
 	if order and _is_live_combat_target(order.target):
 		return order.target

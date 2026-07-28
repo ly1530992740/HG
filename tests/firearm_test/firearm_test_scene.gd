@@ -114,27 +114,40 @@ func _bind_enemies() -> void:
 			enemies.append(node)
 	initial_team_counts.clear()
 	for enemy in enemies:
-		var team: StringName = enemy.get_combat_team() if enemy.has_method("get_combat_team") else &"unknown"
-		initial_team_counts[team] = int(initial_team_counts.get(team, 0)) + 1
-		var perception := enemy.get("perception_component") as PerceptionComponent
-		if perception and not perception.contact_confirmed.is_connected(_on_local_contact_confirmed):
-			perception.contact_confirmed.connect(_on_local_contact_confirmed.bind(enemy))
-		var alert := enemy.get("alert_component") as AlertComponent
-		if alert and not alert.state_changed.is_connected(_on_actor_alert_changed):
-			alert.state_changed.connect(_on_actor_alert_changed.bind(enemy))
-		var weapon := enemy.get("firearm_weapon") as FirearmWeapon
-		if weapon and not weapon.fired.is_connected(_on_ai_weapon_fired):
-			weapon.fired.connect(_on_ai_weapon_fired.bind(enemy))
-		if enemy.has_signal("died") and not enemy.died.is_connected(_on_traced_actor_died):
-			enemy.died.connect(_on_traced_actor_died)
-		if enemy.has_signal("projectile_hit_resolved") and not enemy.projectile_hit_resolved.is_connected(_on_projectile_hit_resolved):
-			enemy.projectile_hit_resolved.connect(_on_projectile_hit_resolved)
-		if enemy.has_signal("surprise_reaction_started") and not enemy.surprise_reaction_started.is_connected(_on_surprise_reaction_started):
-			enemy.surprise_reaction_started.connect(_on_surprise_reaction_started.bind(enemy))
+		_register_enemy_signals(enemy, true)
 	_update_enemy_hud()
 
 	if player.has_signal("died"):
 		player.connect("died", _on_player_died)
+
+func register_dynamic_combatant(enemy: Node, counts_toward_total := true) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	if not enemies.has(enemy):
+		enemies.append(enemy)
+	_register_enemy_signals(enemy, counts_toward_total)
+	battle_result_logged = false
+	_update_enemy_hud()
+
+func _register_enemy_signals(enemy: Node, counts_toward_total: bool) -> void:
+	var team: StringName = enemy.get_combat_team() if enemy.has_method("get_combat_team") else &"unknown"
+	if counts_toward_total:
+		initial_team_counts[team] = int(initial_team_counts.get(team, 0)) + 1
+	var perception := enemy.get("perception_component") as PerceptionComponent
+	if perception and not perception.contact_confirmed.is_connected(_on_local_contact_confirmed):
+		perception.contact_confirmed.connect(_on_local_contact_confirmed.bind(enemy))
+	var alert := enemy.get("alert_component") as AlertComponent
+	if alert and not alert.state_changed.is_connected(_on_actor_alert_changed):
+		alert.state_changed.connect(_on_actor_alert_changed.bind(enemy))
+	var weapon := enemy.get("firearm_weapon") as FirearmWeapon
+	if weapon and not weapon.fired.is_connected(_on_ai_weapon_fired):
+		weapon.fired.connect(_on_ai_weapon_fired.bind(enemy))
+	if enemy.has_signal("died") and not enemy.died.is_connected(_on_traced_actor_died):
+		enemy.died.connect(_on_traced_actor_died)
+	if enemy.has_signal("projectile_hit_resolved") and not enemy.projectile_hit_resolved.is_connected(_on_projectile_hit_resolved):
+		enemy.projectile_hit_resolved.connect(_on_projectile_hit_resolved)
+	if enemy.has_signal("surprise_reaction_started") and not enemy.surprise_reaction_started.is_connected(_on_surprise_reaction_started):
+		enemy.surprise_reaction_started.connect(_on_surprise_reaction_started.bind(enemy))
 
 func _bind_squad_trace(coordinator: SquadCoordinator) -> void:
 	if coordinator == null:
@@ -188,6 +201,8 @@ func _on_traced_order_issued(order: SquadOrder, coordinator: SquadCoordinator) -
 			"cover": order.assigned_cover.name if is_instance_valid(order.assigned_cover) else "NONE",
 		})
 	if coordinator.squad_id == &"bravo" and order.type != SquadOrder.Type.HOLD:
+		if not _uses_ambush_test_setup():
+			return
 		if alpha_first_fire_observed:
 			if not bravo_responded_after_alpha_fire:
 				_trace_event("BRAVO_RESPONSE_CONFIRMED", {
@@ -234,6 +249,8 @@ func _on_ai_weapon_fired(actor: Node2D) -> void:
 	var actor_member := actor.get("squad_member") as SquadMember
 	var actor_order := actor_member.get_current_order() if actor_member else null
 	var fire_target := actor_order.target if actor_order != null and is_instance_valid(actor_order.target) else null
+	if fire_target == null and actor_member != null and actor_member.get_current_task() != null:
+		fire_target = actor_member.get_current_task().task.get_target_for(String(actor.name))
 	var weapon := actor.get("firearm_weapon") as FirearmWeapon
 	var final_spread := weapon.last_shot_spread_degrees if weapon != null else -1.0
 	var aim_quality := float(actor.get_aim_quality()) if actor.has_method("get_aim_quality") else 0.0

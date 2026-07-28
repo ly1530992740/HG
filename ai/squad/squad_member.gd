@@ -5,6 +5,8 @@ signal member_died(member: SquadMember)
 signal order_received(order: SquadOrder)
 signal role_changed(is_leader: bool)
 signal intent_changed(intent: String, action: String, plan: String)
+signal task_received(assignment: SquadTaskAssignment)
+signal task_state_reported(member: SquadMember, assignment: SquadTaskAssignment, state: SquadTask.State, detail: String)
 
 @export var squad_id: StringName = &"default"
 
@@ -12,6 +14,8 @@ var actor: Node2D = null
 var coordinator: Node = null
 var blackboard: SquadBlackboard = null
 var current_order: SquadOrder = null
+var current_task: SquadTaskAssignment = null
+var current_task_state: SquadTask.State = SquadTask.State.CANCELLED
 var is_leader := false
 var intent_text := "自主接敌"
 var action_text := "观察战场"
@@ -54,6 +58,8 @@ func clear_coordinator(expected_coordinator: Node) -> void:
 	coordinator = null
 	blackboard = null
 	current_order = null
+	current_task = null
+	current_task_state = SquadTask.State.CANCELLED
 	set_is_leader(false)
 	_update_role_label()
 
@@ -77,6 +83,48 @@ func receive_order(order: SquadOrder) -> void:
 	sync_goap_state()
 	intent_changed.emit(intent_text, action_text, plan_text)
 	order_received.emit(current_order)
+
+func receive_task(assignment: SquadTaskAssignment) -> void:
+	if assignment == null or assignment.task == null:
+		return
+	if current_task != null and not assignment.is_newer_than(current_task):
+		return
+	current_task = assignment
+	current_task_state = SquadTask.State.ACTIVE
+	current_order = null
+	intent_text = "任务：%s" % assignment.task.get_type_name()
+	action_text = "等待 GOAP 规划"
+	plan_text = "态势%d / 计划%d / 任务%s" % [assignment.situation_version, assignment.plan_version, assignment.task.task_id]
+	sync_goap_state()
+	intent_changed.emit(intent_text, action_text, plan_text)
+	task_received.emit(assignment)
+
+func cancel_task(situation_version: int, plan_version: int, reason: String = "cancelled") -> void:
+	if current_task == null:
+		return
+	if current_task.situation_version != situation_version or current_task.plan_version != plan_version:
+		return
+	report_task_state(SquadTask.State.CANCELLED, reason)
+	current_task = null
+	sync_goap_state()
+
+func get_current_task() -> SquadTaskAssignment:
+	return current_task
+
+func report_task_state(state: SquadTask.State, detail: String = "") -> void:
+	if current_task == null or current_task_state == state:
+		return
+	current_task_state = state
+	task_state_reported.emit(self, current_task, state, detail)
+
+func report_task_ready(detail: String = "ready") -> void:
+	report_task_state(SquadTask.State.READY, detail)
+
+func report_task_succeeded(detail: String = "completed") -> void:
+	report_task_state(SquadTask.State.SUCCEEDED, detail)
+
+func report_task_failed(detail: String = "failed") -> void:
+	report_task_state(SquadTask.State.FAILED, detail)
 
 func get_current_order() -> SquadOrder:
 	if current_order != null and current_order.is_expired():
@@ -239,6 +287,14 @@ func sync_goap_state() -> void:
 	world_state.set_state(&"has_squad_order", current_order != null)
 	world_state.set_state(&"squad_order_type", current_order.type if current_order else -1)
 	world_state.set_state(&"squad_order_version", current_order.version if current_order else 0)
+	world_state.set_state(&"has_squad_task", current_task != null)
+	world_state.set_state(&"squad_task_type", current_task.task.type if current_task else -1)
+	world_state.set_state(&"squad_task_token", current_task.token() if current_task else &"")
+	world_state.set_state(&"completed_task_token", &"")
+	world_state.set_state(&"at_task_destination", false)
+	world_state.set_state(&"task_target_acquired", false)
+	world_state.set_state(&"task_aimed", false)
+	agent.request_replan()
 
 func _on_actor_died(_dead_actor: Node = null) -> void:
 	member_died.emit(self)

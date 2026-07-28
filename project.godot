@@ -39,7 +39,7 @@ mouse_cursor/custom_image="uid://demgxhdh76j4o"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/goap/plugin.cfg")
+enabled=PackedStringArray("res://addons/goap/plugin.cfg", "res://addons/squad_group_editor/plugin.cfg")
 
 [file_customization]
 

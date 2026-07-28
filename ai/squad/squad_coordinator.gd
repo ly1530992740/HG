@@ -1,4 +1,4 @@
-extends Node
+extends SquadGroup
 class_name SquadCoordinator
 
 signal member_registered(member: SquadMember)
@@ -12,20 +12,18 @@ signal ambush_opened(target: Node2D, reason: StringName)
 
 enum ContactPhase { SEARCH, AMBUSH, COMBAT }
 
-@export var squad_id: StringName = &"default"
-@export var combat_team: StringName = &"hostile"
-@export var squad_display_name := ""
-@export var can_target_players := true
+@export_group("基础指挥")
 @export var auto_discover_members := true
 @export var context_refresh_interval := 0.5
 @export var order_interval := 4.0
 @export var initial_cover_duration := 8.0
 @export_range(0.0, 1.0) var assault_charge_chance := 0.22
+
+@export_group("接敌汇报")
 @export var contact_report_delay_min := 0.3
 @export var contact_report_delay_max := 1.0
-@export var ambush_timeout := 6.0
-@export_range(0.1, 1.0) var ambush_ready_ratio_required := 0.7
-@export var ambush_danger_close_distance := 190.0
+
+@export_group("搜索与记忆")
 @export var search_order_interval := 5.0
 @export var search_step_distance := 340.0
 @export var search_movement_enabled := true
@@ -33,9 +31,14 @@ enum ContactPhase { SEARCH, AMBUSH, COMBAT }
 @export var search_direction_override := Vector2.ZERO
 @export var search_expansion_step := 150.0
 @export var search_max_expansion_rings := 3
-@export var shared_target_memory_seconds := 7.5
+@export var shared_target_memory_seconds := 25.0
 @export var surprise_command_delay_min := 0.5
 @export var surprise_command_delay_max := 0.8
+
+@export_group("伏击设置")
+@export var ambush_timeout := 6.0
+@export_range(0.1, 1.0) var ambush_ready_ratio_required := 0.7
+@export var ambush_danger_close_distance := 190.0
 @export var allow_silent_ambush := true
 @export var use_shared_ambush_cover := true
 @export var ambush_opening_volley_duration := 2.5
@@ -80,6 +83,7 @@ var _shared_target_last_confirmed_msec := 0
 var _has_ever_engaged := false
 
 func _ready() -> void:
+	super()
 	add_to_group("squad_coordinator")
 	_rng.randomize()
 	blackboard.set_fact(&"roe", RulesOfEngagement.Type.WEAPONS_HOLD)
@@ -99,6 +103,8 @@ func _process(delta: float) -> void:
 	_cleanup_members()
 	_refresh_context()
 	_refresh_tactical_posture()
+	if battlefield_analyzer != null or route_analyzer != null:
+		refresh_group_analysis(_find_primary_target())
 
 func register_member(member: SquadMember) -> void:
 	if member == null or member.squad_id != squad_id or members.has(member):
@@ -205,6 +211,13 @@ func report_contact(observer: SquadMember, contact: CombatContact, delay_overrid
 	contact_report_queued.emit(observer, contact)
 
 func _discover_members() -> void:
+	var configured_actors := get_configured_member_actors()
+	if not configured_actors.is_empty():
+		for actor in configured_actors:
+			var member := actor.get("squad_member") as SquadMember
+			if member != null:
+				register_member(member)
+		return
 	for node in get_tree().get_nodes_in_group("squad_member"):
 		if node is SquadMember:
 			register_member(node)

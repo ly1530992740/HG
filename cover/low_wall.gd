@@ -1,26 +1,130 @@
+@tool
 extends StaticBody2D
 class_name LowWall
 
 @export_range(0.0, 1.0) var blind_block_chance := 0.9
 @export_range(0.0, 1.0) var precision_block_chance := 0.35
-@export var cover_half_length := 88.0
+
+@export_group("Dimensions")
+@export_range(64.0, 4096.0, 1.0) var wall_length := 200.0:
+	set(value):
+		wall_length = maxf(64.0, value)
+		_request_geometry_rebuild()
+@export_range(8.0, 256.0, 1.0) var wall_width := 24.0:
+	set(value):
+		wall_width = maxf(8.0, value)
+		_request_geometry_rebuild()
+
+@export_group("Automatic Cover Slots")
+@export_range(24.0, 256.0, 1.0) var slot_spacing := 40.0:
+	set(value):
+		slot_spacing = maxf(24.0, value)
+		_request_geometry_rebuild()
+@export_range(0.0, 256.0, 1.0) var slot_end_padding := 40.0:
+	set(value):
+		slot_end_padding = maxf(0.0, value)
+		_request_geometry_rebuild()
+@export_range(4.0, 128.0, 1.0) var slot_side_clearance := 22.0:
+	set(value):
+		slot_side_clearance = maxf(4.0, value)
+		_request_geometry_rebuild()
+
+@export_group("Interaction")
+@export var interaction_padding := Vector2(35.0, 53.0):
+	set(value):
+		interaction_padding = Vector2(maxf(0.0, value.x), maxf(0.0, value.y))
+		_request_geometry_rebuild()
+@export_range(0.0, 128.0, 1.0) var movement_end_margin := 12.0:
+	set(value):
+		movement_end_margin = maxf(0.0, value)
+		_request_geometry_rebuild()
 @export var minimum_actor_spacing := 34.0
 
 @onready var interaction_area: Area2D = $InteractionArea
-@onready var slots: Array[Marker2D] = []
+var slots: Array[Marker2D] = []
+var cover_half_length := 88.0
 
 var assignments: Dictionary = {}
 var reservations: Dictionary = {}
 var lateral_offsets: Dictionary = {}
+var _geometry_rebuild_queued := false
 
 func _ready() -> void:
-	for child in $CoverSlots.get_children():
-		if child is Marker2D:
-			slots.append(child)
+	_rebuild_geometry()
 	add_to_group("cover")
 	add_to_group("projectile_blocker")
 	interaction_area.body_entered.connect(_on_body_entered)
 	interaction_area.body_exited.connect(_on_body_exited)
+
+func _request_geometry_rebuild() -> void:
+	if not is_inside_tree() or _geometry_rebuild_queued:
+		return
+	_geometry_rebuild_queued = true
+	call_deferred("_rebuild_geometry")
+
+func _rebuild_geometry() -> void:
+	_geometry_rebuild_queued = false
+	if not is_inside_tree():
+		return
+	cover_half_length = maxf(1.0, wall_length * 0.5 - movement_end_margin)
+	var half_length := wall_length * 0.5
+	var half_width := wall_width * 0.5
+	var visual := get_node_or_null("Visual") as Polygon2D
+	if visual != null:
+		visual.polygon = PackedVector2Array([
+			Vector2(-half_length, -half_width),
+			Vector2(half_length, -half_width),
+			Vector2(half_length, half_width),
+			Vector2(-half_length, half_width),
+		])
+	var top_edge := get_node_or_null("TopEdge") as Line2D
+	if top_edge != null:
+		top_edge.points = PackedVector2Array([
+			Vector2(-half_length, -half_width),
+			Vector2(half_length, -half_width),
+		])
+	var wall_collision := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if wall_collision != null:
+		var wall_shape := RectangleShape2D.new()
+		wall_shape.size = Vector2(wall_length, wall_width)
+		wall_collision.shape = wall_shape
+	var interaction_collision := get_node_or_null("InteractionArea/CollisionShape2D") as CollisionShape2D
+	if interaction_collision != null:
+		var interaction_shape := RectangleShape2D.new()
+		interaction_shape.size = Vector2(
+			wall_length + interaction_padding.x * 2.0,
+			wall_width + interaction_padding.y * 2.0
+		)
+		interaction_collision.shape = interaction_shape
+	_rebuild_slots()
+
+func _rebuild_slots() -> void:
+	for actor in assignments.keys().duplicate():
+		if is_instance_valid(actor) and actor.has_method("exit_cover"):
+			actor.exit_cover()
+	assignments.clear()
+	reservations.clear()
+	lateral_offsets.clear()
+	var slots_root := get_node_or_null("CoverSlots") as Node2D
+	if slots_root == null:
+		return
+	for child in slots_root.get_children(true):
+		slots_root.remove_child(child)
+		child.queue_free()
+	slots.clear()
+	var usable_length := maxf(0.0, wall_length - slot_end_padding * 2.0)
+	var slots_per_side := maxi(1, int(floor(usable_length / slot_spacing)) + 1)
+	var occupied_length := float(slots_per_side - 1) * slot_spacing
+	var side_offset := wall_width * 0.5 + slot_side_clearance
+	for side_index in 2:
+		var side_sign := -1.0 if side_index == 0 else 1.0
+		var side_name := "North" if side_index == 0 else "South"
+		for slot_index in slots_per_side:
+			var marker := Marker2D.new()
+			marker.name = "%s%02d" % [side_name, slot_index + 1]
+			marker.position = Vector2(-occupied_length * 0.5 + float(slot_index) * slot_spacing, side_sign * side_offset)
+			slots_root.add_child(marker, false, Node.INTERNAL_MODE_BACK)
+			slots.append(marker)
 
 func request_cover(actor: Node2D) -> Marker2D:
 	return _request_cover(actor, null)

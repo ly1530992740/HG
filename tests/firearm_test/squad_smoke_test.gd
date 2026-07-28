@@ -319,12 +319,10 @@ func _configure_ambush_test_scenario(scene: Node) -> void:
 	bravo.allow_silent_ambush = true
 	bravo.hold_search_until_first_contact = true
 	bravo.search_direction_override = Vector2.ZERO
-	for child in scene.get_children():
-		if not child is GoblinBase:
-			continue
-		var actor := child as GoblinBase
-		actor.initial_facing_direction = Vector2.RIGHT
-		actor.last_move_dir = Vector2.RIGHT
+	for actor in alpha.get_configured_member_actors() + bravo.get_configured_member_actors():
+		var soldier := actor as GoblinBase
+		soldier.initial_facing_direction = Vector2.RIGHT
+		soldier.last_move_dir = Vector2.RIGHT
 	if not alpha.members.is_empty():
 		alpha._issue_search_sweep()
 	if not bravo.members.is_empty():
@@ -337,14 +335,15 @@ func _assert_mutual_encounter_config(scene: Node) -> void:
 	assert(not bravo.hold_search_until_first_contact, "Bravo still waits motionless for an ambush.")
 	assert(alpha.search_direction_override.is_equal_approx(Vector2.RIGHT), "Alpha does not search toward Bravo.")
 	assert(bravo.search_direction_override.is_equal_approx(Vector2.LEFT), "Bravo does not search toward Alpha.")
+	assert(alpha.get_member_count() == 8 and bravo.get_member_count() == 8, "The playable battle is not authored as two eight-member Group rosters.")
 	for child in scene.get_children():
-		if not child is GoblinBase:
-			continue
-		var actor := child as GoblinBase
-		if actor.combat_team == &"alpha":
-			assert(actor.initial_facing_direction.x > 0.0, "An Alpha soldier does not face the encounter.")
-		elif actor.combat_team == &"bravo":
-			assert(actor.initial_facing_direction.x < 0.0, "A Bravo soldier does not face the encounter.")
+		assert(not child is GoblinBase, "The playable battle still contains a hand-placed root soldier: %s" % child.name)
+	for actor in alpha.get_configured_member_actors() + bravo.get_configured_member_actors():
+		var soldier := actor as GoblinBase
+		if soldier.combat_team == &"alpha":
+			assert(soldier.initial_facing_direction.x > 0.0, "An Alpha soldier does not face the encounter.")
+		elif soldier.combat_team == &"bravo":
+			assert(soldier.initial_facing_direction.x < 0.0, "A Bravo soldier does not face the encounter.")
 
 func _assert_role_composition(coordinator: SquadCoordinator) -> void:
 	var actual: Dictionary = {}

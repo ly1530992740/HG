@@ -15,6 +15,7 @@ const SEPARATION_RADIUS := 120.0
 const SEPARATION_FORCE := 140.0
 const DETOUR_DISTANCE := 60.0
 
+@export_group("基础属性")
 @export var max_health := 6
 @export var health := 6
 @export var SPEED := 220.0
@@ -23,6 +24,8 @@ const DETOUR_DISTANCE := 60.0
 @export var KNOCKBACK_FORCE := 300.0
 @export var KNOCKBACK_DECAY := 0.85
 @export var target_groups: Array[String] = ["player", "castle", "building"]
+
+@export_group("小队与阵营")
 @export var squad_id: StringName = &"default"
 @export var will_profile: WillComponent.Profile = WillComponent.Profile.REGULAR
 @export var lock_steady_morale := false
@@ -31,6 +34,8 @@ const DETOUR_DISTANCE := 60.0
 @export var team_display_name := "敌军"
 @export var team_color := Color(0.72, 0.16, 0.16, 1.0)
 @export var initial_facing_direction := Vector2.RIGHT
+
+@export_group("死亡设置")
 @export var death_cleanup_delay := 0.0
 @export var death_audio_enabled := true
 

@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://ai/squad/squad_group.tscn" id="1_group"]
+[ext_resource type="Script" path="res://ai/squad/llm_squad_coordinator.gd" id="2_llm"]
+
+[node name="LlmSquadGroup" instance=ExtResource("1_group")]
+script = ExtResource("2_llm")
