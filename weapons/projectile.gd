@@ -65,11 +65,13 @@ func _sweep_motion(destination: Vector2) -> void:
 			break
 		global_position = hit.get("position", segment_start) as Vector2
 		var target: Node2D = collider as Node2D
+		var hit_location := -1
 		if collider is Area2D:
 			var area_target := _get_damage_area_target(collider as Area2D)
 			if area_target is Node2D:
 				target = area_target as Node2D
-		_try_hit(target)
+				hit_location = int((collider as Area2D).get_meta("hit_location", -1))
+		_try_hit(target, hit_location)
 		if not alive:
 			return
 		if collider is CollisionObject2D:
@@ -102,9 +104,9 @@ func _on_area_entered(area: Area2D) -> void:
 
 	var target := _get_damage_area_target(area)
 	if target is Node2D:
-		_try_hit(target)
+		_try_hit(target, int(area.get_meta("hit_location", -1)))
 
-func _try_hit(target: Node2D) -> void:
+func _try_hit(target: Node2D, hit_location := -1) -> void:
 	if not alive:
 		return
 
@@ -122,6 +124,7 @@ func _try_hit(target: Node2D) -> void:
 		return
 
 	alive = false
+	set_meta("hit_location", hit_location)
 	_apply_damage(target)
 	queue_free()
 

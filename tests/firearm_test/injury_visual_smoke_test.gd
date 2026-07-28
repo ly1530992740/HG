@@ -46,6 +46,9 @@ func _run() -> void:
 	assert(actor.death_cleanup_delay < 0.0, "Shooter corpses are not configured to persist.")
 	assert(not actor.death_audio_enabled, "Shooter death audio is enabled.")
 	assert(actor.has_node("VisualAnatomy/Head") and actor.has_node("VisualAnatomy/VisualBody"), "Shooter anatomy visuals were not created.")
+	var head_hurtbox := actor.get_node_or_null("HeadHurtbox") as Area2D
+	assert(head_hurtbox != null and head_hurtbox.is_in_group("hurtbox"), "Shooter head has no projectile hurtbox.")
+	assert(int(head_hurtbox.get_meta("hit_location", -1)) == InjuryComponent.HitLocation.HEAD, "Head hurtbox is not marked as a head hit.")
 	var gun_sprite := actor.get_node("VisualGunSprite") as Sprite2D
 	assert(gun_sprite.texture != null, "Shooter firearm texture was not assigned.")
 	var resting_leg_endpoint := (actor.get_node("VisualAnatomy/LeftLeg") as Line2D).points[2]
@@ -57,6 +60,7 @@ func _run() -> void:
 	assert((actor.get_node("MuzzleFlash") as CanvasItem).visible, "Firing did not show the muzzle flash animation.")
 	actor.velocity = Vector2.ZERO
 	await _assert_continuous_projectile_hit()
+	await _assert_head_projectile_hit(shooter_scene)
 	var injury := actor.injury_component
 	injury.resolve_hit(1, InjuryComponent.HitLocation.TORSO, actor.max_health)
 	injury.resolve_hit(1, InjuryComponent.HitLocation.ARM, actor.max_health)
@@ -121,4 +125,49 @@ func _assert_continuous_projectile_hit() -> void:
 	projectile._sweep_motion(projectile.global_position + projectile.velocity * 0.06)
 	assert(target.hit_count == 1, "A high-speed projectile tunneled through its target.")
 	target.queue_free()
+	shooter.queue_free()
+
+func _assert_head_projectile_hit(shooter_scene: PackedScene) -> void:
+	var shooter := SweepShooter.new()
+	shooter.name = "HeadshotShooter"
+	shooter.global_position = Vector2(12000.0, 12000.0)
+	add_child(shooter)
+	var target := shooter_scene.instantiate() as GoblinBase
+	target.name = "HeadshotTarget"
+	target.death_cleanup_delay = 0.0
+	target.drops_ammo_on_death = false
+	target.awards_player_score = false
+	add_child(target)
+	target.global_position = shooter.global_position + Vector2(150.0, 0.0)
+	target.set_process(false)
+	target.set_physics_process(false)
+	await get_tree().physics_frame
+	var head_hurtbox := target.get_node("HeadHurtbox") as Area2D
+	var ray := PhysicsRayQueryParameters2D.create(head_hurtbox.global_position + Vector2(-70.0, 0.0), head_hurtbox.global_position + Vector2(70.0, 0.0))
+	ray.collide_with_areas = true
+	ray.collide_with_bodies = true
+	ray.collision_mask = 1
+	var head_hit := target.get_world_2d().direct_space_state.intersect_ray(ray)
+	assert(head_hit.get("collider") == head_hurtbox, "Projectile ray passes through the visible head instead of hitting HeadHurtbox: %s" % head_hit)
+	var resolved := {"location": -1, "fatal": false}
+	target.projectile_hit_resolved.connect(func(_victim: Node, _shooter: Node, location: int, fatal: bool, _damage: int):
+		resolved.location = location
+		resolved.fatal = fatal
+	)
+	var projectile := (load("res://weapons/enemy_bullet.tscn") as PackedScene).instantiate() as Projectile
+	projectile.set_physics_process(false)
+	add_child(projectile)
+	projectile.global_position = head_hurtbox.global_position + Vector2(-70.0, 0.0)
+	projectile.launch({
+		"direction": Vector2.RIGHT,
+		"speed": 2600.0,
+		"damage": 1,
+		"lifetime": 1.0,
+		"shooter": shooter,
+		"hit_groups": ["goblin"],
+	})
+	projectile._sweep_motion(head_hurtbox.global_position + Vector2(70.0, 0.0))
+	assert(int(resolved.location) == InjuryComponent.HitLocation.HEAD and bool(resolved.fatal), "Head projectile did not resolve as a fatal head hit: %s" % resolved)
+	await get_tree().process_frame
+	assert(not is_instance_valid(target), "Fatal headshot did not remove the configured test target.")
 	shooter.queue_free()

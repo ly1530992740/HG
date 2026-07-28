@@ -1,4 +1,4 @@
-extends Node
+extends Node2D
 class_name SquadGroup
 
 signal group_member_added(actor: Node2D)
@@ -11,6 +11,8 @@ signal analysis_refreshed(snapshot: Dictionary, routes: Array[Dictionary])
 @export var squad_display_name := ""
 @export var can_target_players := true
 @export var team_color := Color(0.72, 0.16, 0.16, 1.0)
+@export var free_when_all_members_dead := false
+@export_range(0.0, 10.0, 0.1) var empty_cleanup_delay := 0.5
 
 @export_group("场景成员")
 @export var member_root_path: NodePath
@@ -29,6 +31,8 @@ var battlefield_analyzer: SquadBattlefieldAnalyzer = null
 var route_analyzer: SquadRouteAnalyzer = null
 var last_analysis_snapshot: Dictionary = {}
 var last_route_candidates: Array[Dictionary] = []
+var _has_registered_members := false
+var _empty_cleanup_pending := false
 
 func _ready() -> void:
 	add_to_group("squad_group")
@@ -118,6 +122,7 @@ func add_member_actor(actor: Node2D) -> void:
 	var member := actor.get("squad_member") as SquadMember
 	if member != null and has_method("register_member"):
 		call("register_member", member)
+		_has_registered_members = true
 	group_member_added.emit(actor)
 
 func remove_member_actor(actor: Node2D) -> void:
@@ -149,3 +154,19 @@ func _configure_member_identity(actor: Node2D) -> void:
 	actor.set("can_target_players", can_target_players)
 	actor.set("team_display_name", squad_display_name)
 	actor.set("team_color", team_color)
+
+func schedule_empty_cleanup() -> void:
+	if not free_when_all_members_dead or not _has_registered_members or _empty_cleanup_pending:
+		return
+	_empty_cleanup_pending = true
+	if empty_cleanup_delay > 0.0:
+		await get_tree().create_timer(empty_cleanup_delay).timeout
+	if not is_instance_valid(self):
+		return
+	var living_members := get_configured_member_actors().filter(func(actor: Node2D):
+		return is_instance_valid(actor) and (not actor.has_method("is_combat_alive") or actor.is_combat_alive())
+	)
+	if living_members.is_empty():
+		queue_free()
+	else:
+		_empty_cleanup_pending = false

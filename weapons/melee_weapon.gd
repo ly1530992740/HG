@@ -39,7 +39,7 @@ func try_attack(target_position: Vector2) -> bool:
 func _spawn_hitbox(origin: Vector2, direction: Vector2) -> void:
 	var hitbox := Area2D.new()
 	hitbox.name = "MeleeHitbox"
-	hitbox.add_to_group("attackeffect")
+	hitbox.add_to_group("melee_hitbox")
 	hitbox.global_position = origin + direction * weapon_data.melee_range
 	hitbox.rotation = direction.angle()
 	hitbox.monitoring = true
@@ -54,15 +54,30 @@ func _spawn_hitbox(origin: Vector2, direction: Vector2) -> void:
 
 	get_tree().current_scene.add_child(hitbox)
 	hitbox.area_entered.connect(_on_hitbox_area_entered.bind(hitbox))
+	hitbox.body_entered.connect(_on_hitbox_body_entered.bind(hitbox))
 	emit_signal("hitbox_spawned", hitbox)
 
+	await get_tree().physics_frame
+	if is_instance_valid(hitbox):
+		for area in hitbox.get_overlapping_areas():
+			_on_hitbox_area_entered(area, hitbox)
+		for body in hitbox.get_overlapping_bodies():
+			_on_hitbox_body_entered(body, hitbox)
 	await get_tree().create_timer(weapon_data.melee_active_time).timeout
 	if is_instance_valid(hitbox):
 		hitbox.queue_free()
 
 func _on_hitbox_area_entered(area: Area2D, hitbox: Area2D) -> void:
-	var target := area.get_parent()
-	if target == wielder:
+	var target := _get_area_target(area)
+	if target == null:
+		return
+	_apply_hit(target, hitbox)
+
+func _on_hitbox_body_entered(body: Node2D, hitbox: Area2D) -> void:
+	_apply_hit(body, hitbox)
+
+func _apply_hit(target: Node, hitbox: Area2D) -> void:
+	if not is_instance_valid(hitbox) or target == wielder:
 		return
 
 	if not _can_hit(target):
@@ -73,10 +88,22 @@ func _on_hitbox_area_entered(area: Area2D, hitbox: Area2D) -> void:
 	hit_targets[target] = true
 	hitbox.set_meta("hit_targets", hit_targets)
 
-	if target.has_method("take_damage"):
+	if target.has_method("receive_melee_hit"):
+		target.receive_melee_hit(weapon_data.damage, hitbox.global_position, wielder)
+	elif target.has_method("take_damage"):
 		target.take_damage(weapon_data.damage, hitbox.global_position)
 	elif target.has_method("take_damages"):
 		target.take_damages(weapon_data.damage)
+
+func _get_area_target(area: Area2D) -> Node:
+	var area_name := String(area.name).to_lower()
+	if not area.is_in_group("hurtbox") \
+			and not area.is_in_group("hitbox") \
+			and area_name != "hurtbox" \
+			and area_name != "hitbox" \
+			and area_name != "headhurtbox":
+		return null
+	return area.get_parent()
 
 func _can_hit(target: Node) -> bool:
 	if target == null:

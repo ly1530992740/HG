@@ -21,6 +21,7 @@ enum State { IDLE, RUN, USE, DEAD }
 @export var firearm_test_invulnerable := false
 @export var firearm_data: WeaponData
 @export var firearm_muzzle_offset := Vector2(24, -8)
+@export var starting_firearms: PackedStringArray = PackedStringArray(["rifle"])
 
 const DEFAULT_PROJECTILE_SCENE := preload("res://weapons/projectile.tscn")
 
@@ -82,6 +83,9 @@ var firearm_crosshair: WeaponCrosshair
 var firearm_tool_button: Button
 var firearm_selector_panel: PanelContainer
 var firearm_buttons: Array[Button] = []
+var unlocked_firearms: PackedStringArray = []
+var firearm_ammo_state: Dictionary = {}
+var current_firearm_id := ""
 var cover_user: CoverUser
 var aim_component: AimComponent
 var concealment_component: ConcealmentComponent
@@ -163,6 +167,14 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventKey and not event.echo:
 		var key_event := event as InputEventKey
+		if key_event.pressed and key_event.physical_keycode == KEY_Q:
+			cycle_firearm(-1)
+			get_viewport().set_input_as_handled()
+			return
+		if key_event.pressed and key_event.physical_keycode == KEY_E:
+			cycle_firearm(1)
+			get_viewport().set_input_as_handled()
+			return
 		if key_event.physical_keycode == KEY_C and key_event.pressed:
 			if cover_user:
 				cover_user.toggle_nearest_cover()
@@ -187,17 +199,27 @@ func _input(event: InputEvent) -> void:
 		firearm_weapon.stop_attack()
 		get_viewport().set_input_as_handled()
 
-	if event.is_action_pressed("fire_weapon"):
-		_fire_weapon_at_mouse()
-		get_viewport().set_input_as_handled()
-
-	if event.is_action_released("fire_weapon") and firearm_weapon:
-		firearm_weapon.stop_attack()
-		get_viewport().set_input_as_handled()
-
 	if event.is_action_pressed("reload_weapon"):
 		if firearm_weapon:
 			firearm_weapon.reload()
+		get_viewport().set_input_as_handled()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not active or state == State.DEAD:
+		return
+	if event.is_action_pressed("fire_weapon"):
+		if _is_world_click_reserved():
+			return
+		set_tool_and_activate(Tool.GUN)
+		_fire_weapon_at_mouse()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_released("fire_weapon") and firearm_weapon:
+		firearm_weapon.stop_attack()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("aim_weapon") and firearm_weapon:
+		if _is_world_click_reserved():
+			return
+		set_tool_and_activate(Tool.GUN)
 		get_viewport().set_input_as_handled()
 
 # --------------------------------------------------
@@ -326,7 +348,13 @@ func _setup_firearm() -> void:
 	firearm_muzzle.position = firearm_muzzle_offset
 	add_child(firearm_muzzle)
 
-	var data := firearm_data if firearm_data != null else _make_default_firearm_data()
+	for weapon_id in starting_firearms:
+		if not unlocked_firearms.has(weapon_id):
+			unlocked_firearms.append(weapon_id)
+	if unlocked_firearms.is_empty():
+		unlocked_firearms.append("rifle")
+	current_firearm_id = "custom" if firearm_data != null else unlocked_firearms[0]
+	var data := firearm_data if firearm_data != null else _make_firearm_data(current_firearm_id)
 
 	firearm_weapon = FirearmWeapon.new()
 	firearm_weapon.name = "FirearmWeapon"
@@ -370,7 +398,19 @@ func _setup_cover_user() -> void:
 func _setup_aim_component() -> void:
 	aim_component = AimComponent.new()
 	aim_component.name = "AimComponent"
+	aim_component.aimed_spread_multiplier = 0.08
+	aim_component.moving_aim_multiplier = 1.35
+	aim_component.aim_settle_time = 0.22
+	aim_component.recoil_per_shot = 0.04
+	aim_component.maximum_recoil = 0.18
+	aim_component.recoil_recovery_per_second = 3.5
 	add_child(aim_component)
+
+func _is_world_click_reserved() -> bool:
+	if get_tree().get_first_node_in_group("active_building_placement") != null:
+		return true
+	var hovered := get_viewport().gui_get_hovered_control()
+	return hovered != null and hovered.mouse_filter != Control.MOUSE_FILTER_IGNORE
 
 func _setup_concealment_component() -> void:
 	concealment_component = ConcealmentComponent.new()
@@ -421,7 +461,7 @@ func _setup_firearm_selector() -> void:
 		firearm_selector_panel.add_child(list)
 
 		var title := Label.new()
-		title.text = "Weapons"
+		title.text = "已拥有武器（Q/E切换）"
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.add_theme_font_size_override("font_size", 9)
 		list.add_child(title)
@@ -435,12 +475,19 @@ func _setup_firearm_selector() -> void:
 
 	var weapon_list := firearm_selector_panel.get_node("WeaponList") as VBoxContainer
 	var weapon_grid := weapon_list.get_node("WeaponGrid") as GridContainer
-	if firearm_buttons.is_empty():
-		_add_firearm_option(weapon_grid, "Pistol", "pistol")
-		_add_firearm_option(weapon_grid, "SMG", "smg")
-		_add_firearm_option(weapon_grid, "Shotgun", "shotgun")
-		_add_firearm_option(weapon_grid, "Bolt", "bolt_rifle")
-		_add_firearm_option(weapon_grid, "LMG", "lmg")
+	_refresh_firearm_selector(weapon_grid)
+
+func _refresh_firearm_selector(grid: GridContainer = null) -> void:
+	if grid == null and firearm_selector_panel != null:
+		grid = firearm_selector_panel.get_node_or_null("WeaponList/WeaponGrid") as GridContainer
+	if grid == null:
+		return
+	for button in firearm_buttons:
+		if is_instance_valid(button):
+			button.queue_free()
+	firearm_buttons.clear()
+	for weapon_id in unlocked_firearms:
+		_add_firearm_option(grid, _get_firearm_label(weapon_id), weapon_id)
 
 func _add_firearm_option(parent: Container, label: String, weapon_id: String) -> void:
 	var button := Button.new()
@@ -485,6 +532,8 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 	data.hit_groups = ["goblin", "goblinbuildings"]
 
 	match weapon_id:
+		"rifle":
+			return _make_default_firearm_data()
 		"pistol":
 			data.weapon_name = "Pistol"
 			data.damage = 3
@@ -556,11 +605,89 @@ func _make_firearm_data(weapon_id: String) -> WeaponData:
 func set_firearm_weapon(weapon_id: String) -> void:
 	if firearm_weapon == null:
 		return
-
-	firearm_weapon.set_weapon_data(_make_firearm_data(weapon_id))
+	if weapon_id == current_firearm_id:
+		set_tool_and_activate(Tool.GUN)
+		return
+	_store_current_firearm_ammo()
+	if not unlocked_firearms.has(weapon_id):
+		unlocked_firearms.append(weapon_id)
+		_refresh_firearm_selector()
+	current_firearm_id = weapon_id
+	firearm_weapon.set_weapon_data(_make_firearm_data(weapon_id), true)
+	if firearm_ammo_state.has(weapon_id):
+		var ammo: Dictionary = firearm_ammo_state[weapon_id]
+		firearm_weapon.magazine_ammo = int(ammo.get("magazine", firearm_weapon.magazine_ammo))
+		firearm_weapon.reserve_ammo = int(ammo.get("reserve", firearm_weapon.reserve_ammo))
+		firearm_weapon.ammo_changed.emit(firearm_weapon.magazine_ammo, firearm_weapon.reserve_ammo)
 	set_tool_and_activate(Tool.GUN)
 	Global.pawn_tool = "gun"
 	update_animation()
+
+func unlock_firearm(weapon_id: String, equip_now := true) -> bool:
+	if weapon_id.is_empty():
+		return false
+	var newly_unlocked := not unlocked_firearms.has(weapon_id)
+	if newly_unlocked:
+		unlocked_firearms.append(weapon_id)
+		_refresh_firearm_selector()
+	if equip_now:
+		set_firearm_weapon(weapon_id)
+	return newly_unlocked
+
+func cycle_firearm(direction: int) -> void:
+	if unlocked_firearms.is_empty() or firearm_weapon == null:
+		return
+	var index := unlocked_firearms.find(current_firearm_id)
+	if index < 0:
+		index = 0
+	var next_index := posmod(index + signi(direction), unlocked_firearms.size())
+	set_firearm_weapon(unlocked_firearms[next_index])
+
+func add_firearm_ammo(amount: int, weapon_id := "") -> void:
+	if amount <= 0:
+		return
+	var target_id := current_firearm_id if weapon_id.is_empty() else weapon_id
+	if target_id == current_firearm_id and firearm_weapon != null:
+		firearm_weapon.add_reserve_ammo(amount)
+		return
+	var ammo: Dictionary = firearm_ammo_state.get(target_id, {"magazine": 0, "reserve": 0})
+	ammo["reserve"] = int(ammo.get("reserve", 0)) + amount
+	firearm_ammo_state[target_id] = ammo
+
+func receive_ammo_pickup(amount: int) -> void:
+	add_firearm_ammo(amount)
+
+func receive_weapon_pickup(weapon_id: String, ammo_amount: int) -> bool:
+	if weapon_id.is_empty() or firearm_weapon == null:
+		return false
+	var newly_unlocked := unlock_firearm(weapon_id, true)
+	if not newly_unlocked and ammo_amount > 0:
+		add_firearm_ammo(ammo_amount, weapon_id)
+	return true
+
+func _store_current_firearm_ammo() -> void:
+	if current_firearm_id.is_empty() or firearm_weapon == null:
+		return
+	firearm_ammo_state[current_firearm_id] = {
+		"magazine": firearm_weapon.magazine_ammo,
+		"reserve": firearm_weapon.reserve_ammo,
+	}
+
+func _get_firearm_label(weapon_id: String) -> String:
+	match weapon_id:
+		"rifle":
+			return "步枪"
+		"pistol":
+			return "手枪"
+		"smg":
+			return "冲锋枪"
+		"shotgun":
+			return "霰弹枪"
+		"bolt_rifle":
+			return "精确步枪"
+		"lmg":
+			return "轻机枪"
+	return weapon_id
 
 func _fire_weapon_at_mouse() -> void:
 	if firearm_weapon == null:
@@ -703,6 +830,8 @@ func spawn_attack_effect() -> void:
 	var fx := attack_effect_scene.instantiate()
 	fx.global_position = marker_2d.global_position
 	fx.scale=Vector2(0.2,0.2)
+	if fx.has_method("configure_attack"):
+		fx.configure_attack(self, _get_current_melee_damage())
 	get_parent().add_child(fx)
 	
 	match current_tool:
@@ -722,6 +851,18 @@ func spawn_attack_effect() -> void:
 			pickaxe.play()
 		Tool.HAND: 
 			fx.scale = Vector2(0.2, 0.2)
+
+func _get_current_melee_damage() -> int:
+	match current_tool:
+		Tool.KNIFE:
+			return 15
+		Tool.AXE:
+			return 12
+		Tool.PICKAXE:
+			return 10
+		Tool.HAND:
+			return 4
+	return 10
 
 func spawn_repair_effect() -> void:
 	var fx := attack_repair_scene.instantiate()

@@ -62,7 +62,7 @@ func _ready() -> void:
 	_bind_enemies()
 	_bind_squad_trace(alpha_coordinator)
 	_bind_squad_trace(bravo_coordinator)
-	status_label.text = "WASD | C掩体 | Space精确 | F/Q射击 | R装弹"
+	status_label.text = "WASD移动 | 左键射击 | 右键精确瞄准 | R装弹"
 
 func _process(delta: float) -> void:
 	if is_instance_valid(player) and is_instance_valid(battle_camera):

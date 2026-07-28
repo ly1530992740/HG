@@ -1,6 +1,8 @@
 extends CharacterBody2D
 class_name GoblinBase
 
+const AMMO_PICKUP_SCENE := preload("res://survival/pickups/ammo_pickup.tscn")
+
 signal died(actor: Node)
 signal projectile_hit_resolved(victim: Node, shooter: Node, location: int, fatal: bool, damage: int)
 
@@ -38,6 +40,10 @@ const DETOUR_DISTANCE := 60.0
 @export_group("死亡设置")
 @export var death_cleanup_delay := 0.0
 @export var death_audio_enabled := true
+@export var awards_player_score := true
+@export_range(0, 1000, 1) var score_reward := 1
+@export var drops_ammo_on_death := true
+@export_range(0, 500, 1) var ammo_drop_amount := 12
 
 @onready var anim: AnimatedSprite2D = get_node_or_null("anim")
 @onready var nav: NavigationAgent2D = get_node_or_null("NavigationAgent2D")
@@ -66,6 +72,7 @@ var perception_component: PerceptionComponent
 var aim_component: AimComponent
 var concealment_component: ConcealmentComponent
 var direct_threat_timer := 0.0
+var _last_damage_instigator: Node = null
 
 func _ready() -> void:
 	z_index = 3
@@ -343,7 +350,8 @@ func receive_projectile_hit(base_damage: int, source_position: Vector2, projecti
 	if state == State.DEAD:
 		return
 	direct_threat_timer = 2.5
-	var hit := injury_component.resolve_hit(base_damage, -1, max_health) if injury_component else {
+	var forced_location := int(projectile.get_meta("hit_location", -1)) if is_instance_valid(projectile) else -1
+	var hit := injury_component.resolve_hit(base_damage, forced_location, max_health) if injury_component else {
 		"location": InjuryComponent.HitLocation.TORSO,
 		"damage": base_damage,
 		"fatal": false,
@@ -351,8 +359,13 @@ func receive_projectile_hit(base_damage: int, source_position: Vector2, projecti
 	var fatal := bool(hit.get("fatal", false))
 	var resolved_damage := max_health * 10 if fatal else int(hit.get("damage", base_damage))
 	var shooter: Node = projectile.get("shooter") as Node if is_instance_valid(projectile) else null
+	_last_damage_instigator = shooter
 	projectile_hit_resolved.emit(self, shooter, int(hit.get("location", InjuryComponent.HitLocation.TORSO)), fatal, resolved_damage)
 	take_damage(resolved_damage, source_position)
+
+func receive_melee_hit(damage: int, source_position: Vector2, instigator: Node) -> void:
+	_last_damage_instigator = instigator
+	take_damage(damage, source_position)
 
 func start_flashing() -> void:
 	if is_flashing or anim == null:
@@ -372,6 +385,8 @@ func die() -> void:
 		return
 
 	state = State.DEAD
+	_award_player_kill()
+	_spawn_ammo_drop()
 	died.emit(self)
 	release_target()
 	rebalance_pack()
@@ -389,6 +404,33 @@ func die() -> void:
 	await get_tree().create_timer(death_cleanup_delay).timeout
 	if is_instance_valid(self):
 		queue_free()
+
+func _award_player_kill() -> void:
+	if not awards_player_score or score_reward <= 0 or not _is_player_side_instigator(_last_damage_instigator):
+		return
+	SurvivalEconomy.add_points(score_reward, self)
+
+func _spawn_ammo_drop() -> void:
+	if not drops_ammo_on_death or ammo_drop_amount <= 0 or get_tree().current_scene == null:
+		return
+	call_deferred("_finish_ammo_drop_spawn", ammo_drop_amount, global_position, get_tree().current_scene)
+
+func _finish_ammo_drop_spawn(amount: int, spawn_position: Vector2, parent: Node) -> void:
+	if not is_instance_valid(parent):
+		return
+	var pickup := AMMO_PICKUP_SCENE.instantiate() as AmmoPickup
+	if pickup == null:
+		return
+	pickup.ammo_amount = amount
+	parent.add_child(pickup)
+	pickup.global_position = spawn_position
+
+func _is_player_side_instigator(instigator: Node) -> bool:
+	if instigator == null or not is_instance_valid(instigator):
+		return false
+	if instigator.is_in_group("player") or instigator.is_in_group("pawn"):
+		return true
+	return instigator.has_method("get_combat_team") and instigator.get_combat_team() == &"player_allies"
 
 func _disable_dead_actor() -> void:
 	velocity = Vector2.ZERO

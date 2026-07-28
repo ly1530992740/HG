@@ -10,6 +10,7 @@ const PRESETS := [
 	{"label": "霰弹突击兵", "role": SquadCombatRole.Type.SHOTGUNNER, "loadout": 0},
 	{"label": "手枪侦察兵", "role": SquadCombatRole.Type.PISTOL_SCOUT, "loadout": 0},
 	{"label": "冲锋枪兵", "role": SquadCombatRole.Type.RIFLEMAN, "loadout": 1},
+	{"label": "近战兵", "role": SquadCombatRole.Type.MELEE, "loadout": 2},
 ]
 
 const PROPERTY_LABELS := {
@@ -19,6 +20,8 @@ const PROPERTY_LABELS := {
 	"squad_display_name": "小队显示名称",
 	"can_target_players": "可以攻击玩家",
 	"team_color": "队伍颜色",
+	"free_when_all_members_dead": "全员阵亡后删除小队节点",
+	"empty_cleanup_delay": "小队清理延迟",
 	"member_root_path": "成员容器路径",
 	"member_actor_paths": "手工成员路径",
 	"propagate_group_identity": "同步 Group 阵营信息",
@@ -29,6 +32,8 @@ const PROPERTY_LABELS := {
 
 	# 小队长
 	"auto_discover_members": "自动发现成员",
+	"command_mode": "指挥模式",
+	"elect_squad_leader": "选举小队长",
 	"context_refresh_interval": "态势刷新间隔",
 	"order_interval": "命令间隔",
 	"initial_cover_duration": "初始找掩体时长",
@@ -106,9 +111,18 @@ const PROPERTY_LABELS := {
 	"team_display_name": "队伍显示名称",
 	"death_cleanup_delay": "尸体清理延迟",
 	"death_audio_enabled": "启用死亡音效",
+	"awards_player_score": "被玩家击杀时奖励积分",
+	"score_reward": "击杀积分",
+	"drops_ammo_on_death": "死亡时掉落弹药",
+	"ammo_drop_amount": "掉落弹药数量",
 	"detect_range": "检测距离",
 	"attack_range": "射击距离",
 	"keep_distance": "保持距离",
+	"autonomous_goap_enabled": "启用单兵自主 GOAP",
+	"defense_anchor": "防守中心",
+	"defense_radius": "防守半径",
+	"defense_arrival_radius": "集结到达距离",
+	"maximum_cover_move_distance": "最大找掩体距离",
 	"fire_cooldown": "射击冷却",
 	"projectile_damage": "子弹伤害",
 	"projectile_speed": "子弹速度",
@@ -125,10 +139,32 @@ const PROPERTY_LABELS := {
 	"target_refresh_interval": "目标刷新间隔",
 	"surprise_reaction_min": "最短受惊时间",
 	"surprise_reaction_max": "最长受惊时间",
+	"allow_cover_lateral_reposition": "受压时允许沿掩体换位",
 	"standard_sight_range": "标准视野距离",
 	"standard_field_of_view": "标准视野角度",
 	"marksman_aim_sight_range": "精确射手瞄准视距",
 	"marksman_aim_field_of_view": "精确射手瞄准视野角度",
+
+	# 波次生成
+	"waves": "敌军波次",
+	"auto_start": "场景启动后自动开始",
+	"first_wave_delay": "第一波倒计时",
+	"between_wave_delay": "波次间隔倒计时",
+	"spawn_radius": "随机生成半径",
+	"minimum_spawn_radius": "最小生成半径",
+	"show_spawn_radius_preview": "在场景中显示生成半径",
+	"spawn_on_outer_ring": "仅在最外圈生成",
+	"face_spawn_center": "生成后朝向中心",
+	"assign_primary_target": "生成后指定首要目标",
+	"primary_target_path": "首要目标节点路径",
+	"initial_points": "初始积分",
+	"clear_check_interval": "全灭检查间隔",
+	"spawned_squads_parent_path": "生成小队的父节点路径",
+	"wave_name": "波次名称",
+	"squads": "本波小队配置",
+	"squad_scene": "小队预制体",
+	"count": "生成数量",
+	"spawn_radius_override": "单项生成半径覆盖",
 }
 
 var _editor_plugin: EditorPlugin
@@ -144,6 +180,10 @@ func _can_handle(object: Object) -> bool:
 		or object is SquadBattlefieldAnalyzer
 		or object is SquadRouteAnalyzer
 		or object is GoblinBase
+		or object is SquadWaveSpawner
+		or object is SquadWaveDefinition
+		or object is SquadWaveEntry
+		or object is SurvivalDefenseWaveController
 	)
 
 func _parse_begin(object: Object) -> void:
@@ -250,11 +290,13 @@ func _localize_enum_options(editor: EditorProperty, property_name: String) -> vo
 	var labels: PackedStringArray = []
 	match property_name:
 		"combat_role":
-			labels = PackedStringArray(["步枪兵", "精确射手", "机枪兵", "霰弹突击兵", "手枪侦察兵"])
+			labels = PackedStringArray(["步枪兵", "精确射手", "机枪兵", "霰弹突击兵", "手枪侦察兵", "近战兵"])
 		"firearm_loadout":
-			labels = PackedStringArray(["按兵种默认", "冲锋枪"])
+			labels = PackedStringArray(["按兵种默认", "冲锋枪", "仅近战武器"])
 		"will_profile":
 			labels = PackedStringArray(["狂热", "正规", "胆怯"])
+		"command_mode":
+			labels = PackedStringArray(["小队长统一指挥", "无小队长：单兵自主 GOAP"])
 	if labels.is_empty():
 		return
 	for child in editor.find_children("*", "OptionButton", true, false):

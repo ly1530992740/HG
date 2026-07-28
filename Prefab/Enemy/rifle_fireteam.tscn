@@ -1,0 +1,37 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ai/squad/squad_coordinator.gd" id="1_group"]
+[ext_resource type="PackedScene" path="res://unit/goblins/goblin shooter.tscn" id="2_soldier"]
+
+[node name="RifleFireteam" type="Node2D"]
+script = ExtResource("1_group")
+squad_id = &"rifle_fireteam"
+combat_team = &"hostile"
+squad_display_name = "敌军步枪火力组"
+team_color = Color(0.72, 0.14, 0.1, 1)
+free_when_all_members_dead = true
+member_root_path = NodePath("Members")
+propagate_group_identity = true
+command_mode = 0
+elect_squad_leader = true
+search_movement_enabled = false
+allow_silent_ambush = false
+
+[node name="Members" type="Node2D" parent="."]
+
+[node name="Rifle1" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(-70, -65)
+autonomous_goap_enabled = false
+
+[node name="Rifle2" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(-70, 65)
+autonomous_goap_enabled = false
+
+[node name="Rifle3" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(45, -65)
+autonomous_goap_enabled = false
+
+[node name="MachineGunner" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(45, 65)
+combat_role = 2
+autonomous_goap_enabled = false

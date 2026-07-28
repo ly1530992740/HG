@@ -96,6 +96,8 @@ var _search_contact_version_bumped := false
 
 func _ready() -> void:
 	super()
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		return
 	task_scheduler = SquadTaskScheduler.new()
 	task_scheduler.name = "SquadTaskScheduler"
 	add_child(task_scheduler)
@@ -112,6 +114,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	super(delta)
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		return
 	_debug_refresh_timer -= delta
 	if _debug_refresh_timer <= 0.0:
 		_debug_refresh_timer = 0.25
@@ -119,6 +123,9 @@ func _process(delta: float) -> void:
 		_update_decision_label()
 
 func _begin_ambush(target: Node2D) -> void:
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		super._begin_ambush(target)
+		return
 	if _contact_phase == ContactPhase.AMBUSH:
 		super._begin_ambush(target)
 		return
@@ -128,10 +135,15 @@ func _begin_ambush(target: Node2D) -> void:
 
 func _begin_direct_contact(target: Node2D) -> void:
 	super._begin_direct_contact(target)
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		return
 	if not _request_pending:
 		_request_llm_decision(target, &"combat")
 
 func _accept_contact_report(observer: SquadMember, contact: CombatContact) -> void:
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		super._accept_contact_report(observer, contact)
+		return
 	if _contact_phase == ContactPhase.SEARCH and not _search_contact_version_bumped:
 		_search_contact_version_bumped = true
 		situation_version += 1
@@ -142,6 +154,8 @@ func _accept_contact_report(observer: SquadMember, contact: CombatContact) -> vo
 
 func _reset_contact_state() -> void:
 	super._reset_contact_state()
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		return
 	_search_contact_version_bumped = false
 	situation_version += 1
 	if task_scheduler:
@@ -256,6 +270,7 @@ func _build_tactical_state(target: Node2D, context: StringName, candidate_plan_l
 		"机枪手": 0,
 		"霰弹突击手": 0,
 		"手枪侦察员": 0,
+		"近战兵": 0,
 	}
 	for member in members:
 		if not is_instance_valid(member) or not is_instance_valid(member.actor):
@@ -277,6 +292,8 @@ func _build_tactical_state(target: Node2D, context: StringName, candidate_plan_l
 				role_counts["霰弹突击手"] += 1
 			SquadCombatRole.Type.PISTOL_SCOUT:
 				role_counts["手枪侦察员"] += 1
+			SquadCombatRole.Type.MELEE:
+				role_counts["近战兵"] += 1
 			_:
 				role_counts["步枪手"] += 1
 	var center := _get_squad_center()

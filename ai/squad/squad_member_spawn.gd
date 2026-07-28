@@ -4,7 +4,7 @@ class_name SquadMemberSpawn
 @export var member_id: StringName = &"Soldier"
 @export var position := Vector2.ZERO
 @export var combat_role: SquadCombatRole.Type = SquadCombatRole.Type.RIFLEMAN
-@export_range(0, 1, 1) var firearm_loadout := 0
+@export_range(0, 2, 1) var firearm_loadout := 0
 @export var initial_facing_direction := Vector2.RIGHT
 @export var lock_steady_morale := true
 

@@ -1,0 +1,44 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ai/squad/squad_coordinator.gd" id="1_group"]
+[ext_resource type="PackedScene" path="res://unit/goblins/goblin shooter.tscn" id="2_soldier"]
+
+[node name="ScoutRaiderSquad" type="Node2D"]
+script = ExtResource("1_group")
+squad_id = &"scout_raiders"
+combat_team = &"hostile"
+squad_display_name = "敌军侦搜袭扰队"
+team_color = Color(0.78, 0.24, 0.12, 1)
+free_when_all_members_dead = true
+member_root_path = NodePath("Members")
+propagate_group_identity = true
+command_mode = 0
+elect_squad_leader = true
+search_movement_enabled = false
+allow_silent_ambush = false
+
+[node name="Members" type="Node2D" parent="."]
+
+[node name="ScoutPistol1" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(-55, -60)
+combat_role = 4
+autonomous_goap_enabled = false
+
+[node name="ScoutPistol2" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(-55, 60)
+combat_role = 4
+autonomous_goap_enabled = false
+
+[node name="ScoutMelee1" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(60, -48)
+combat_role = 5
+firearm_loadout = 2
+autonomous_goap_enabled = false
+drops_ammo_on_death = false
+
+[node name="ScoutMelee2" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector2(60, 48)
+combat_role = 5
+firearm_loadout = 2
+autonomous_goap_enabled = false
+drops_ammo_on_death = false

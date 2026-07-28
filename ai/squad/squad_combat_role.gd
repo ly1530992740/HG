@@ -7,6 +7,7 @@ enum Type {
 	MACHINE_GUNNER,
 	SHOTGUNNER,
 	PISTOL_SCOUT,
+	MELEE,
 }
 
 static func get_label(role: Type) -> String:
@@ -19,6 +20,8 @@ static func get_label(role: Type) -> String:
 			return "霰弹突击兵"
 		Type.PISTOL_SCOUT:
 			return "手枪侦察兵"
+		Type.MELEE:
+			return "近战兵"
 	return "步枪兵"
 
 static func get_short_label(role: Type) -> String:
@@ -31,4 +34,6 @@ static func get_short_label(role: Type) -> String:
 			return "霰"
 		Type.PISTOL_SCOUT:
 			return "手"
+		Type.MELEE:
+			return "刀"
 	return "步"

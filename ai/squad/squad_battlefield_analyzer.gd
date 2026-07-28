@@ -102,4 +102,6 @@ func _actor_firepower(actor: Node2D) -> float:
 				return 1.4
 			SquadCombatRole.Type.PISTOL_SCOUT:
 				return 1.0
+			SquadCombatRole.Type.MELEE:
+				return 0.7
 	return 1.0

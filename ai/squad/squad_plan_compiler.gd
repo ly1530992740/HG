@@ -192,6 +192,8 @@ static func _mobility_score(member: SquadMember) -> int:
 			return 100
 		SquadCombatRole.Type.SHOTGUNNER:
 			return 90
+		SquadCombatRole.Type.MELEE:
+			return 85
 		SquadCombatRole.Type.RIFLEMAN:
 			return 70
 		SquadCombatRole.Type.MARKSMAN:

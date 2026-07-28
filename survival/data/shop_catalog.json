@@ -1,0 +1,77 @@
+{
+  "items": [
+    {
+      "id": "weapon_pistol",
+      "name": "制式手枪",
+      "category": "weapon",
+      "cost": 3,
+      "weapon_id": "pistol",
+      "ammo_amount": 30,
+      "description": "购买后投放到地面，拾取手枪；重复拾取补充30发弹药"
+    },
+    {
+      "id": "weapon_smg",
+      "name": "战术冲锋枪",
+      "category": "weapon",
+      "cost": 6,
+      "weapon_id": "smg",
+      "ammo_amount": 60,
+      "description": "购买后投放到地面，拾取冲锋枪；重复拾取补充60发弹药"
+    },
+    {
+      "id": "weapon_shotgun",
+      "name": "战斗霰弹枪",
+      "category": "weapon",
+      "cost": 7,
+      "weapon_id": "shotgun",
+      "ammo_amount": 18,
+      "description": "购买后投放到地面，拾取霰弹枪；重复拾取补充18发弹药"
+    },
+    {
+      "id": "weapon_marksman",
+      "name": "精确步枪",
+      "category": "weapon",
+      "cost": 10,
+      "weapon_id": "bolt_rifle",
+      "ammo_amount": 15,
+      "description": "购买后投放到地面，拾取精确步枪；重复拾取补充15发弹药"
+    },
+    {
+      "id": "weapon_lmg",
+      "name": "轻机枪",
+      "category": "weapon",
+      "cost": 12,
+      "weapon_id": "lmg",
+      "ammo_amount": 80,
+      "description": "购买后投放到地面，拾取轻机枪；重复拾取补充80发弹药"
+    },
+    {
+      "id": "ally_defense_squad",
+      "name": "四人守备小队",
+      "category": "ally",
+      "cost": 12,
+      "scene": "res://Prefab/Ally/ally_defense_squad.tscn",
+      "description": "三名步枪兵和一名近战兵，仅使用单兵GOAP守点"
+    },
+    {
+      "id": "cover_low_wall",
+      "name": "标准矮墙",
+      "category": "building",
+      "cost": 4,
+      "scene": "res://cover/low_wall.tscn",
+      "wall_length": 420.0,
+      "wall_width": 32.0,
+      "description": "购买后在战场上用左键放置，右键取消"
+    },
+    {
+      "id": "cover_long_wall",
+      "name": "长型防御墙",
+      "category": "building",
+      "cost": 8,
+      "scene": "res://cover/low_wall.tscn",
+      "wall_length": 900.0,
+      "wall_width": 38.0,
+      "description": "可容纳更多队员的长掩体"
+    }
+  ]
+}

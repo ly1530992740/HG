@@ -3,7 +3,7 @@ extends "res://unit/goblins/goblin_base.gd"
 signal surprise_reaction_started(duration: float)
 
 enum ThreatResponse { WAIT, BLIND_FIRE, PRECISE_FIRE }
-enum FirearmLoadout { ROLE_DEFAULT, SMG }
+enum FirearmLoadout { ROLE_DEFAULT, SMG, MELEE_ONLY }
 
 @export_group("兵种与武器")
 @export var combat_role: SquadCombatRole.Type = SquadCombatRole.Type.RIFLEMAN
@@ -11,6 +11,13 @@ enum FirearmLoadout { ROLE_DEFAULT, SMG }
 @export var detect_range := 420.0
 @export var attack_range := 330.0
 @export var keep_distance := 230.0
+
+@export_group("自主 GOAP 与守点")
+@export var autonomous_goap_enabled := false
+@export var defense_anchor := Vector2.ZERO
+@export_range(0.0, 5000.0, 10.0) var defense_radius := 0.0
+@export_range(30.0, 300.0, 5.0) var defense_arrival_radius := 90.0
+@export_range(100.0, 1200.0, 10.0) var maximum_cover_move_distance := 520.0
 
 @export_group("射击参数")
 @export var fire_cooldown := 0.85
@@ -29,10 +36,15 @@ enum FirearmLoadout { ROLE_DEFAULT, SMG }
 @export var melee_damage := 4
 
 @export_group("AI 反应")
-@export var ai_decision_interval := 0.12
-@export var target_refresh_interval := 0.18
+@export var ai_decision_interval := 0.25
+@export var target_refresh_interval := 0.35
 @export var surprise_reaction_min := 0.5
 @export var surprise_reaction_max := 0.8
+@export var allow_cover_lateral_reposition := false
+
+@export_group("性能调度")
+@export_range(0.05, 1.0, 0.01) var navigation_repath_interval := 0.18
+@export_range(1.0, 100.0, 1.0) var navigation_repath_distance := 24.0
 
 @export_group("视野参数")
 @export var standard_sight_range := 1800.0
@@ -79,12 +91,17 @@ var _action_elapsed := 0.0
 var _selected_cover: Node = null
 var _threat_response: ThreatResponse = ThreatResponse.WAIT
 var _threat_response_timer := 0.0
+var _return_fire_delay := 0.0
 var _peek_window_remaining := 0.0
 var _concealment_remaining := 0.0
 var _cover_strafe_target := 0.0
 var _cover_reposition_wait := 0.0
 var _gun_length_scale := 1.0
 var melee_goal_version := 0
+var autonomous_target_version := 0
+var defense_goal_version := 0
+var autonomous_objective_target: Node2D = null
+var _defense_anchor_active := false
 var _melee_attack_started := false
 var _ai_decision_timer := 0.0
 var _target_refresh_timer := 0.0
@@ -100,6 +117,9 @@ var _torso_wound_count := 0
 var _walk_phase := 0.0
 var _visual_recoil := 0.0
 var _muzzle_flash_remaining := 0.0
+var _navigation_repath_timer := 0.0
+var _navigation_target := Vector2.ZERO
+var _navigation_target_valid := false
 
 func _ready() -> void:
 	_apply_combat_role_profile()
@@ -122,8 +142,12 @@ func _ready() -> void:
 	_setup_hp_bar()
 	_find_combat_target()
 	_setup_squad_goap()
+	_ai_decision_timer = randf_range(0.0, maxf(0.05, ai_decision_interval))
+	_target_refresh_timer = randf_range(0.0, maxf(0.05, target_refresh_interval))
+	_navigation_repath_timer = randf_range(0.0, maxf(0.05, navigation_repath_interval))
 
 func _physics_process(delta: float) -> void:
+	_navigation_repath_timer = maxf(0.0, _navigation_repath_timer - delta)
 	if _surprise_reaction_timer > 0.0:
 		_surprise_reaction_timer = maxf(0.0, _surprise_reaction_timer - delta)
 		velocity = Vector2.ZERO
@@ -137,7 +161,7 @@ func _physics_process(delta: float) -> void:
 	if _target_refresh_timer <= 0.0:
 		_target_refresh_timer = target_refresh_interval
 		_find_combat_target()
-	if not _goap_controls_actor and current_combat_weapon == melee_weapon and not is_melee_engagement_needed():
+	if firearm_weapon != null and not _goap_controls_actor and current_combat_weapon == melee_weapon and not is_melee_engagement_needed():
 		_equip_combat_weapon(firearm_weapon)
 	_ai_decision_timer -= delta
 	if _ai_decision_timer <= 0.0:
@@ -168,15 +192,20 @@ func separation_vector() -> Vector2:
 
 func _find_combat_target() -> void:
 	var best: Node2D = null
+	if _is_live_combat_target(autonomous_objective_target) \
+			and can_damage_target(autonomous_objective_target):
+		best = autonomous_objective_target
 	if perception_component:
 		var own_contact := perception_component.get_best_contact()
-		if own_contact != null:
+		if best == null and own_contact != null:
 			best = own_contact.target
 	if best == null and squad_member != null and squad_member.blackboard != null:
 		var shared_target := squad_member.blackboard.shared_target
 		if is_instance_valid(shared_target) and can_damage_target(shared_target):
 			best = shared_target
 	if best != null and best.has_method("is_combat_alive") and not best.is_combat_alive():
+		best = null
+	if best != null and not _is_target_inside_defense_area(best):
 		best = null
 	target = best
 	current_target = target
@@ -212,9 +241,7 @@ func chase_state() -> void:
 		return
 
 	if nav:
-		nav.target_position = target.global_position
-		var next_point := nav.get_next_path_position()
-		velocity = (next_point - global_position).normalized() * SPEED * get_movement_speed_multiplier()
+		velocity = _get_navigation_direction(target.global_position) * SPEED * get_movement_speed_multiplier()
 	else:
 		velocity = to_target.normalized() * SPEED * get_movement_speed_multiplier()
 
@@ -480,6 +507,9 @@ func _on_visual_death(_actor: Node) -> void:
 	z_index = 1
 
 func _setup_firearm() -> void:
+	if firearm_loadout == FirearmLoadout.MELEE_ONLY or combat_role == SquadCombatRole.Type.MELEE:
+		firearm_weapon = null
+		return
 	var data := WeaponData.new()
 	data.knockback = 0.0
 	data.projectile_scene = PROJECTILE_SCENE
@@ -515,31 +545,40 @@ func _apply_combat_role_profile() -> void:
 	match combat_role:
 		SquadCombatRole.Type.MARKSMAN:
 			max_health = 7
-			SPEED = 180.0
+			SPEED = 165.0
 			detect_range = 1800.0
 			keep_distance = 1200.0
 		SquadCombatRole.Type.MACHINE_GUNNER:
 			max_health = 10
-			SPEED = 175.0
+			SPEED = 160.0
 			detect_range = 1800.0
 			keep_distance = 950.0
 		SquadCombatRole.Type.SHOTGUNNER:
 			max_health = 9
-			SPEED = 235.0
+			SPEED = 200.0
 			detect_range = 1800.0
 			keep_distance = 500.0
 		SquadCombatRole.Type.PISTOL_SCOUT:
 			max_health = 7
-			SPEED = 245.0
+			SPEED = 205.0
 			detect_range = 1800.0
 			keep_distance = 650.0
+		SquadCombatRole.Type.MELEE:
+			max_health = 11
+			SPEED = 190.0
+			detect_range = 1500.0
+			attack_range = melee_trigger_distance
+			keep_distance = 38.0
 		_:
 			max_health = 8
-			SPEED = 210.0
+			SPEED = 185.0
 			detect_range = 1800.0
 			keep_distance = 900.0
 	if firearm_loadout == FirearmLoadout.SMG:
 		keep_distance = 800.0
+	elif firearm_loadout == FirearmLoadout.MELEE_ONLY:
+		attack_range = melee_trigger_distance
+		keep_distance = 38.0
 
 func _configure_smg_weapon_data(data: WeaponData) -> void:
 	data.weapon_name = "Tactical SMG"
@@ -629,6 +668,11 @@ func _apply_combat_role_visual() -> void:
 		gun_visual.color = Color(0.2, 0.22, 0.24, 1.0)
 		_gun_length_scale = 0.9
 		return
+	if firearm_loadout == FirearmLoadout.MELEE_ONLY or combat_role == SquadCombatRole.Type.MELEE:
+		gun_visual.visible = false
+		gun_sprite.visible = false
+		melee_visual.visible = true
+		return
 	match combat_role:
 		SquadCombatRole.Type.MARKSMAN:
 			gun_sprite.texture = MARKSMAN_TEXTURE
@@ -669,7 +713,10 @@ func _setup_melee_weapon() -> void:
 	melee_weapon.weapon_data = data
 	add_child(melee_weapon)
 	melee_weapon.equip(self)
-	melee_weapon.unequip()
+	if firearm_weapon == null:
+		current_combat_weapon = melee_weapon
+	else:
+		melee_weapon.unequip()
 
 func _equip_combat_weapon(weapon: Weapon) -> void:
 	if weapon == null or current_combat_weapon == weapon:
@@ -737,6 +784,14 @@ func _setup_squad_goap() -> void:
 	melee_action.name = "MeleeEngageAction"
 	melee_action.cost = 2
 	actions.add_child(melee_action)
+	var autonomous_action := AutonomousCombatAction.new()
+	autonomous_action.name = "AutonomousCombatAction"
+	autonomous_action.cost = 4
+	actions.add_child(autonomous_action)
+	var defend_action := DefendPositionAction.new()
+	defend_action.name = "DefendPositionAction"
+	defend_action.cost = 2
+	actions.add_child(defend_action)
 
 	var goals := Node.new()
 	goals.name = "Goals"
@@ -754,6 +809,12 @@ func _setup_squad_goap() -> void:
 	var close_combat_goal := CloseCombatGoal.new()
 	close_combat_goal.name = "CloseCombatGoal"
 	goals.add_child(close_combat_goal)
+	var autonomous_goal := AutonomousCombatGoal.new()
+	autonomous_goal.name = "AutonomousCombatGoal"
+	goals.add_child(autonomous_goal)
+	var defend_goal := DefendPositionGoal.new()
+	defend_goal.name = "DefendPositionGoal"
+	goals.add_child(defend_goal)
 
 	goap_agent = GoapAgent.new()
 	goap_agent.name = "GoapAgent"
@@ -784,6 +845,8 @@ func _update_goap_world_state() -> void:
 	world_state.set_state(&"target_in_melee_range", is_melee_engagement_needed())
 	world_state.set_state(&"roe", _get_rules_of_engagement())
 	world_state.set_state(&"contact_visible", target != null and perception_component != null and perception_component.is_currently_visible(target))
+	world_state.set_state(&"autonomous_target_neutralized", 0)
+	world_state.set_state(&"defense_anchor_reached", defense_goal_version if not needs_to_reach_defense_anchor() else 0)
 
 func get_squad_action_cost(order_type: SquadOrder.Type, base_cost: int) -> int:
 	var adjusted_cost := base_cost
@@ -833,13 +896,14 @@ func get_task_action_cost(operation: SquadTaskAction.Operation, base_cost: int) 
 	return adjusted_cost
 
 func begin_task_action(operation: SquadTaskAction.Operation) -> void:
-	_equip_combat_weapon(firearm_weapon)
+	_equip_combat_weapon(_get_primary_combat_weapon())
 	_goap_controls_actor = true
 	_active_task_operation = operation
 	_action_elapsed = 0.0
 	_selected_cover = null
 	_threat_response = _choose_threat_response()
 	_threat_response_timer = 0.0
+	_return_fire_delay = randf_range(0.45, 0.8)
 	_peek_window_remaining = 0.0
 	_concealment_remaining = randf_range(0.2, 0.55)
 	_cover_strafe_target = randf_range(-70.0, 70.0)
@@ -972,13 +1036,14 @@ func _get_task_action_name(operation: SquadTaskAction.Operation) -> String:
 	return "扇区警戒"
 
 func begin_squad_action(order_type: SquadOrder.Type) -> void:
-	_equip_combat_weapon(firearm_weapon)
+	_equip_combat_weapon(_get_primary_combat_weapon())
 	_goap_controls_actor = true
 	_active_squad_action = order_type
 	_action_elapsed = 0.0
 	_selected_cover = null
 	_threat_response = _choose_threat_response()
 	_threat_response_timer = 0.0
+	_return_fire_delay = randf_range(0.45, 0.8)
 	_peek_window_remaining = 0.0
 	_concealment_remaining = 0.0 if order_type == SquadOrder.Type.FOCUS_FIRE and _ambush_followup_active else randf_range(0.25, 0.75)
 	_cover_strafe_target = randf_range(-70.0, 70.0)
@@ -1062,9 +1127,14 @@ func perform_squad_action(order_type: SquadOrder.Type, delta: float) -> bool:
 		SquadOrder.Type.ADVANCE:
 			var advance_target := _get_order_target()
 			if advance_target:
-				_move_toward_position(advance_target.global_position, SPEED * 1.05 * get_movement_speed_multiplier())
-				_try_fire_at(advance_target.global_position)
-				return _action_elapsed >= 2.0 or global_position.distance_to(advance_target.global_position) <= 175.0
+				var distance := global_position.distance_to(advance_target.global_position)
+				if distance <= 240.0:
+					velocity = Vector2.ZERO
+					_try_fire_at(advance_target.global_position)
+					return true
+				set_weapon_aiming(false)
+				_move_toward_position(advance_target.global_position, SPEED * 0.82 * get_movement_speed_multiplier())
+				return _action_elapsed >= 5.0
 			return true
 		SquadOrder.Type.RETREAT:
 			var retreat_target := _get_order_target()
@@ -1087,10 +1157,8 @@ func _perform_flank_action() -> bool:
 	var distance_to_destination := global_position.distance_to(order.target_position)
 	if distance_to_destination > 55.0:
 		set_weapon_aiming(false)
-		_move_toward_position(order.target_position, SPEED * 1.08 * get_movement_speed_multiplier())
-		if _action_elapsed >= 1.0 and global_position.distance_to(order_target.global_position) <= attack_range:
-			_try_fire_at(order_target.global_position)
-		return _action_elapsed >= 4.2
+		_move_toward_position(order.target_position, SPEED * 0.78 * get_movement_speed_multiplier())
+		return _action_elapsed >= 6.0
 	velocity = Vector2.ZERO
 	set_weapon_aiming(true)
 	_try_fire_at(order_target.global_position)
@@ -1106,7 +1174,7 @@ func end_squad_action(order_type: SquadOrder.Type) -> void:
 		_ambush_followup_active = false
 
 func begin_safety_action() -> void:
-	_equip_combat_weapon(firearm_weapon)
+	_equip_combat_weapon(_get_primary_combat_weapon())
 	_goap_controls_actor = true
 	_active_squad_action = SquadOrder.Type.TAKE_COVER
 	_action_elapsed = 0.0
@@ -1214,10 +1282,131 @@ func _find_nearest_world_cover(threat_position: Vector2) -> Node:
 		if cover.has_method("has_available_cover_against") and not cover.has_available_cover_against(threat_position):
 			continue
 		var distance := global_position.distance_to(cover.global_position)
+		if distance > maximum_cover_move_distance:
+			continue
+		if _defense_anchor_active and defense_radius > 0.0 and defense_anchor.distance_to(cover.global_position) > defense_radius:
+			continue
 		if distance < nearest_distance:
 			nearest = cover
 			nearest_distance = distance
 	return nearest
+
+func set_autonomous_goap_enabled(enabled: bool) -> void:
+	autonomous_goap_enabled = enabled
+	if enabled and defense_radius > 0.0 and not _defense_anchor_active:
+		defense_anchor = global_position
+		_defense_anchor_active = true
+	if goap_agent:
+		_update_goap_world_state()
+		goap_agent.request_replan()
+
+func set_autonomous_combat_objective(objective: Node2D) -> void:
+	autonomous_objective_target = objective if _is_live_combat_target(objective) and can_damage_target(objective) else null
+	target = autonomous_objective_target
+	current_target = autonomous_objective_target
+	if goap_agent:
+		_update_goap_world_state()
+		goap_agent.request_replan()
+
+func set_defense_anchor(position_value: Vector2, radius_value: float = -1.0) -> void:
+	defense_anchor = position_value
+	if radius_value >= 0.0:
+		defense_radius = radius_value
+	_defense_anchor_active = true
+	defense_goal_version += 1
+	exit_cover()
+	if goap_agent:
+		_update_goap_world_state()
+		goap_agent.request_replan()
+
+func needs_to_reach_defense_anchor() -> bool:
+	return autonomous_goap_enabled \
+		and _defense_anchor_active \
+		and global_position.distance_to(defense_anchor) > defense_arrival_radius
+
+func begin_defense_move() -> void:
+	_goap_controls_actor = true
+	_equip_combat_weapon(_get_primary_combat_weapon())
+	exit_cover()
+	if squad_member:
+		squad_member.set_ai_status("执行玩家集结", "沿安全路线移动", "移动到指定区域 -> 建立防线")
+
+func perform_defense_move(_delta: float) -> bool:
+	if not needs_to_reach_defense_anchor():
+		velocity = Vector2.ZERO
+		return true
+	_move_toward_position(defense_anchor, SPEED * 0.72 * get_movement_speed_multiplier())
+	return false
+
+func end_defense_move() -> void:
+	_goap_controls_actor = false
+	velocity = Vector2.ZERO
+	if squad_member:
+		squad_member.set_ai_status("阵地已建立", "原地警戒", "只攻击防区内敌人")
+
+func _is_target_inside_defense_area(candidate: Node2D) -> bool:
+	if not _defense_anchor_active or defense_radius <= 0.0:
+		return true
+	return candidate != null and defense_anchor.distance_to(candidate.global_position) <= defense_radius
+
+func has_autonomous_combat_target() -> bool:
+	return autonomous_goap_enabled \
+		and _is_live_combat_target(target) \
+		and can_damage_target(target) \
+		and _is_target_inside_defense_area(target)
+
+func prepare_autonomous_combat_goal() -> int:
+	autonomous_target_version += 1
+	return autonomous_target_version
+
+func begin_autonomous_combat() -> void:
+	_goap_controls_actor = true
+	_equip_combat_weapon(_get_primary_combat_weapon())
+	_selected_cover = null
+	_action_elapsed = 0.0
+	if squad_member:
+		squad_member.set_ai_status("自主消灭敌人", "评估掩体和射程", "守住阵地 -> 掩体射击 -> 不追出防区")
+
+func perform_autonomous_combat(delta: float) -> bool:
+	_action_elapsed += delta
+	if not has_autonomous_combat_target():
+		velocity = Vector2.ZERO
+		return true
+	var distance := global_position.distance_to(target.global_position)
+	if firearm_weapon == null:
+		_equip_combat_weapon(melee_weapon)
+		if distance > melee_attack_distance:
+			_move_toward_position(target.global_position, SPEED * 0.78 * get_movement_speed_multiplier())
+			return false
+		velocity = Vector2.ZERO
+		melee_weapon.try_attack(target.global_position)
+		return false
+	_equip_combat_weapon(firearm_weapon)
+	if get_active_cover() != null:
+		velocity = Vector2.ZERO
+		if distance <= attack_range:
+			_fire_for_command(true, delta)
+		return false
+	if distance <= attack_range:
+		if _move_into_cover():
+			_fire_for_command(true, delta)
+		elif _selected_cover == null:
+			velocity = Vector2.ZERO
+			set_weapon_aiming(true)
+			_try_fire_at(target.global_position)
+		return false
+	if not _defense_anchor_active or defense_radius <= 0.0:
+		_move_toward_position(target.global_position, SPEED * 0.55 * get_movement_speed_multiplier())
+	else:
+		velocity = Vector2.ZERO
+	return false
+
+func end_autonomous_combat() -> void:
+	_goap_controls_actor = false
+	velocity = Vector2.ZERO
+
+func _get_primary_combat_weapon() -> Weapon:
+	return firearm_weapon if firearm_weapon != null else melee_weapon
 
 func _move_toward_position(destination: Vector2, move_speed: float) -> void:
 	if _movement_detour_destination.distance_to(destination) > 60.0:
@@ -1235,20 +1424,29 @@ func _move_toward_position(destination: Vector2, move_speed: float) -> void:
 	var movement_target := _movement_detour_waypoint if _movement_detour_waypoint != Vector2.ZERO else destination
 	var direction := (movement_target - global_position).normalized()
 	if nav:
-		nav.target_position = movement_target
-		var next_point := nav.get_next_path_position()
-		if next_point != global_position:
-			direction = (next_point - global_position).normalized()
+		direction = _get_navigation_direction(movement_target)
 	velocity = direction * move_speed
 
 func _move_directly_toward_position(destination: Vector2, move_speed: float) -> void:
 	var direction := (destination - global_position).normalized()
 	if nav:
-		nav.target_position = destination
-		var next_point := nav.get_next_path_position()
-		if next_point != global_position:
-			direction = (next_point - global_position).normalized()
+		direction = _get_navigation_direction(destination)
 	velocity = direction * move_speed
+
+func _get_navigation_direction(destination: Vector2) -> Vector2:
+	if nav == null:
+		return (destination - global_position).normalized()
+	if not _navigation_target_valid \
+			or _navigation_repath_timer <= 0.0 \
+			or _navigation_target.distance_to(destination) >= navigation_repath_distance:
+		_navigation_target = destination
+		_navigation_target_valid = true
+		_navigation_repath_timer = navigation_repath_interval
+		nav.target_position = destination
+	var next_point := nav.get_next_path_position()
+	if next_point == global_position:
+		return (destination - global_position).normalized()
+	return (next_point - global_position).normalized()
 
 func _find_cover_detour(destination: Vector2) -> Vector2:
 	var best_waypoint := Vector2.ZERO
@@ -1281,6 +1479,10 @@ func _fire_for_command(precise: bool, delta: float) -> void:
 		if _threat_response_timer <= 0.0:
 			_threat_response = _choose_threat_response()
 			_threat_response_timer = randf_range(0.8, 1.5)
+		if _threat_response == ThreatResponse.WAIT:
+			_return_fire_delay = maxf(0.0, _return_fire_delay - delta)
+			if _return_fire_delay <= 0.0:
+				_threat_response = ThreatResponse.BLIND_FIRE
 		match _threat_response:
 			ThreatResponse.WAIT:
 				set_cover_precision(false)
@@ -1315,10 +1517,11 @@ func _fire_for_command(precise: bool, delta: float) -> void:
 		set_weapon_aiming(false)
 		set_cover_precision(false)
 		_peek_window_remaining = 0.0
-	_cover_reposition_wait = maxf(0.0, _cover_reposition_wait - delta)
-	if _cover_reposition_wait <= 0.0 and cover_user.move_toward_lateral_offset(_cover_strafe_target, delta):
-		_cover_strafe_target = randf_range(-70.0, 70.0)
-		_cover_reposition_wait = randf_range(0.8, 1.6)
+	if allow_cover_lateral_reposition and threatened:
+		_cover_reposition_wait = maxf(0.0, _cover_reposition_wait - delta)
+		if _cover_reposition_wait <= 0.0 and cover_user.move_toward_lateral_offset(_cover_strafe_target, delta):
+			_cover_strafe_target = randf_range(-35.0, 35.0)
+			_cover_reposition_wait = randf_range(2.5, 4.0)
 	velocity = Vector2.ZERO
 	if _ambush_followup_active and firearm_weapon != null and can_damage_target(order_target):
 		firearm_weapon.try_attack(order_target.global_position)
@@ -1485,7 +1688,13 @@ func _on_goap_plan_changed(plan: Array) -> void:
 func _on_goap_goal_changed(goal: GoapGoal) -> void:
 	if squad_member == null or goal == null:
 		return
-	var intent := "优先保全生命" if goal is PreserveLifeGoal else "服从队长命令"
+	var intent := "服从队长命令"
+	if goal is PreserveLifeGoal:
+		intent = "优先保全生命"
+	elif goal is DefendPositionGoal:
+		intent = "执行玩家集结"
+	elif goal is AutonomousCombatGoal:
+		intent = "自主守点作战"
 	squad_member.set_ai_status(intent, "GOAP 正在规划", squad_member.plan_text)
 
 func _on_goap_action_changed(action: GoapAction) -> void:
@@ -1512,8 +1721,14 @@ func _is_fire_authorized(candidate: Node2D) -> bool:
 		return visible
 	if visible:
 		return true
+	var assignment := squad_member.get_current_task() if squad_member else null
+	if assignment != null and assignment.task != null \
+			and assignment.task.type in [SquadTask.Type.NEUTRALIZE_TARGET, SquadTask.Type.SUPPRESS_TARGET]:
+		return assignment.task.get_target_for(String(name)) == candidate and can_damage_target(candidate)
 	var order := squad_member.get_current_order() if squad_member else null
-	return order != null and order.type == SquadOrder.Type.SUPPRESS
+	return order != null \
+			and order.target == candidate \
+			and order.type in [SquadOrder.Type.FOCUS_FIRE, SquadOrder.Type.SUPPRESS, SquadOrder.Type.OVERWATCH]
 
 func on_hostile_gunshot_heard(_position: Vector2, _source: Node2D) -> void:
 	if state == State.DEAD or alert_component == null or alert_component.state >= AlertComponent.State.CONTACT:

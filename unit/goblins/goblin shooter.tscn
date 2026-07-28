@@ -256,6 +256,9 @@ radius = 5.0
 [sub_resource type="CircleShape2D" id="CircleShape2D_65rug"]
 radius = 8.0
 
+[sub_resource type="CircleShape2D" id="CircleShape2D_head"]
+radius = 14.0
+
 [sub_resource type="CircleShape2D" id="CircleShape2D_hggns"]
 radius = 308.5714
 
@@ -283,11 +286,20 @@ position = Vector2(0, 11.428571)
 shape = SubResource("CircleShape2D_5cjqo")
 
 [node name="hurtbox" type="Area2D" parent="." unique_id=711240326]
+metadata/hit_location = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="hurtbox" unique_id=1419661754]
 visible = false
 shape = SubResource("CircleShape2D_65rug")
 metadata/_edit_lock_ = true
+
+[node name="HeadHurtbox" type="Area2D" parent="." groups=["hurtbox"]]
+position = Vector2(0, -27)
+metadata/hit_location = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HeadHurtbox"]
+visible = false
+shape = SubResource("CircleShape2D_head")
 
 [node name="detect_area" type="Area2D" parent="." unique_id=747640548]
 
@@ -305,10 +317,10 @@ path_return_max_length = 10240.0
 path_return_max_radius = 10240.0
 avoidance_enabled = true
 radius = 50.0
-neighbor_distance = 600.0
-time_horizon_agents = 10.0
-time_horizon_obstacles = 10.0
-max_speed = 100000.0
+neighbor_distance = 220.0
+time_horizon_agents = 1.5
+time_horizon_obstacles = 1.0
+max_speed = 260.0
 
 [node name="cooldown" type="Timer" parent="." unique_id=1258868201]
 

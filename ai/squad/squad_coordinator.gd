@@ -11,13 +11,16 @@ signal contact_report_accepted(observer: SquadMember, contact: CombatContact)
 signal ambush_opened(target: Node2D, reason: StringName)
 
 enum ContactPhase { SEARCH, AMBUSH, COMBAT }
+enum CommandMode { SQUAD_COMMANDER, AUTONOMOUS_GOAP }
 
 @export_group("基础指挥")
 @export var auto_discover_members := true
+@export var command_mode: CommandMode = CommandMode.SQUAD_COMMANDER
+@export var elect_squad_leader := true
 @export var context_refresh_interval := 0.5
-@export var order_interval := 4.0
-@export var initial_cover_duration := 8.0
-@export_range(0.0, 1.0) var assault_charge_chance := 0.22
+@export var order_interval := 6.0
+@export var initial_cover_duration := 12.0
+@export_range(0.0, 1.0) var assault_charge_chance := 0.08
 
 @export_group("接敌汇报")
 @export var contact_report_delay_min := 0.3
@@ -103,13 +106,16 @@ func _process(delta: float) -> void:
 	_cleanup_members()
 	_refresh_context()
 	_refresh_tactical_posture()
-	if battlefield_analyzer != null or route_analyzer != null:
+	if command_mode == CommandMode.SQUAD_COMMANDER and (battlefield_analyzer != null or route_analyzer != null):
 		refresh_group_analysis(_find_primary_target())
 
 func register_member(member: SquadMember) -> void:
 	if member == null or member.squad_id != squad_id or members.has(member):
 		return
 	members.append(member)
+	_has_registered_members = true
+	if is_instance_valid(member.actor) and member.actor.has_method("set_autonomous_goap_enabled"):
+		member.actor.set_autonomous_goap_enabled(command_mode == CommandMode.AUTONOMOUS_GOAP)
 	_initial_strength = max(_initial_strength, members.size() + _casualties)
 	member.assign_coordinator(self, blackboard)
 	if not member.member_died.is_connected(_on_member_died):
@@ -140,6 +146,8 @@ func unregister_member(member: SquadMember) -> void:
 	blackboard.set_members(members)
 	member_unregistered.emit(member)
 	_schedule_leader_election()
+	if members.is_empty():
+		schedule_empty_cleanup()
 
 func issue_order(
 		order_type: SquadOrder.Type,
@@ -193,6 +201,24 @@ func get_contact_phase() -> ContactPhase:
 func get_pending_contact_report_count() -> int:
 	return _pending_contact_reports.size()
 
+func set_known_combat_objective(objective: Node2D) -> void:
+	if not _is_hostile_target(objective):
+		return
+	blackboard.set_shared_target(objective)
+	_shared_target_last_confirmed_msec = Time.get_ticks_msec()
+	call_deferred("_activate_known_combat_objective", objective)
+
+func _activate_known_combat_objective(objective: Node2D) -> void:
+	await get_tree().process_frame
+	if not _is_hostile_target(objective):
+		return
+	_cleanup_members()
+	if command_mode == CommandMode.SQUAD_COMMANDER and elect_squad_leader and leader == null:
+		_elect_leader()
+	_shared_target_last_confirmed_msec = Time.get_ticks_msec()
+	blackboard.set_shared_target(objective)
+	_begin_direct_contact(objective)
+
 func report_contact(observer: SquadMember, contact: CombatContact, delay_override := -1.0) -> void:
 	if observer == null or contact == null or not contact.is_valid() or not members.has(observer):
 		return
@@ -233,9 +259,11 @@ func _elect_leader() -> void:
 	_cleanup_members()
 	if leader != null and members.has(leader):
 		return
-	if members.is_empty():
+	if members.is_empty() or not elect_squad_leader or command_mode == CommandMode.AUTONOMOUS_GOAP:
 		leader = null
 		blackboard.set_leader(null)
+		for member in members:
+			member.set_is_leader(false)
 		return
 	leader = members[_rng.randi_range(0, members.size() - 1)]
 	for member in members:
@@ -272,6 +300,8 @@ func _refresh_context() -> void:
 
 func _refresh_tactical_posture() -> void:
 	if leader == null or members.is_empty():
+		return
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
 		return
 	var previous_posture := tactical_posture
 	tactical_posture = tactical_evaluator.evaluate(blackboard)
@@ -329,9 +359,16 @@ func _issue_contact_fire_plan(target: Node2D) -> void:
 	for member in marksmen:
 		specialists[member] = true
 		issue_order(SquadOrder.Type.OVERWATCH, target, Vector2.ZERO, null, 106, order_interval, [member])
+	if specialists.is_empty():
+		var riflemen := _get_members_with_role(SquadCombatRole.Type.RIFLEMAN)
+		if not riflemen.is_empty():
+			var improvised_suppressor := riflemen[0]
+			specialists[improvised_suppressor] = true
+			_active_suppressor = improvised_suppressor
+			issue_order(SquadOrder.Type.SUPPRESS, target, Vector2.ZERO, null, 104, order_interval, [improvised_suppressor])
 	for member in members:
 		if not specialists.has(member):
-			issue_order(SquadOrder.Type.STAY_HIDDEN, target, Vector2.ZERO, null, 100, order_interval, [member])
+			issue_order(SquadOrder.Type.FOCUS_FIRE, target, Vector2.ZERO, null, 100, order_interval, [member])
 
 func _issue_combined_arms_plan(target: Node2D, aggressive: bool) -> void:
 	blackboard.set_fact(&"tactical_plan", "AGGRESSIVE_ENVELOPMENT" if aggressive else "SUPPRESS_AND_FLANK")
@@ -612,16 +649,22 @@ func _begin_direct_contact(target: Node2D) -> void:
 	_engagement_active = true
 	_engagement_time = 0.0
 	_command_phase = 0
-	_order_timer = order_interval
+	_order_timer = 0.0
 	_active_suppressor = null
 	blackboard.set_fact(&"contact_phase", _contact_phase)
 	blackboard.set_fact(&"roe", RulesOfEngagement.Type.WEAPONS_FREE)
 	blackboard.set_fact(&"ambush_ready_ratio", 0.0)
 	blackboard.set_fact(&"tactical_plan", "CONTACT_TO_COVER")
 	_set_squad_alert_combat(target.global_position)
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		blackboard.set_fact(&"tactical_plan", "AUTONOMOUS_GOAP")
+		return
 	issue_order(SquadOrder.Type.TAKE_COVER, target, Vector2.ZERO, null, 110, initial_cover_duration)
 
 func _begin_ambush(target: Node2D) -> void:
+	if command_mode == CommandMode.AUTONOMOUS_GOAP:
+		_begin_direct_contact(target)
+		return
 	_contact_phase = ContactPhase.AMBUSH
 	_engagement_active = true
 	_engagement_time = 0.0
@@ -1015,7 +1058,8 @@ func _reset_contact_state() -> void:
 	blackboard.set_fact(&"hostile_alive_count", 0)
 	blackboard.set_fact(&"tactical_plan", "SEARCH_SWEEP")
 	_set_squad_searching(_last_contact_position)
-	_issue_search_sweep()
+	if command_mode != CommandMode.AUTONOMOUS_GOAP:
+		_issue_search_sweep()
 	_order_timer = search_order_interval
 
 func _release_unused_ambush_reservations() -> void:
