@@ -1,0 +1,93 @@
+[gd_scene format=3 uid="uid://crr547u1sb6w2"]
+
+[ext_resource type="PackedScene" path="res://survival3d/player/third_person_player_3d.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://survival3d/player/camera_rig_3d.tscn" id="2_camera"]
+[ext_resource type="Script" uid="uid://oxplg12cwtu6" path="res://survival3d/ui/battle_hud_3d.gd" id="3_hud"]
+[ext_resource type="Script" uid="uid://lvfj7g63fw70" path="res://survival3d/ui/qwen_debug_panel_3d.gd" id="4_debug"]
+[ext_resource type="Script" uid="uid://bl7jnxcycj5wa" path="res://survival3d/shop/survival_shop_controller_3d.gd" id="5_shop"]
+[ext_resource type="Script" uid="uid://bo5hyli3kn2t6" path="res://survival3d/allies/player_squad_command_controller_3d.gd" id="6_command"]
+[ext_resource type="Script" uid="uid://mid6cwl1umy6" path="res://survival3d/rewards/combat_reward_service_3d.gd" id="7_rewards"]
+[ext_resource type="Script" uid="uid://jevpl3pp0yi0" path="res://combat3d/battlefield_registry_3d.gd" id="8_registry"]
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 1
+background_color = Color(0.075, 0.095, 0.105, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.62, 0.66, 0.62, 1)
+ambient_light_energy = 0.7
+reflected_light_source = 2
+tonemap_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="GroundMaterial"]
+albedo_color = Color(0.15, 0.235, 0.17, 1)
+roughness = 0.95
+
+[sub_resource type="BoxMesh" id="GroundMesh"]
+material = SubResource("GroundMaterial")
+size = Vector3(64, 0.2, 54)
+
+[sub_resource type="BoxShape3D" id="GroundShape"]
+size = Vector3(64, 0.2, 54)
+
+[sub_resource type="StandardMaterial3D" id="ZoneMaterial"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.12, 0.4, 0.28, 0.28)
+
+[sub_resource type="CylinderMesh" id="ZoneMesh"]
+material = SubResource("ZoneMaterial")
+top_radius = 7.5
+bottom_radius = 7.5
+height = 0.02
+
+[node name="BattlefieldShell3D" type="Node3D" unique_id=378880018]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1326409357]
+environment = SubResource("Environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=186604168]
+transform = Transform3D(0.8480481, 0.41758206, -0.32625088, 0.049297333, 0.55082375, 0.8331644, 0.52762127, -0.7226468, 0.44653937, 0, 0, 0)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="Ground" type="StaticBody3D" parent="." unique_id=1771089759]
+collision_mask = 0
+
+[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=845402942]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+mesh = SubResource("GroundMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=911420395]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+shape = SubResource("GroundShape")
+
+[node name="DefenseZone" type="MeshInstance3D" parent="." unique_id=334813115]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 0)
+mesh = SubResource("ZoneMesh")
+
+[node name="Player3D" parent="." unique_id=617083319 instance=ExtResource("1_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 17)
+
+[node name="CameraDirector3D" parent="." unique_id=251096416 instance=ExtResource("2_camera")]
+player_path = NodePath("../Player3D")
+
+[node name="BattleHud3D" type="CanvasLayer" parent="." unique_id=22217697]
+script = ExtResource("3_hud")
+player_path = NodePath("../Player3D")
+
+[node name="QwenDebugPanel3D" type="CanvasLayer" parent="." unique_id=73947187]
+script = ExtResource("4_debug")
+
+[node name="SurvivalShop3D" type="Node" parent="." unique_id=2131752495]
+script = ExtResource("5_shop")
+player_path = NodePath("../Player3D")
+world_parent_path = NodePath("../..")
+
+[node name="PlayerSquadCommand3D" type="Node" parent="." unique_id=1618251400]
+script = ExtResource("6_command")
+
+[node name="CombatRewardService3D" type="Node" parent="." unique_id=947977922]
+script = ExtResource("7_rewards")
+
+[node name="BattlefieldRegistry3D" type="Node" parent="." unique_id=1546443984]
+script = ExtResource("8_registry")

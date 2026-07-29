@@ -1,0 +1,24 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ai3d/squad_coordinator_3d.gd" id="1_group"]
+[ext_resource type="PackedScene" path="res://ai3d/soldier_3d.tscn" id="2_soldier"]
+
+[node name="ScoutRaiderSquad3D" type="Node3D"]
+script = ExtResource("1_group")
+squad_id = &"scouts_3d"
+squad_display_name = "红队侦察组"
+free_when_all_members_dead = true
+
+[node name="Members" type="Node3D" parent="."]
+
+[node name="ScoutA" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector3(-1, 0, 0.5)
+combat_role = 1
+
+[node name="ScoutB" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector3(1, 0, 0.5)
+combat_role = 1
+
+[node name="Marksman" parent="Members" instance=ExtResource("2_soldier")]
+position = Vector3(0, 0, -0.8)
+combat_role = 3

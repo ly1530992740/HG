@@ -1,0 +1,110 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://ai3d/soldier_3d.gd" id="1_soldier"]
+[ext_resource type="Script" path="res://combat3d/combat_hitbox_3d.gd" id="2_hitbox"]
+[ext_resource type="Texture2D" path="res://Textures/new/Units/Red Units/Pawn/Pawn_Idle.png" id="3_texture"]
+[ext_resource type="Script" path="res://ai3d/components/soldier_weapon_component_3d.gd" id="4_weapon"]
+[ext_resource type="Script" path="res://ai3d/components/soldier_perception_component_3d.gd" id="5_perception"]
+[ext_resource type="Script" path="res://combat3d/components/health_component_3d.gd" id="6_health"]
+[ext_resource type="Script" path="res://movement3d/stamina_component_3d.gd" id="7_stamina"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule_actor"]
+radius = 0.34
+height = 1.8
+
+[sub_resource type="CapsuleShape3D" id="Capsule_body"]
+radius = 0.31
+height = 1.15
+
+[sub_resource type="SphereShape3D" id="Sphere_head"]
+radius = 0.27
+
+[sub_resource type="StandardMaterial3D" id="Material_shadow"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.02, 0.02, 0.02, 0.4)
+
+[sub_resource type="CylinderMesh" id="Mesh_shadow"]
+material = SubResource("Material_shadow")
+top_radius = 0.42
+bottom_radius = 0.42
+height = 0.015
+
+[node name="Soldier3D" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_soldier")
+
+[node name="Components" type="Node" parent="."]
+
+[node name="Weapon" type="Node" parent="Components"]
+script = ExtResource("4_weapon")
+
+[node name="Perception" type="Node" parent="Components"]
+script = ExtResource("5_perception")
+
+[node name="Health" type="Node" parent="Components"]
+script = ExtResource("6_health")
+
+[node name="Stamina" type="Node" parent="Components"]
+script = ExtResource("7_stamina")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.9, 0)
+shape = SubResource("Capsule_actor")
+
+[node name="Shadow" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.015, 0)
+mesh = SubResource("Mesh_shadow")
+
+[node name="Visual" type="Sprite3D" parent="."]
+position = Vector3(0, 1, 0)
+pixel_size = 0.023
+billboard = 1
+alpha_cut = 1
+texture = ExtResource("3_texture")
+hframes = 8
+
+[node name="WeaponPivot" type="Node3D" parent="."]
+
+[node name="Muzzle" type="Marker3D" parent="WeaponPivot"]
+position = Vector3(0.28, 1.2, -0.65)
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_height_offset = 0.0
+radius = 0.38
+height = 1.8
+path_desired_distance = 0.35
+target_desired_distance = 0.45
+avoidance_enabled = false
+
+[node name="BodyHitbox" type="Area3D" parent="."]
+position = Vector3(0, 0.92, 0)
+collision_layer = 8
+collision_mask = 0
+monitoring = false
+script = ExtResource("2_hitbox")
+
+[node name="Shape" type="CollisionShape3D" parent="BodyHitbox"]
+shape = SubResource("Capsule_body")
+
+[node name="HeadHitbox" type="Area3D" parent="."]
+position = Vector3(0, 1.7, 0)
+collision_layer = 8
+collision_mask = 0
+monitoring = false
+script = ExtResource("2_hitbox")
+hit_location = "head"
+damage_multiplier = 2.0
+
+[node name="Shape" type="CollisionShape3D" parent="HeadHitbox"]
+shape = SubResource("Sphere_head")
+
+[node name="StatusLabel" type="Label3D" parent="."]
+position = Vector3(0, 2.25, 0)
+pixel_size = 0.0035
+billboard = 1
+no_depth_test = true
+font_size = 24
+outline_size = 7
+text = "等待小队"

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://survival3d/waves/squad_wave_spawner_3d.gd" id="1"]
+
+[node name="SquadWaveSpawner3D" type="Node3D"]
+script = ExtResource("1")

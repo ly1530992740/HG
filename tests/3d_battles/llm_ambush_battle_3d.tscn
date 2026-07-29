@@ -1,0 +1,41 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://survival3d/battlefield/battlefield_shell_3d.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://Prefab/Enemy3D/rifle_fireteam_3d.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://ai3d/tactical_cover_3d.tscn" id="4"]
+[ext_resource type="Script" path="res://tests/3d_battles/ambush_setup_3d.gd" id="5"]
+
+[node name="LlmAmbushBattle3D" type="Node3D"]
+script = ExtResource("5")
+
+[node name="World" parent="." instance=ExtResource("1")]
+
+[node name="BlueSquad" parent="." instance=ExtResource("2")]
+position = Vector3(0, 0, 9)
+squad_id = &"blue_ambush_3d"
+squad_display_name = "蓝队伏击组"
+combat_team = 2
+can_target_players = false
+free_when_all_members_dead = false
+qwen_reconsider_interval = 3.0
+
+[node name="RedSquad" parent="." instance=ExtResource("2")]
+position = Vector3(0, 0, -6)
+squad_id = &"red_guard_3d"
+squad_display_name = "红队警戒组"
+can_target_players = false
+free_when_all_members_dead = false
+
+[node name="RedRearCover" parent="." instance=ExtResource("4")]
+position = Vector3(0, 0, -1.8)
+cover_length = 9.0
+cover_height = 1.3
+
+[node name="BlueApproachCover" parent="." instance=ExtResource("4")]
+position = Vector3(-5.5, 0, 3.0)
+rotation = Vector3(0, 1.5707963, 0)
+cover_length = 6.0
+
+[node name="RedFrontCover" parent="." instance=ExtResource("4")]
+position = Vector3(0, 0, -9.5)
+cover_length = 8.0

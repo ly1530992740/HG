@@ -183,7 +183,6 @@ func _can_handle(object: Object) -> bool:
 		or object is SquadWaveSpawner
 		or object is SquadWaveDefinition
 		or object is SquadWaveEntry
-		or object is SurvivalDefenseWaveController
 	)
 
 func _parse_begin(object: Object) -> void:

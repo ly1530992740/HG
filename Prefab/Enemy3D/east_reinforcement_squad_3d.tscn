@@ -1,0 +1,35 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ai3d/squad_coordinator_3d.gd" id="1"]
+[ext_resource type="PackedScene" path="res://ai3d/soldier_3d.tscn" id="2"]
+
+[node name="EastReinforcementSquad3D" type="Node3D"]
+script = ExtResource("1")
+squad_id = &"east_reinforcements_3d"
+squad_display_name = "红队东侧增援"
+knows_primary_target_at_start = true
+free_when_all_members_dead = true
+
+[node name="Members" type="Node3D" parent="."]
+
+[node name="MachineGunner" parent="Members" instance=ExtResource("2")]
+position = Vector3(-1.6, 0, 0.8)
+combat_role = 2
+
+[node name="RifleA" parent="Members" instance=ExtResource("2")]
+position = Vector3(0, 0, 1.0)
+
+[node name="Marksman" parent="Members" instance=ExtResource("2")]
+position = Vector3(1.6, 0, 0.8)
+combat_role = 3
+
+[node name="RifleB" parent="Members" instance=ExtResource("2")]
+position = Vector3(-1.0, 0, -0.8)
+
+[node name="Shotgun" parent="Members" instance=ExtResource("2")]
+position = Vector3(0.3, 0, -0.9)
+combat_role = 4
+
+[node name="Smg" parent="Members" instance=ExtResource("2")]
+position = Vector3(1.5, 0, -0.7)
+combat_role = 1

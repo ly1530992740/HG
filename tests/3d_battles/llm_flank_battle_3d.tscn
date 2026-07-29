@@ -1,0 +1,49 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://survival3d/battlefield/battlefield_shell_3d.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://Prefab/Enemy3D/rifle_fireteam_3d.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://Prefab/Enemy3D/heavy_support_squad_3d.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://ai3d/tactical_cover_3d.tscn" id="4"]
+[ext_resource type="Script" path="res://tests/3d_battles/flank_setup_3d.gd" id="5"]
+
+[node name="LlmFlankBattle3D" type="Node3D"]
+script = ExtResource("5")
+
+[node name="World" parent="." instance=ExtResource("1")]
+
+[node name="BlueSquad" parent="." instance=ExtResource("2")]
+position = Vector3(0, 0, 9)
+squad_id = &"blue_flank_3d"
+squad_display_name = "蓝队机动组"
+combat_team = 2
+can_target_players = false
+free_when_all_members_dead = false
+flank_member_count = 3
+
+[node name="RedSquad" parent="." instance=ExtResource("3")]
+position = Vector3(0, 0, -8)
+squad_id = &"red_strongpoint_3d"
+squad_display_name = "红队重火力阵地"
+can_target_players = false
+free_when_all_members_dead = false
+
+[node name="SouthFlankWall" parent="." instance=ExtResource("4")]
+position = Vector3(8, 0, 0)
+rotation = Vector3(0, 1.5707963, 0)
+cover_length = 17.0
+cover_width = 0.65
+cover_height = 1.4
+
+[node name="NorthFlankWall" parent="." instance=ExtResource("4")]
+position = Vector3(-8, 0, 2)
+rotation = Vector3(0, 1.5707963, 0)
+cover_length = 5.0
+cover_width = 0.55
+
+[node name="BlueFrontCover" parent="." instance=ExtResource("4")]
+position = Vector3(0, 0, 4.5)
+cover_length = 7.0
+
+[node name="RedFrontCover" parent="." instance=ExtResource("4")]
+position = Vector3(0, 0, -4.5)
+cover_length = 8.0

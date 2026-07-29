@@ -1,0 +1,12 @@
+{
+  "items": [
+    {"id":"weapon_pistol","name":"制式手枪","category":"weapon","cost":3,"weapon_id":"pistol","ammo_amount":30,"description":"投放到玩家附近，靠近拾取"},
+    {"id":"weapon_smg","name":"战术冲锋枪","category":"weapon","cost":6,"weapon_id":"smg","ammo_amount":60,"description":"近距离高射速武器"},
+    {"id":"weapon_shotgun","name":"战斗霰弹枪","category":"weapon","cost":7,"weapon_id":"shotgun","ammo_amount":18,"description":"近距离高伤害武器"},
+    {"id":"weapon_marksman","name":"精确步枪","category":"weapon","cost":10,"weapon_id":"marksman","ammo_amount":15,"description":"远距离精确射击"},
+    {"id":"weapon_lmg","name":"轻机枪","category":"weapon","cost":12,"weapon_id":"lmg","ammo_amount":80,"description":"持续压制火力"},
+    {"id":"ally_defense_squad","name":"四人守备小队","category":"ally","cost":12,"scene":"res://Prefab/Ally3D/ally_defense_squad_3d.tscn","description":"GOAP队友，按G集结并防守"},
+    {"id":"cover_low_wall","name":"标准矮墙","category":"building","cost":4,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":5.0,"cover_width":0.55,"cover_height":1.2,"description":"左键放置，右键取消"},
+    {"id":"cover_long_wall","name":"长型防御墙","category":"building","cost":8,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":10.0,"cover_width":0.65,"cover_height":1.35,"description":"提供更多自动掩体点位"}
+  ]
+}

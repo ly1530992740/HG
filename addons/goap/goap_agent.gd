@@ -51,6 +51,17 @@ var previous_action: GoapAction = null
 var _debug_id := ""
 
 
+func _exit_tree() -> void:
+	# These helper Nodes are created with new() and are not children, so the
+	# agent owns their lifetime explicitly.
+	if is_instance_valid(_action_planner):
+		_action_planner.free()
+		_action_planner = null
+	if is_instance_valid(_world_state):
+		_world_state.free()
+		_world_state = null
+
+
 ## Main tick — call once per frame from [code]_process[/code] or [code]_physics_process[/code].
 func process(delta):
 	if _replan_requested:
