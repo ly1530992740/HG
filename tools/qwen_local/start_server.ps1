@@ -1,7 +1,9 @@
 param(
     [int]$Port = 8081,
-    [int]$ContextSize = 4096,
+    [int]$ContextSize = 16384,
     [int]$GpuLayers = 99,
+    [ValidateRange(1, 8)]
+    [int]$ParallelSlots = 4,
     [int]$StartupTimeoutSeconds = 60
 )
 
@@ -41,7 +43,7 @@ $arguments = @(
     "--ctx-size", $ContextSize,
     "--gpu-layers", $GpuLayers,
     "--flash-attn", "on",
-    "--parallel", "1",
+    "--parallel", $ParallelSlots,
     "--jinja",
     "--reasoning", "off",
     "--no-webui"

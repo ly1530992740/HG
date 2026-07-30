@@ -30,6 +30,15 @@ func _run() -> void:
 	var top_down_forward := -camera.global_transform.basis.z.normalized()
 	_expect(top_down_forward.dot(Vector3.DOWN) > 0.68 and top_down_forward.dot(Vector3.DOWN) < 0.73, "默认相机不是约45度战术俯视")
 	_expect(absf(camera.global_position.z - player.global_position.z) > 10.0, "45度俯视相机仍位于玩家正上方")
+	_expect(player.top_down_direction_steps == 8, "俯视玩家没有配置为8方位表现")
+	player.rotation.y = player._quantize_top_down_yaw(deg_to_rad(68.0))
+	_expect(is_equal_approx(rad_to_deg(player.rotation.y), 90.0), "俯视玩家朝向没有按45度台阶量化")
+	var pose_time_before := float(player.voxel_visual.get("_time"))
+	player.set("_top_down_pose_accumulator", 0.0)
+	player._update_sprite(0.04, true)
+	_expect(is_equal_approx(float(player.voxel_visual.get("_time")), pose_time_before), "俯视动作仍在每个渲染帧平滑推进")
+	player._update_sprite(0.1, true)
+	_expect(float(player.voxel_visual.get("_time")) > pose_time_before, "俯视动作没有按低帧率台阶推进")
 	var top_down_aim_point := player.get_top_down_aim_point(Vector3(6.0, 20.0, -3.0), Vector3.DOWN)
 	var top_down_direction := (top_down_aim_point - player.muzzle.global_position).normalized()
 	_expect(absf(top_down_direction.y) < 0.0001, "俯视鼠标投影仍产生向地面的射击方向")
@@ -66,10 +75,19 @@ func _run() -> void:
 	_expect(camera_director.is_shoulder_view(), "视角切换键底层没有进入越肩模式")
 	_expect(camera.projection == Camera3D.PROJECTION_PERSPECTIVE, "越肩视角没有切换透视投影")
 	_expect(crosshair != null and crosshair.visible, "越肩举枪没有显示动态准星")
-	_expect(player.shoulder_back_texture != null and visual.texture == player.shoulder_back_texture, "越肩瞄准没有切换到背部动画贴图")
+	_expect(player.shoulder_back_texture != null and player.shoulder_animation_set.values().has(visual.texture), "越肩瞄准没有切换到角色动画贴图")
+	_expect(player.shoulder_animator.current_state == "aim" and visual.hframes == 4, "越肩举枪没有进入四帧瞄准动画")
 	_expect(visual.texture != top_down_texture, "越肩瞄准仍在使用俯视贴图")
 
+	_expect(visual.visible and not player.voxel_visual.visible, "Shoulder view must only show the pixel character sprite")
+	_expect(not player.weapon_pivot.visible, "Shoulder view must hide the 3D weapon")
+	_expect(is_equal_approx(visual.pixel_size, player.shoulder_sprite_pixel_size), "Shoulder sprite scale was not applied")
+	var shoulder_frame_width := float(visual.texture.get_width()) / float(maxi(1, visual.hframes))
+	_expect(shoulder_frame_width * visual.pixel_size < 0.9, "Shoulder animation frame is wide enough to obstruct the center crosshair")
+	var rifle_shoulder_texture := player.shoulder_back_texture
 	player.set_weapon("lmg")
+	_expect(player.shoulder_back_texture != rifle_shoulder_texture and player.shoulder_animation_set.values().has(visual.texture), "Shoulder pixel animation must refresh after switching weapons")
+	_expect(not player.weapon_pivot.visible, "Switching weapons in shoulder view must keep the 3D weapon hidden")
 	_expect(player.automatic_fire, "轻机枪没有启用按住连续射击")
 	var lmg_profile := [player.aimed_spread_degrees, player.aim_settle_time, player.recoil_per_shot_degrees]
 	var lmg_ammo_before := player.current_ammo
@@ -77,6 +95,7 @@ func _run() -> void:
 	await get_tree().create_timer(0.36).timeout
 	Input.action_release("fire_weapon")
 	_expect(lmg_ammo_before - player.current_ammo >= 3, "按住左键时轻机枪没有连续发射")
+	_expect(player.shoulder_animator.current_state == "fire" and visual.hframes == 4, "连续开火没有播放越肩后坐动画")
 
 	player.set_weapon("marksman")
 	var marksman_profile := [player.aimed_spread_degrees, player.aim_settle_time, player.recoil_per_shot_degrees]
@@ -101,8 +120,8 @@ func _run() -> void:
 	var blocked_shot := player.fire_at_world_point(recoil_test_point)
 	_expect(String(blocked_shot.get("reason", "")) == "reloading", "换弹过程中仍然可以开火")
 	player._update_reload(0.2)
-	await get_tree().process_frame
 	_expect(player.current_ammo == 0 and player.get_reload_progress() > 0.45, "换弹中途错误完成或没有推进进度")
+	_expect(player.shoulder_animator.current_state == "reload" and visual.hframes == 8 and visual.frame >= 3, "换弹进度没有推进越肩装填动画")
 	_expect(crosshair.visible, "换弹过程中准星中央没有显示加载动画")
 	player._update_reload(0.21)
 	_expect(not player.is_reloading and player.current_ammo > 0, "换弹计时完成后没有装入弹药")
@@ -120,7 +139,7 @@ func _run() -> void:
 	var head_result := player.fire_at_world_point(head_position)
 	await get_tree().physics_frame
 	_expect(bool(head_result.get("fired", false)), "玩家没有成功发射 3D 射线")
-	_expect(open_target.health == open_target.max_health - player.body_damage * 2, "头部伤害倍率未生效")
+	_expect(open_target.health == maxi(0, open_target.max_health - player.body_damage * 2), "头部伤害倍率未生效")
 
 	player.fire_cooldown = 0.0
 	var short_target := player.muzzle.global_position + Vector3.RIGHT * 4.0
@@ -140,7 +159,7 @@ func _run() -> void:
 	camera_director.set_aiming(false)
 	await get_tree().create_timer(0.1).timeout
 	_expect(camera_director.is_shoulder_view() and camera.projection == Camera3D.PROJECTION_PERSPECTIVE, "松开右键错误退出了越肩视角")
-	_expect(visual.texture == player.shoulder_back_texture, "松开右键错误恢复了俯视贴图")
+	_expect(player.shoulder_animation_set.values().has(visual.texture), "松开右键错误恢复了俯视贴图")
 	camera_director.set_shoulder_view(false)
 	await get_tree().create_timer(0.2).timeout
 	_expect(camera.projection == Camera3D.PROJECTION_ORTHOGONAL, "切回战术视角后未恢复正交投影")

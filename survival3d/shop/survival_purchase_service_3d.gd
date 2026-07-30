@@ -8,6 +8,8 @@ var _purchase_serial := 0
 func purchase_weapon(item: Dictionary, player: Node3D, world_parent: Node) -> Dictionary:
 	if player == null:
 		return {"success": false, "message": "找不到玩家"}
+	if world_parent == null:
+		return {"success": false, "message": "找不到武器投放场景"}
 	if not SurvivalEconomy.try_spend(int(item.get("cost", 0))):
 		return {"success": false, "message": "积分不足"}
 	var pickup := WEAPON_PICKUP.instantiate() as WeaponPickup3D
@@ -18,7 +20,7 @@ func purchase_weapon(item: Dictionary, player: Node3D, world_parent: Node) -> Di
 	_purchase_serial += 1
 	var angle := float(_purchase_serial % 8) * TAU / 8.0
 	pickup.global_position = player.global_position + Vector3(cos(angle), 0.15, sin(angle)) * 1.8
-	return {"success": true, "message": "%s 已投放到地面" % pickup.display_name, "category": "weapon"}
+	return {"success": true, "message": "%s 已投放到附近地面，关闭商城后靠近拾取" % pickup.display_name, "category": "weapon"}
 
 func purchase_ally(item: Dictionary, player: Node3D, world_parent: Node) -> Dictionary:
 	var scene := load(String(item.get("scene", ""))) as PackedScene

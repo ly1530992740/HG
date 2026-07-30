@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource type="Script" path="res://tests/third_person_25d/third_person_prototype.gd" id="1_root"]
 [ext_resource type="Script" path="res://survival3d/player/third_person_player_3d.gd" id="2_player"]
@@ -8,18 +8,20 @@
 [ext_resource type="Script" path="res://combat3d/combat_hitbox_3d.gd" id="6_hitbox"]
 [ext_resource type="Texture2D" path="res://Textures/new/Units/Black Units/Pawn/Pawn_OverShoulder_Back.png" id="7_back"]
 [ext_resource type="Script" path="res://survival3d/ui/weapon_spread_crosshair_3d.gd" id="8_crosshair"]
+[ext_resource type="Script" path="res://combat3d/voxel_soldier_visual_3d.gd" id="9_voxel"]
+[ext_resource type="PackedScene" path="res://survival3d/rendering/pixel_art_world_post_process_3d.tscn" id="10_pixel_post"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
-background_color = Color(0.08, 0.105, 0.115, 1)
+background_color = Color(0.115, 0.13, 0.135, 1)
 ambient_light_source = 3
-ambient_light_color = Color(0.55, 0.62, 0.66, 1)
-ambient_light_energy = 0.65
+ambient_light_color = Color(0.62, 0.65, 0.64, 1)
+ambient_light_energy = 1.1
 reflected_light_source = 2
 tonemap_mode = 2
 
 [sub_resource type="StandardMaterial3D" id="Material_ground"]
-albedo_color = Color(0.16, 0.24, 0.18, 1)
+albedo_color = Color(0.22, 0.235, 0.19, 1)
 roughness = 0.95
 
 [sub_resource type="BoxMesh" id="BoxMesh_ground"]
@@ -110,8 +112,14 @@ environment = SubResource("Environment_main")
 [node name="Sun" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-52, -32, 0)
 light_color = Color(1, 0.91, 0.78, 1)
-light_energy = 1.2
+light_energy = 1.45
 shadow_enabled = true
+shadow_opacity = 0.78
+
+[node name="SkyFill" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(35, 148, 0)
+light_color = Color(0.45, 0.55, 0.62, 1)
+light_energy = 0.32
 
 [node name="Ground" type="StaticBody3D" parent="."]
 collision_layer = 1
@@ -182,11 +190,14 @@ alpha_cut = 1
 texture = ExtResource("4_black_idle")
 hframes = 8
 
+[node name="VoxelVisual" type="Node3D" parent="Player"]
+script = ExtResource("9_voxel")
+faction = 1
+
 [node name="WeaponPivot" type="Node3D" parent="Player"]
 
-[node name="WeaponMesh" type="MeshInstance3D" parent="Player/WeaponPivot"]
+[node name="WeaponModelRoot" type="Node3D" parent="Player/WeaponPivot"]
 position = Vector3(0.3, 1.18, -0.42)
-mesh = SubResource("BoxMesh_gun")
 
 [node name="Muzzle" type="Marker3D" parent="Player/WeaponPivot"]
 position = Vector3(0.3, 1.18, -0.82)
@@ -221,6 +232,8 @@ player_path = NodePath("../Player")
 current = true
 near = 0.08
 far = 150.0
+
+[node name="PixelArtWorldPostProcess3D" parent="." instance=ExtResource("10_pixel_post")]
 
 [node name="OpenTarget" parent="." instance=ExtResource("5_target")]
 position = Vector3(2.7, 0, -7.2)

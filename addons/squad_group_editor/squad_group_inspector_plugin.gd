@@ -29,6 +29,22 @@ const PROPERTY_LABELS := {
 	"editor_spawn_area": "添加士兵随机范围",
 	"battlefield_analyzer_path": "态势分析模块路径",
 	"route_analyzer_path": "路线分析模块路径",
+	"use_qwen": "启用Qwen实体小队长",
+	"autonomous_goap": "无队长时单兵自主进攻",
+	"knows_primary_target_at_start": "出生时知道主要目标",
+	"evaluation_interval": "态势检查间隔",
+	"qwen_reconsider_interval": "Qwen最短重新决策间隔",
+	"low_health_cover_ratio": "低生命依托掩体比例",
+	"flank_member_count": "规则回退包抄人数",
+	"formation_surprise_delay": "小队受袭反应延迟",
+	"use_advanced_tactics": "启用有限情报战术链路",
+	"mission_type": "小队任务类型",
+	"mission_target_path": "地图任务点",
+	"mission_radius": "任务区域半径",
+	"mission_clear_confirmation_seconds": "区域清理确认时间",
+	"mission_return_radius": "返回原位完成半径",
+	"qwen_endpoint": "Qwen服务地址",
+	"qwen_timeout_seconds": "Qwen请求超时秒数",
 
 	# 小队长
 	"auto_discover_members": "自动发现成员",
@@ -109,6 +125,8 @@ const PROPERTY_LABELS := {
 	"target_groups": "可搜索目标组",
 	"will_profile": "意志配置",
 	"team_display_name": "队伍显示名称",
+	"can_be_squad_leader": "可以担任小队长",
+	"leader_priority": "小队长选举优先级",
 	"death_cleanup_delay": "尸体清理延迟",
 	"death_audio_enabled": "启用死亡音效",
 	"awards_player_score": "被玩家击杀时奖励积分",
@@ -183,9 +201,15 @@ func _can_handle(object: Object) -> bool:
 		or object is SquadWaveSpawner
 		or object is SquadWaveDefinition
 		or object is SquadWaveEntry
+		or object is SquadCoordinator3D
+		or object is Soldier3D
+		or object is SquadRouteAnalyzer3D
 	)
 
 func _parse_begin(object: Object) -> void:
+	if object is SquadCoordinator3D:
+		_build_3d_mission_panel(object as SquadCoordinator3D)
+		return
 	if not object is SquadGroup:
 		var localization_anchor := Control.new()
 		localization_anchor.custom_minimum_size = Vector2.ZERO
@@ -219,6 +243,49 @@ func _parse_begin(object: Object) -> void:
 	panel.add_child(status)
 	add_button.pressed.connect(_on_add_soldier.bind(group, preset_selector, status))
 	add_custom_control(panel)
+
+func _build_3d_mission_panel(coordinator: SquadCoordinator3D) -> void:
+	var panel := VBoxContainer.new()
+	_inspector_anchors[coordinator.get_instance_id()] = panel
+	panel.add_theme_constant_override("separation", 6)
+	var title := Label.new()
+	title.text = "小队地图任务点"
+	title.add_theme_font_size_override("font_size", 14)
+	panel.add_child(title)
+	var help := Label.new()
+	help.text = "创建后在3D场景中拖动 MissionTarget，任务半径以该点为中心。"
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(help)
+	var button := Button.new()
+	button.text = "创建或选中任务点"
+	button.tooltip_text = "创建 Marker3D 并使用Godot移动工具在地图中选点"
+	button.pressed.connect(_on_select_3d_mission_target.bind(coordinator))
+	panel.add_child(button)
+	add_custom_control(panel)
+
+func _on_select_3d_mission_target(coordinator: SquadCoordinator3D) -> void:
+	if _editor_plugin == null or not is_instance_valid(coordinator):
+		return
+	var marker := coordinator.get_node_or_null(coordinator.mission_target_path) as Marker3D
+	if marker == null:
+		marker = Marker3D.new()
+		marker.name = "MissionTarget"
+		var edited_root := _editor_plugin.get_editor_interface().get_edited_scene_root()
+		if edited_root == null:
+			marker.free()
+			return
+		var undo_redo := _editor_plugin.get_undo_redo()
+		undo_redo.create_action("Create squad mission target")
+		undo_redo.add_do_method(coordinator, &"add_child", marker, true)
+		undo_redo.add_do_method(marker, &"set_owner", edited_root)
+		undo_redo.add_do_property(coordinator, &"mission_target_path", NodePath("MissionTarget"))
+		undo_redo.add_undo_property(coordinator, &"mission_target_path", coordinator.mission_target_path)
+		undo_redo.add_undo_method(coordinator, &"remove_child", marker)
+		undo_redo.add_do_reference(marker)
+		undo_redo.commit_action()
+	var selection := _editor_plugin.get_editor_interface().get_selection()
+	selection.clear()
+	selection.add_node(marker)
 
 func _parse_end(object: Object) -> void:
 	var object_id := object.get_instance_id()
@@ -296,6 +363,8 @@ func _localize_enum_options(editor: EditorProperty, property_name: String) -> vo
 			labels = PackedStringArray(["狂热", "正规", "胆怯"])
 		"command_mode":
 			labels = PackedStringArray(["小队长统一指挥", "无小队长：单兵自主 GOAP"])
+		"mission_type":
+			labels = PackedStringArray(["攻占后固守", "消灭区域敌人后返回原位"])
 	if labels.is_empty():
 		return
 	for child in editor.find_children("*", "OptionButton", true, false):

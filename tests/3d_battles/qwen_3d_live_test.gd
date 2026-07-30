@@ -12,6 +12,8 @@ func _run() -> void:
 	blue.use_qwen = true
 	red.use_qwen = true
 	add_child(battle)
+	await get_tree().process_frame
+	push_warning("[QWEN3D_LIVE] ready blue_leader=%s red_leader=%s blue_brain=%s red_brain=%s" % [str(blue.leader), str(red.leader), str(blue.get("_qwen_brain")), str(red.get("_qwen_brain"))])
 	var deadline := Time.get_ticks_msec() + 9000
 	while Time.get_ticks_msec() < deadline:
 		if not blue.last_qwen_output.is_empty() and not red.last_qwen_output.is_empty() and not blue.last_qwen_output.begins_with("等待") and not red.last_qwen_output.begins_with("等待"):
@@ -21,6 +23,7 @@ func _run() -> void:
 	_print_decision(red)
 	var success := blue.last_command_source in ["LOCAL_QWEN", "QWEN_GUARDED"] and red.last_command_source in ["LOCAL_QWEN", "QWEN_GUARDED"]
 	if success:
+		push_warning("[QWEN3D_LIVE_PASS] blue=%s/%dms red=%s/%dms" % [blue.last_command_source, blue.last_qwen_latency_ms, red.last_command_source, red.last_qwen_latency_ms])
 		print("QWEN_3D_LIVE_PASS")
 		get_tree().quit(0)
 	else:

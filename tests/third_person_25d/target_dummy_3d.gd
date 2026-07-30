@@ -19,7 +19,7 @@ func _ready() -> void:
 	_spawn_transform = global_transform
 	_update_health_label("")
 
-func receive_hit(damage: int, hit_location: String, _hit_position: Vector3, _instigator: Node) -> void:
+func receive_hit(damage: int, hit_location: String, _hit_position: Vector3, _instigator: Node, _weapon_metadata := {}) -> void:
 	if health <= 0:
 		return
 	health = maxi(0, health - damage)

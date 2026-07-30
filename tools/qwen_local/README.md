@@ -45,6 +45,7 @@ reasoning.
 powershell -ExecutionPolicy Bypass -File .\tools\qwen_local\stop_server.ps1
 ```
 
-The server defaults to a 4096-token context and non-thinking mode so tactical
-responses stay short and fast. Pass `-ContextSize` or `-Port` to the start
-script when a different setting is required.
+The server defaults to four parallel slots with a 16384-token shared context
+and non-thinking mode. This gives each tactical request about 4096 tokens of
+context while allowing several squad leaders to decide at the same time. Pass
+`-ContextSize`, `-ParallelSlots`, or `-Port` when different limits are required.

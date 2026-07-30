@@ -11,11 +11,14 @@ var _elapsed := 0.0
 func _ready() -> void:
 	add_to_group("pickup3d")
 	body_entered.connect(_on_body_entered)
+	var definition := WeaponCatalog3D.get_definition(weapon_id)
+	display_name = String(definition.get("display_name", display_name))
 	$Label.text = display_name
+	WeaponModelFactory3D.rebuild($ModelRoot, definition, 0.72)
 
 func _process(delta: float) -> void:
 	_elapsed += delta
-	$Mesh.rotation.y += delta * 1.4
+	$ModelRoot.rotation.y += delta * 1.4
 
 func _on_body_entered(body: Node3D) -> void:
 	if _elapsed < pickup_delay or not body.has_method("receive_weapon_pickup"):

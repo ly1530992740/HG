@@ -35,6 +35,7 @@ func analyze(squad_center: Vector3, target_position: Vector3) -> Array[Dictionar
 		if forward_distance < -1.0 or forward_distance > target_distance + 3.0:
 			continue
 		var route := cover.get_flank_route(squad_center, target_position, route_clearance)
+		var reachable := _route_is_reachable(squad_center, route, cover)
 		var exposure := _estimate_exposure(route, target_position, cover)
 		var capacity := cover.get_cover_capacity_per_side()
 		var distance := _route_distance(squad_center, route)
@@ -43,7 +44,8 @@ func analyze(squad_center: Vector3, target_position: Vector3) -> Array[Dictionar
 			"id": "%s_%s" % [side, String(cover.name).to_upper()],
 			"side": side,
 			"direction": "北侧" if side == "LEFT" else "南侧",
-			"available": capacity >= minimum_capacity and exposure <= 0.75,
+			"available": reachable and capacity >= minimum_capacity and exposure <= 0.75,
+			"reachable": reachable,
 			"exposure": snappedf(exposure, 0.01),
 			"distance": snappedf(distance, 0.1),
 			"capacity": capacity,
@@ -128,3 +130,18 @@ func _route_distance(origin: Vector3, route: Array[Vector3]) -> float:
 		result += previous.distance_to(point)
 		previous = point
 	return result
+
+func _route_is_reachable(origin: Vector3, route: Array[Vector3], route_cover: TacticalCover3D) -> bool:
+	if route.is_empty() or get_viewport().world_3d == null:
+		return false
+	var points: Array[Vector3] = [origin]
+	points.append_array(route)
+	var space := get_viewport().world_3d.direct_space_state
+	for index in range(points.size() - 1):
+		var start := points[index] + Vector3.UP * 0.55
+		var finish := points[index + 1] + Vector3.UP * 0.55
+		var query := PhysicsRayQueryParameters3D.create(start, finish, 1, [route_cover.get_rid()])
+		query.collide_with_areas = false
+		if not space.intersect_ray(query).is_empty():
+			return false
+	return true

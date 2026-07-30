@@ -11,14 +11,19 @@ class_name WeaponSpreadCrosshair3D
 var _player: ThirdPersonPlayer3D
 var _spread_degrees := 0.0
 var _reload_progress := 0.0
+var _hit_flash := 0.0
+var _headshot_flash := false
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _player == null:
 		return
-	visible = _player.is_reloading or (_player.is_aiming() and _player.is_shoulder_view())
+	if _hit_flash > 0.0:
+		_hit_flash = maxf(0.0, _hit_flash - delta)
+		queue_redraw()
+	visible = _hit_flash > 0.0 or _player.is_reloading or (_player.is_aiming() and _player.is_shoulder_view())
 	set_spread_degrees(_player.get_current_spread_degrees())
 	var next_reload_progress := _player.get_reload_progress()
 	if not is_equal_approx(_reload_progress, next_reload_progress):
@@ -27,6 +32,8 @@ func _process(_delta: float) -> void:
 
 func bind_player(player: ThirdPersonPlayer3D) -> void:
 	_player = player
+	if _player != null and not _player.shot_resolved.is_connected(_on_shot_resolved):
+		_player.shot_resolved.connect(_on_shot_resolved)
 	visible = player != null and (player.is_reloading or (player.is_aiming() and player.is_shoulder_view()))
 	queue_redraw()
 
@@ -60,6 +67,22 @@ func _draw() -> void:
 	draw_circle(center, 0.75, line_color)
 	if _player != null and _player.is_reloading:
 		_draw_reload_progress(center)
+	if _hit_flash > 0.0:
+		_draw_hit_marker(center)
+
+func _on_shot_resolved(result: Dictionary) -> void:
+	var collider := result.get("collider") as Node
+	if not collider is CombatHitbox3D:
+		return
+	_hit_flash = 0.18
+	_headshot_flash = (collider as CombatHitbox3D).hit_location == "head"
+	queue_redraw()
+
+func _draw_hit_marker(center: Vector2) -> void:
+	var color := Color(1.0, 0.28, 0.16, clampf(_hit_flash / 0.18, 0.0, 1.0)) if _headshot_flash else Color(0.96, 0.96, 0.92, clampf(_hit_flash / 0.18, 0.0, 1.0))
+	var radius := 8.0
+	for direction in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		draw_line(center + direction * (radius - 3.0), center + direction * radius, color, 2.0, true)
 
 func _draw_reload_progress(center: Vector2) -> void:
 	var radius := minimum_gap_pixels + arm_length_pixels + 5.0

@@ -8,18 +8,40 @@
 [ext_resource type="Script" uid="uid://bo5hyli3kn2t6" path="res://survival3d/allies/player_squad_command_controller_3d.gd" id="6_command"]
 [ext_resource type="Script" uid="uid://mid6cwl1umy6" path="res://survival3d/rewards/combat_reward_service_3d.gd" id="7_rewards"]
 [ext_resource type="Script" uid="uid://jevpl3pp0yi0" path="res://combat3d/battlefield_registry_3d.gd" id="8_registry"]
+[ext_resource type="Script" path="res://survival3d/battlefield/battlefield_dressing_3d.gd" id="9_dressing"]
+[ext_resource type="PackedScene" path="res://survival3d/rendering/pixel_art_world_post_process_3d.tscn" id="10_pixel_post"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
+sky_top_color = Color(0.135, 0.17, 0.19, 1)
+sky_horizon_color = Color(0.46, 0.455, 0.42, 1)
+ground_bottom_color = Color(0.075, 0.085, 0.08, 1)
+ground_horizon_color = Color(0.28, 0.285, 0.26, 1)
+sun_angle_max = 12.0
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMaterial")
 
 [sub_resource type="Environment" id="Environment"]
-background_mode = 1
-background_color = Color(0.075, 0.095, 0.105, 1)
+background_mode = 2
+sky = SubResource("Sky")
 ambient_light_source = 3
-ambient_light_color = Color(0.62, 0.66, 0.62, 1)
-ambient_light_energy = 0.7
+ambient_light_color = Color(0.68, 0.7, 0.68, 1)
+ambient_light_energy = 1.45
 reflected_light_source = 2
 tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.46, 0.475, 0.46, 1)
+fog_light_energy = 0.84
+fog_density = 0.007
+fog_height = 0.0
+fog_height_density = 0.08
+adjustment_enabled = true
+adjustment_brightness = 1.24
+adjustment_contrast = 1.02
+adjustment_saturation = 0.9
 
 [sub_resource type="StandardMaterial3D" id="GroundMaterial"]
-albedo_color = Color(0.15, 0.235, 0.17, 1)
+albedo_color = Color(0.205, 0.225, 0.185, 1)
 roughness = 0.95
 
 [sub_resource type="BoxMesh" id="GroundMesh"]
@@ -32,7 +54,7 @@ size = Vector3(64, 0.2, 54)
 [sub_resource type="StandardMaterial3D" id="ZoneMaterial"]
 transparency = 1
 shading_mode = 0
-albedo_color = Color(0.12, 0.4, 0.28, 0.28)
+albedo_color = Color(0.12, 0.32, 0.23, 0.1)
 
 [sub_resource type="CylinderMesh" id="ZoneMesh"]
 material = SubResource("ZoneMaterial")
@@ -47,8 +69,16 @@ environment = SubResource("Environment")
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=186604168]
 transform = Transform3D(0.8480481, 0.41758206, -0.32625088, 0.049297333, 0.55082375, 0.8331644, 0.52762127, -0.7226468, 0.44653937, 0, 0, 0)
-light_energy = 1.2
+light_color = Color(0.91, 0.83, 0.69, 1)
+light_energy = 1.5
 shadow_enabled = true
+shadow_opacity = 0.76
+
+[node name="SkyFill" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.76604444, -0.21984631, 0.6040228, -0.0, 0.9396926, 0.34202012, -0.64278764, 0.26200265, -0.7198463, 0, 0, 0)
+light_color = Color(0.42, 0.51, 0.57, 1)
+light_energy = 0.38
+shadow_enabled = false
 
 [node name="Ground" type="StaticBody3D" parent="." unique_id=1771089759]
 collision_mask = 0
@@ -65,11 +95,16 @@ shape = SubResource("GroundShape")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.015, 0)
 mesh = SubResource("ZoneMesh")
 
+[node name="BattlefieldDressing3D" type="Node3D" parent="."]
+script = ExtResource("9_dressing")
+
 [node name="Player3D" parent="." unique_id=617083319 instance=ExtResource("1_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 17)
 
 [node name="CameraDirector3D" parent="." unique_id=251096416 instance=ExtResource("2_camera")]
 player_path = NodePath("../Player3D")
+
+[node name="PixelArtWorldPostProcess3D" parent="." instance=ExtResource("10_pixel_post")]
 
 [node name="BattleHud3D" type="CanvasLayer" parent="." unique_id=22217697]
 script = ExtResource("3_hud")

@@ -1,12 +1,26 @@
 {
   "items": [
-    {"id":"weapon_pistol","name":"制式手枪","category":"weapon","cost":3,"weapon_id":"pistol","ammo_amount":30,"description":"投放到玩家附近，靠近拾取"},
-    {"id":"weapon_smg","name":"战术冲锋枪","category":"weapon","cost":6,"weapon_id":"smg","ammo_amount":60,"description":"近距离高射速武器"},
-    {"id":"weapon_shotgun","name":"战斗霰弹枪","category":"weapon","cost":7,"weapon_id":"shotgun","ammo_amount":18,"description":"近距离高伤害武器"},
-    {"id":"weapon_marksman","name":"精确步枪","category":"weapon","cost":10,"weapon_id":"marksman","ammo_amount":15,"description":"远距离精确射击"},
-    {"id":"weapon_lmg","name":"轻机枪","category":"weapon","cost":12,"weapon_id":"lmg","ammo_amount":80,"description":"持续压制火力"},
-    {"id":"ally_defense_squad","name":"四人守备小队","category":"ally","cost":12,"scene":"res://Prefab/Ally3D/ally_defense_squad_3d.tscn","description":"GOAP队友，按G集结并防守"},
-    {"id":"cover_low_wall","name":"标准矮墙","category":"building","cost":4,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":5.0,"cover_width":0.55,"cover_height":1.2,"description":"左键放置，右键取消"},
-    {"id":"cover_long_wall","name":"长型防御墙","category":"building","cost":8,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":10.0,"cover_width":0.65,"cover_height":1.35,"description":"提供更多自动掩体点位"}
+    {"id":"weapon_pistol","name":"毛瑟C96手枪","category":"weapon","cost":3,"weapon_id":"mauser_c96","ammo_amount":40,"description":"投放到玩家附近，靠近拾取"},
+    {"id":"weapon_fn1900","name":"勃朗宁FN M1900","category":"weapon","cost":3,"weapon_id":"fn_1900","ammo_amount":35,"description":"轻便低后坐手枪"},
+    {"id":"weapon_m1911","name":"柯尔特M1911","category":"weapon","cost":4,"weapon_id":"m1911","ammo_amount":35,"description":"大口径高停止力手枪"},
+    {"id":"weapon_smg","name":"PPSh-41波波沙","category":"weapon","cost":6,"weapon_id":"ppsh41","ammo_amount":142,"description":"高射速71发弹鼓冲锋枪"},
+    {"id":"weapon_type100","name":"百式冲锋枪","category":"weapon","cost":6,"weapon_id":"type_100","ammo_amount":90,"description":"可控性较好的日式冲锋枪"},
+    {"id":"weapon_mp18","name":"MP18冲锋枪","category":"weapon","cost":6,"weapon_id":"mp18","ammo_amount":96,"description":"中国战场常见早期冲锋枪"},
+    {"id":"weapon_zhongzheng","name":"中正式步枪","category":"weapon","cost":5,"weapon_id":"zhongzheng","ammo_amount":40,"description":"高伤害栓动步枪"},
+    {"id":"weapon_type38","name":"三八式步枪","category":"weapon","cost":5,"weapon_id":"type_38","ammo_amount":40,"description":"远射程低后坐栓动步枪"},
+    {"id":"weapon_hanyang88","name":"汉阳造八八式","category":"weapon","cost":4,"weapon_id":"hanyang_88","ammo_amount":40,"description":"抗战时期常见国产步枪"},
+    {"id":"weapon_shotgun","name":"堑壕霰弹枪","category":"weapon","cost":7,"weapon_id":"trench_gun","ammo_amount":30,"description":"近距离高停止力武器"},
+    {"id":"weapon_auto5","name":"勃朗宁Auto-5","category":"weapon","cost":8,"weapon_id":"browning_auto5","ammo_amount":25,"description":"半自动近距离霰弹枪"},
+    {"id":"weapon_marksman","name":"九七式狙击步枪","category":"weapon","cost":10,"weapon_id":"type_97_sniper","ammo_amount":35,"description":"远距离精确射击"},
+    {"id":"weapon_scoped_zhongzheng","name":"中正式瞄准镜步枪","category":"weapon","cost":11,"weapon_id":"scoped_zhongzheng","ammo_amount":30,"description":"高伤害远距离精确步枪"},
+    {"id":"weapon_lmg","name":"DP-28轻机枪","category":"weapon","cost":12,"weapon_id":"dp28","ammo_amount":141,"description":"47发弹盘持续压制"},
+    {"id":"weapon_type99","name":"九九式轻机枪","category":"weapon","cost":12,"weapon_id":"type_99_lmg","ammo_amount":120,"description":"日式班用支援武器"},
+    {"id":"weapon_zb26","name":"捷克式ZB-26","category":"weapon","cost":12,"weapon_id":"zb26","ammo_amount":100,"description":"中国军队广泛使用的轻机枪"},
+    {"id":"weapon_bayonet","name":"军用刺刀","category":"weapon","cost":2,"weapon_id":"knife","ammo_amount":0,"description":"快速近战武器"},
+    {"id":"weapon_dadao","name":"抗战大刀","category":"weapon","cost":4,"weapon_id":"dadao","ammo_amount":0,"description":"高伤害双手近战武器"},
+    {"id":"weapon_infantry_knife","name":"步兵短刀","category":"weapon","cost":2,"weapon_id":"infantry_knife","ammo_amount":0,"description":"攻击速度快的近战武器"},
+    {"id":"ally_defense_squad","name":"四人红军守备小队","category":"ally","cost":12,"scene":"res://Prefab/Ally3D/ally_defense_squad_3d.tscn","description":"GOAP队友，按G集结并防守"},
+    {"id":"cover_low_wall","name":"标准沙袋矮墙","category":"building","cost":4,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":5.0,"cover_width":0.55,"cover_height":1.2,"description":"左键放置，右键取消"},
+    {"id":"cover_long_wall","name":"长型防御工事","category":"building","cost":8,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":10.0,"cover_width":0.65,"cover_height":1.35,"description":"提供更多自动掩体点位"}
   ]
 }

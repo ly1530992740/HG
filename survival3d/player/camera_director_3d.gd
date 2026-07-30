@@ -7,12 +7,14 @@ signal view_mode_changed(shoulder_view: bool)
 @export var player_path: NodePath
 @export var top_down_offset := Vector3(0.0, 14.0, 14.0)
 @export var top_down_size := 19.0
-@export var shoulder_distance := 3.2
-@export var shoulder_height := 1.55
-@export var shoulder_offset := 0.65
-@export var shoulder_fov := 68.0
+@export var shoulder_distance := 1.45
+@export var shoulder_height := 1.52
+@export var shoulder_offset := 0.92
+@export var shoulder_fov := 58.0
 @export var transition_speed := 8.0
 @export var mouse_sensitivity := 0.0025
+@export var recoil_recovery_speed := 11.0
+@export var recoil_shake_decay := 16.0
 @export_range(-80.0, -5.0, 1.0) var minimum_pitch_degrees := -55.0
 @export_range(5.0, 80.0, 1.0) var maximum_pitch_degrees := 35.0
 @export_flags_3d_physics var camera_collision_mask := 1
@@ -25,6 +27,10 @@ var shoulder_view := false
 var yaw := 0.0
 var pitch := deg_to_rad(-8.0)
 var _blend := 0.0
+var _recoil_pitch := 0.0
+var _recoil_yaw := 0.0
+var _recoil_shake := 0.0
+var _recoil_phase := 0.0
 
 func _ready() -> void:
 	player = get_node_or_null(player_path) as CharacterBody3D
@@ -55,8 +61,16 @@ func _process(delta: float) -> void:
 	var top_transform := _get_top_down_transform()
 	var shoulder_transform := _get_shoulder_transform()
 	var desired := top_transform.interpolate_with(shoulder_transform, smoothstep(0.0, 1.0, _blend))
+	_recoil_phase += delta * 57.0
+	if _recoil_shake > 0.001:
+		var shake_right := desired.basis.x * sin(_recoil_phase) * _recoil_shake
+		var shake_up := desired.basis.y * cos(_recoil_phase * 0.83) * _recoil_shake * 0.55
+		desired.origin += shake_right + shake_up
 	desired.origin = _resolve_camera_collision(_get_focus_position(), desired.origin)
 	global_transform = global_transform.interpolate_with(desired, 1.0 - exp(-14.0 * delta))
+	_recoil_pitch = move_toward(_recoil_pitch, 0.0, recoil_recovery_speed * delta)
+	_recoil_yaw = move_toward(_recoil_yaw, 0.0, recoil_recovery_speed * delta)
+	_recoil_shake = move_toward(_recoil_shake, 0.0, recoil_shake_decay * delta)
 
 	if _blend >= 0.45:
 		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
@@ -88,6 +102,11 @@ func set_shoulder_view(enabled: bool) -> void:
 
 func is_shoulder_view() -> bool:
 	return shoulder_view
+
+func add_weapon_recoil(pitch_degrees: float, yaw_degrees: float, shake_strength := 0.025) -> void:
+	_recoil_pitch = clampf(_recoil_pitch + deg_to_rad(maxf(0.0, pitch_degrees)), 0.0, deg_to_rad(8.0))
+	_recoil_yaw = clampf(_recoil_yaw + deg_to_rad(randf_range(-yaw_degrees, yaw_degrees)), deg_to_rad(-3.0), deg_to_rad(3.0))
+	_recoil_shake = maxf(_recoil_shake, shake_strength)
 
 func get_flat_forward() -> Vector3:
 	var forward := Basis(Vector3.UP, yaw) * Vector3.FORWARD
@@ -126,11 +145,13 @@ func _get_top_down_transform() -> Transform3D:
 	return Transform3D(Basis.IDENTITY, camera_position).looking_at(focus, Vector3.UP)
 
 func _get_shoulder_transform() -> Transform3D:
-	var focus := _get_focus_position()
-	var flat_forward := get_flat_forward()
+	var focus := player.global_position + Vector3.UP * 1.42
+	var flat_forward := Basis(Vector3.UP, yaw + _recoil_yaw) * Vector3.FORWARD
+	flat_forward.y = 0.0
+	flat_forward = flat_forward.normalized()
 	var right := get_flat_right()
-	var aim_direction := flat_forward.rotated(right, pitch).normalized()
-	var camera_position := focus - aim_direction * shoulder_distance + right * shoulder_offset + Vector3.UP * (shoulder_height - 1.05)
+	var aim_direction := flat_forward.rotated(right, pitch + _recoil_pitch).normalized()
+	var camera_position := focus - aim_direction * shoulder_distance + right * shoulder_offset + Vector3.UP * (shoulder_height - 1.42)
 	return Transform3D(Basis.IDENTITY, camera_position).looking_at(focus + aim_direction * 20.0, Vector3.UP)
 
 func _resolve_camera_collision(focus: Vector3, desired_position: Vector3) -> Vector3:

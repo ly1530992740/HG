@@ -10,12 +10,15 @@ enum Operation {
 	RELOAD,
 	ENGAGE,
 	GUARD,
+	OBSERVE,
 }
 
 @export var operation: Operation = Operation.MOVE
 
 func is_valid() -> bool:
 	if not enabled or _actor == null or not _actor.has_method("get_active_directive"):
+		return false
+	if agent != null and agent.get_current_goal() is SoldierAutonomyGoal3D:
 		return false
 	var directive := _actor.get_active_directive() as SquadDirective3D
 	if directive == null:
@@ -36,7 +39,9 @@ func is_valid() -> bool:
 		Operation.ENGAGE:
 			return directive.type in [SquadDirective3D.Type.ATTACK, SquadDirective3D.Type.SUPPRESS, SquadDirective3D.Type.FLANK]
 		Operation.GUARD:
-			return directive.type == SquadDirective3D.Type.GUARD
+			return directive.type in [SquadDirective3D.Type.GUARD, SquadDirective3D.Type.HOLD_SECTOR]
+		Operation.OBSERVE:
+			return directive.type == SquadDirective3D.Type.RECON
 	return false
 
 func get_preconditions() -> Dictionary:
@@ -64,6 +69,8 @@ func get_preconditions() -> Dictionary:
 			return result
 		Operation.GUARD:
 			return {&"at_destination": true}
+		Operation.OBSERVE:
+			return {&"at_destination": true}
 	return {}
 
 func get_effects() -> Dictionary:
@@ -72,7 +79,7 @@ func get_effects() -> Dictionary:
 		return {}
 	match operation:
 		Operation.MOVE:
-			if directive.type == SquadDirective3D.Type.MOVE:
+			if directive.type in [SquadDirective3D.Type.MOVE, SquadDirective3D.Type.WITHDRAW]:
 				return {&"at_destination": true, &"directive_complete": directive.version}
 			return {&"at_destination": true}
 		Operation.ENTER_COVER:
@@ -87,7 +94,7 @@ func get_effects() -> Dictionary:
 			return {&"aimed": true}
 		Operation.RELOAD:
 			return {&"weapon_loaded": true}
-		Operation.ENGAGE, Operation.GUARD:
+		Operation.ENGAGE, Operation.GUARD, Operation.OBSERVE:
 			return {&"directive_complete": directive.version}
 	return {}
 

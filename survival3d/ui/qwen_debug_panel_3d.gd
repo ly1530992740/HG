@@ -80,7 +80,8 @@ func _refresh() -> void:
 			output = "尚未返回"
 		elif output.length() > 220:
 			output = output.left(220) + "..."
-		sections.append("[b]%s[/b]  延迟 %dms\n输入：%s\n输出：%s\n执行：%s" % [squad.squad_display_name, squad.last_qwen_latency_ms, input_summary, output, squad.last_command_summary if not squad.last_command_summary.is_empty() else "空"])
+		var leader_name := String(squad.leader.name) if is_instance_valid(squad.leader) else "未选举"
+		sections.append("[b]%s[/b]  队长 %s  延迟 %dms\n输入：%s\n输出：%s\n执行：%s" % [squad.squad_display_name, leader_name, squad.last_qwen_latency_ms, input_summary, output, squad.last_command_summary if not squad.last_command_summary.is_empty() else "空"])
 	_text.text = "\n\n".join(sections) if not sections.is_empty() else "当前没有3D小队"
 
 func _summarize_input(raw: String) -> String:
@@ -89,4 +90,11 @@ func _summarize_input(raw: String) -> String:
 	var parsed = JSON.parse_string(raw)
 	if not parsed is Dictionary:
 		return raw.left(160)
-	return "我方%d，敌军%d，敌方警觉=%s，火力%.1f/%.1f，路线%d条" % [int(parsed.get("我方存活", 0)), int(parsed.get("已确认敌军", 0)), str(parsed.get("敌军是否警觉", false)), float(parsed.get("我方火力", 0.0)), float(parsed.get("敌方火力", 0.0)), (parsed.get("候选包抄路线", []) as Array).size()]
+	var squad: Dictionary = parsed.get("squad", {})
+	var enemy: Dictionary = parsed.get("enemy", {})
+	var routes: Array = parsed.get("routes", [])
+	var reachable := 0
+	for route in routes:
+		if bool(route.get("reachable", false)):
+			reachable += 1
+	return "队长%s，我方%d，目标%s，可见者%d，可达路线%d" % [String(squad.get("leader_id", "NONE")), int(squad.get("living_count", 0)), String(enemy.get("id", "UNKNOWN")), (enemy.get("visible_by", []) as Array).size(), reachable]

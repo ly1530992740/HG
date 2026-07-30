@@ -34,6 +34,8 @@ var _toast_label: Label
 var _tabs: TabContainer
 var _purchase_service: SurvivalPurchaseService3D
 var _placement_service: BuildingPlacementService3D
+var _mouse_mode_before_shop := Input.MOUSE_MODE_VISIBLE
+var _tree_was_paused := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -54,6 +56,10 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_update_layout)
 	_update_layout()
 
+func _exit_tree() -> void:
+	if _panel != null and _panel.visible:
+		_set_shop_open(false)
+
 func _process(_delta: float) -> void:
 	if _placement_service.is_active():
 		var point: Variant = get_mouse_ground_position()
@@ -63,7 +69,7 @@ func _process(_delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).physical_keycode == shop_key:
 		if not _placement_service.is_active():
-			_panel.visible = not _panel.visible
+			_set_shop_open(not _panel.visible)
 		else:
 			_cancel_building()
 		get_viewport().set_input_as_handled()
@@ -81,7 +87,7 @@ func _input(event: InputEvent) -> void:
 func toggle_shop() -> void:
 	if not pending_building.is_empty():
 		_cancel_building()
-	_panel.visible = not _panel.visible
+	_set_shop_open(not _panel.visible)
 
 func get_mouse_ground_position() -> Variant:
 	var camera := get_viewport().get_camera_3d()
@@ -100,8 +106,7 @@ func get_mouse_ground_position() -> Variant:
 func purchase_item_by_id(item_id: String) -> bool:
 	for item in catalog_items:
 		if String(item.get("id", "")) == item_id:
-			_purchase_item(item)
-			return true
+			return _purchase_item(item)
 	return false
 
 func _load_catalog() -> void:
@@ -144,7 +149,7 @@ func _build_ui() -> void:
 	header.add_child(title)
 	var close := Button.new()
 	close.text = "关闭"
-	close.pressed.connect(func(): _panel.visible = false)
+	close.pressed.connect(func(): _set_shop_open(false))
 	header.add_child(close)
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -195,30 +200,48 @@ func _update_layout() -> void:
 	_toast_label.position = Vector2(margin, 62.0)
 	_toast_label.size = Vector2(size.x - margin * 2.0, 34.0)
 
-func _purchase_item(item: Dictionary) -> void:
+func _purchase_item(item: Dictionary) -> bool:
 	match String(item.get("category", "")):
-		"weapon": _apply_purchase_result(item, _purchase_service.purchase_weapon(item, _find_player(), _get_world_parent()))
-		"ally": _apply_purchase_result(item, _purchase_service.purchase_ally(item, _find_player(), _get_world_parent()))
-		"building": _begin_building(item)
+		"weapon": return _apply_purchase_result(item, _purchase_service.purchase_weapon(item, _find_player(), _get_world_parent()))
+		"ally": return _apply_purchase_result(item, _purchase_service.purchase_ally(item, _find_player(), _get_world_parent()))
+		"building": return _begin_building(item)
+	return false
 
-func _apply_purchase_result(item: Dictionary, result: Dictionary) -> void:
+func _apply_purchase_result(item: Dictionary, result: Dictionary) -> bool:
 	if not bool(result.get("success", false)):
 		_set_status(String(result.get("message", "购买失败")))
-		return
-	_panel.visible = false
-	_show_toast(String(result.get("message", "购买成功")))
+		return false
+	var message := String(result.get("message", "购买成功"))
+	_set_status(message)
+	_show_toast(message)
 	item_purchased.emit(String(item.get("id", "")), String(result.get("category", "")))
+	return true
 
-func _begin_building(item: Dictionary) -> void:
+func _begin_building(item: Dictionary) -> bool:
 	if not SurvivalEconomy.can_afford(int(item.get("cost", 0))):
 		_set_status("积分不足")
-		return
+		return false
 	if not _placement_service.begin(item, _get_world_parent()):
 		_set_status("建筑预制体无法加载")
-		return
-	_panel.visible = false
+		return false
+	_set_shop_open(false)
 	_show_toast("移动鼠标选择位置，左键建造，右键取消")
 	placement_started.emit(String(item.get("id", "")))
+	return true
+
+func _set_shop_open(open: bool) -> void:
+	if _panel == null or _panel.visible == open:
+		return
+	if open:
+		_mouse_mode_before_shop = Input.mouse_mode
+		_tree_was_paused = get_tree().paused
+		_panel.visible = true
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		get_tree().paused = true
+	else:
+		_panel.visible = false
+		get_tree().paused = _tree_was_paused
+		Input.mouse_mode = _mouse_mode_before_shop
 
 func _confirm_building() -> void:
 	if not _placement_service.is_active() or not SurvivalEconomy.try_spend(int(_placement_service.pending_item.get("cost", 0))):

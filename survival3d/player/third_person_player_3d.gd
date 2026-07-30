@@ -1,6 +1,8 @@
 extends CharacterBody3D
 class_name ThirdPersonPlayer3D
 
+const DAMAGE_RULES_3D := preload("res://combat3d/combat_damage_rules_3d.gd")
+
 signal ammo_changed(current: int, reserve: int)
 signal shot_resolved(result: Dictionary)
 signal health_changed(current: int, maximum: int)
@@ -52,14 +54,22 @@ const TRACER_SPEED_BASELINE := 90.0
 @export var max_health := 100
 @export var invulnerable := false
 @export var shoulder_back_texture: Texture2D
+@export_range(0.002, 0.01, 0.00025) var shoulder_sprite_pixel_size := 0.0035
+@export var shoulder_sprite_offset := Vector2(-10.0, 8.0)
+
+@export_category("俯视2.5D表现")
+@export_range(4, 16, 1) var top_down_direction_steps := 8
+@export_range(2.0, 15.0, 1.0) var top_down_pose_fps := 8.0
 
 @onready var visual: Sprite3D = $Visual
+@onready var voxel_visual: VoxelSoldierVisual3D = $VoxelVisual
 @onready var muzzle: Marker3D = $WeaponPivot/Muzzle
 @onready var actor_collision: CollisionShape3D = $Collision
 @onready var body_hitbox: Area3D = $BodyHitbox
 @onready var body_hitbox_shape: CollisionShape3D = $BodyHitbox/Shape
 @onready var head_hitbox: Area3D = $HeadHitbox
 @onready var weapon_pivot: Node3D = $WeaponPivot
+@onready var weapon_model_root: Node3D = $WeaponPivot/WeaponModelRoot
 
 var camera_director: CameraDirector3D
 var current_ammo := 0
@@ -87,6 +97,15 @@ var accuracy_component: PlayerAccuracyComponent3D
 var ballistics_component: PlayerBallisticsComponent3D
 var health_component: HealthComponent3D
 var stamina_component: StaminaComponent3D
+var weapon_feedback_component: WeaponFeedback3D
+var shoulder_animator: ShoulderSpriteAnimator3D
+var weapon_definition: Dictionary = {}
+var shoulder_animation_set: Dictionary = {}
+var _last_fire_msec := -100000
+var blind_fire_active := false
+var _top_down_sprite_pixel_size := 0.015
+var _top_down_sprite_offset := Vector2.ZERO
+var _top_down_pose_accumulator := 0.0
 
 func _ready() -> void:
 	add_to_group("player3d")
@@ -95,6 +114,8 @@ func _ready() -> void:
 	if registry != null:
 		registry.register_node(self)
 	_top_down_texture = visual.texture
+	_top_down_sprite_pixel_size = visual.pixel_size
+	_top_down_sprite_offset = visual.offset
 	_setup_runtime_components()
 	health_component.configure(max_health)
 	stamina_component.configure(max_stamina, run_stamina_cost_per_second, stamina_recovery_per_second, stamina_recovery_delay, stamina_required_to_resume_run)
@@ -198,7 +219,11 @@ func _physics_process(delta: float) -> void:
 		facing.y = 0.0
 	if facing.length_squared() > 0.001:
 		logical_forward = facing.normalized()
-		rotation.y = lerp_angle(rotation.y, atan2(-logical_forward.x, -logical_forward.z), 1.0 - exp(-rotation_speed * delta))
+		var target_yaw := atan2(-logical_forward.x, -logical_forward.z)
+		if camera_director != null and camera_director.is_shoulder_view():
+			rotation.y = lerp_angle(rotation.y, target_yaw, 1.0 - exp(-rotation_speed * delta))
+		else:
+			rotation.y = _quantize_top_down_yaw(target_yaw)
 
 	move_and_slide()
 	_update_sprite(delta, move_direction.length_squared() > 0.01)
@@ -345,12 +370,17 @@ func fire_at_world_point(world_point: Vector3) -> Dictionary:
 	if fire_cooldown > 0.0:
 		return {"fired": false, "reason": "cooldown"}
 	if current_ammo <= 0:
+		if weapon_feedback_component != null:
+			weapon_feedback_component.play_empty()
 		return {"fired": false, "reason": "empty"}
 
 	current_ammo -= 1
+	_last_fire_msec = Time.get_ticks_msec()
 	fire_cooldown = fire_interval
 	ammo_changed.emit(current_ammo, reserve_ammo)
 	var blind_fire := is_in_cover() and not cover_peeking
+	blind_fire_active = blind_fire
+	_apply_weapon_pose(blind_fire)
 	var origin := _get_fire_origin(blind_fire)
 	var shot_distance := maximum_range
 	var direction := (world_point - origin).normalized()
@@ -361,12 +391,18 @@ func fire_at_world_point(world_point: Vector3) -> Dictionary:
 		direction.y = 0.0
 		direction = direction.normalized() if direction.length_squared() > 0.0001 else logical_forward
 		logical_forward = direction
-		rotation.y = atan2(-logical_forward.x, -logical_forward.z)
+		rotation.y = _quantize_top_down_yaw(atan2(-logical_forward.x, -logical_forward.z))
 	var spread_degrees := get_current_spread_degrees(blind_fire)
 	var spread := deg_to_rad(spread_degrees)
 	direction = ballistics_component.apply_spread(direction, spread)
-	var result := ballistics_component.perform_shot(self, origin, direction, shot_distance, shot_collision_mask, body_damage)
+	var result := ballistics_component.perform_shot(self, origin, direction, shot_distance, shot_collision_mask, body_damage, weapon_definition)
 	accuracy_component.report_shot(recoil_per_shot_degrees, max_recoil_spread_degrees)
+	if camera_director != null:
+		camera_director.add_weapon_recoil(
+			float(weapon_definition.get("camera_kick", recoil_per_shot_degrees)),
+			float(weapon_definition.get("camera_yaw", 0.3)),
+			0.035 if String(weapon_definition.get("family", "")) in ["bolt_rifle", "shotgun", "lmg"] else 0.02
+		)
 	result["fired"] = true
 	result["origin"] = origin
 	result["blind_fire"] = blind_fire
@@ -376,6 +412,13 @@ func fire_at_world_point(world_point: Vector3) -> Dictionary:
 	result["direction"] = direction
 	result["end"] = result.get("position", origin + direction * shot_distance)
 	ballistics_component.spawn_tracer(self, origin, result["end"] as Vector3, tracer_speed, tracer_length)
+	if weapon_feedback_component != null:
+		weapon_feedback_component.play_fire(direction, result)
+		var collider := result.get("collider") as Node
+		if collider is CombatHitbox3D:
+			weapon_feedback_component.play_hit_confirm((collider as CombatHitbox3D).hit_location == "head")
+	if shoulder_animator != null:
+		shoulder_animator.notify_fire(String(weapon_definition.get("family", "bolt_rifle")))
 	shot_resolved.emit(result)
 	return result
 
@@ -385,7 +428,11 @@ func reload() -> bool:
 	is_reloading = true
 	reload_elapsed = 0.0
 	set_aiming(false)
+	if shoulder_animator != null:
+		shoulder_animator.notify_reload_started()
 	reload_state_changed.emit(true, 0.0)
+	if weapon_feedback_component != null:
+		weapon_feedback_component.play_reload()
 	return true
 
 func cancel_reload() -> void:
@@ -405,6 +452,8 @@ func _update_reload(delta: float) -> void:
 		return
 	reload_elapsed += delta
 	var progress := get_reload_progress()
+	if shoulder_animator != null and is_shoulder_view():
+		shoulder_animator.update_animation(0.0, is_aiming(), true, progress, false)
 	reload_state_changed.emit(true, progress)
 	if progress < 1.0:
 		return
@@ -455,11 +504,15 @@ func receive_ammo_pickup(amount: int) -> void:
 	reserve_ammo += maxi(0, amount)
 	ammo_changed.emit(current_ammo, reserve_ammo)
 
-func receive_hit(damage: int, _hit_location: String, _hit_position: Vector3, _instigator: Node) -> void:
+func receive_hit(damage: int, hit_location: String, hit_position: Vector3, instigator: Node, weapon_metadata := {}) -> void:
 	if dead or invulnerable or damage <= 0:
+		return
+	if not DAMAGE_RULES_3D.can_damage(instigator, self):
 		return
 	if not health_component.apply_damage(damage):
 		return
+	if voxel_visual != null and String(weapon_metadata.get("family", "")) != "melee":
+		voxel_visual.add_bullet_wound(hit_position, weapon_metadata.get("impact_normal", Vector3.ZERO) as Vector3, hit_location)
 	health_changed.emit(health, health_component.maximum)
 	if health <= 0:
 		dead = true
@@ -482,36 +535,34 @@ func _store_weapon_ammo() -> void:
 	weapon_ammo_state[current_weapon_id] = {"magazine": current_ammo, "reserve": reserve_ammo}
 
 func _apply_weapon_profile(weapon_id: String, reset_ammo: bool) -> void:
-	match weapon_id:
-		"pistol":
-			magazine_size = 12; fire_interval = 0.28; reload_duration = 1.35; body_damage = 32; maximum_range = 32.0; hip_spread_degrees = 2.8
-			automatic_fire = false; aimed_spread_degrees = 0.22; aimed_initial_spread_degrees = 1.2; aim_settle_time = 0.5
-			recoil_per_shot_degrees = 0.45; max_recoil_spread_degrees = 2.5; recoil_recovery_per_second = 2.8
-		"smg":
-			magazine_size = 32; fire_interval = 0.09; reload_duration = 1.7; body_damage = 18; maximum_range = 24.0; hip_spread_degrees = 4.2
-			automatic_fire = true; aimed_spread_degrees = 0.55; aimed_initial_spread_degrees = 2.0; aim_settle_time = 0.75
-			recoil_per_shot_degrees = 0.38; max_recoil_spread_degrees = 4.5; recoil_recovery_per_second = 2.0
-		"shotgun":
-			magazine_size = 8; fire_interval = 0.75; reload_duration = 2.4; body_damage = 58; maximum_range = 15.0; hip_spread_degrees = 5.5
-			automatic_fire = false; aimed_spread_degrees = 2.2; aimed_initial_spread_degrees = 3.8; aim_settle_time = 0.45
-			recoil_per_shot_degrees = 1.2; max_recoil_spread_degrees = 5.0; recoil_recovery_per_second = 2.2
-		"lmg":
-			magazine_size = 60; fire_interval = 0.1; reload_duration = 3.4; body_damage = 20; maximum_range = 34.0; hip_spread_degrees = 4.0
-			automatic_fire = true; aimed_spread_degrees = 0.75; aimed_initial_spread_degrees = 2.6; aim_settle_time = 1.2
-			recoil_per_shot_degrees = 0.32; max_recoil_spread_degrees = 6.0; recoil_recovery_per_second = 1.5
-		"marksman":
-			magazine_size = 6; fire_interval = 1.0; reload_duration = 2.2; body_damage = 72; maximum_range = 55.0; hip_spread_degrees = 5.0
-			automatic_fire = false; aimed_spread_degrees = 0.08; aimed_initial_spread_degrees = 2.3; aim_settle_time = 1.5
-			recoil_per_shot_degrees = 1.8; max_recoil_spread_degrees = 6.0; recoil_recovery_per_second = 1.3
-		_:
-			magazine_size = 24; fire_interval = 0.16; reload_duration = 2.0; body_damage = 28; maximum_range = 38.0; hip_spread_degrees = 3.5
-			automatic_fire = false; aimed_spread_degrees = 0.18; aimed_initial_spread_degrees = 1.6; aim_settle_time = 0.8
-			recoil_per_shot_degrees = 0.55; max_recoil_spread_degrees = 3.8; recoil_recovery_per_second = 2.4
+	weapon_definition = WeaponCatalog3D.get_definition(weapon_id)
+	shoulder_animation_set = VoxelSoldierVisual3D.create_red_army_shoulder_animation_set(weapon_definition)
+	shoulder_back_texture = shoulder_animation_set.get("ready") as Texture2D
+	if shoulder_animator != null:
+		shoulder_animator.set_animation_set(shoulder_animation_set)
+	magazine_size = int(weapon_definition.get("magazine_size", 5))
+	fire_interval = float(weapon_definition.get("fire_interval", 0.2))
+	reload_duration = float(weapon_definition.get("reload_duration", 2.0))
+	body_damage = int(weapon_definition.get("damage", 28))
+	maximum_range = float(weapon_definition.get("maximum_range", 38.0))
+	hip_spread_degrees = float(weapon_definition.get("hip_spread", 3.5))
+	aimed_spread_degrees = float(weapon_definition.get("aimed_spread", 0.18))
+	aimed_initial_spread_degrees = float(weapon_definition.get("aimed_initial_spread", 1.6))
+	aim_settle_time = float(weapon_definition.get("aim_settle_time", 0.8))
+	recoil_per_shot_degrees = float(weapon_definition.get("recoil_per_shot", 0.55))
+	max_recoil_spread_degrees = float(weapon_definition.get("max_recoil", 3.8))
+	recoil_recovery_per_second = float(weapon_definition.get("recoil_recovery", 2.4))
+	automatic_fire = bool(weapon_definition.get("automatic", false))
+	if weapon_feedback_component != null:
+		weapon_feedback_component.configure(weapon_definition)
 	accuracy_component.reset_aim()
 	accuracy_component.reset_recoil()
 	if reset_ammo:
 		current_ammo = magazine_size
-		reserve_ammo = maxi(starting_reserve_ammo, magazine_size * 3)
+		reserve_ammo = int(weapon_definition.get("starting_reserve", maxi(starting_reserve_ammo, magazine_size * 3)))
+
+func get_weapon_display_name() -> String:
+	return String(weapon_definition.get("display_name", WeaponCatalog3D.get_display_name(current_weapon_id)))
 
 func _bind_camera() -> void:
 	camera_director = get_tree().get_first_node_in_group("third_person_camera") as CameraDirector3D
@@ -531,13 +582,27 @@ func _on_aim_mode_changed(_enabled: bool) -> void:
 func _on_view_mode_changed(shoulder_view: bool) -> void:
 	if visual == null:
 		return
-	visual.texture = shoulder_back_texture if shoulder_view and shoulder_back_texture != null else _top_down_texture
+	if shoulder_view:
+		shoulder_animator.set_active(true, is_aiming())
+	else:
+		shoulder_animator.set_active(false)
+		visual.texture = _top_down_texture
+		visual.hframes = 8
+		visual.vframes = 1
+		rotation.y = _quantize_top_down_yaw(rotation.y)
+	visual.pixel_size = shoulder_sprite_pixel_size if shoulder_view else _top_down_sprite_pixel_size
+	visual.offset = shoulder_sprite_offset if shoulder_view else _top_down_sprite_offset
+	visual.visible = shoulder_view
+	if voxel_visual != null:
+		voxel_visual.visible = not shoulder_view
+	if weapon_pivot != null:
+		weapon_pivot.visible = not shoulder_view
 	visual.frame = 0
 	_animation_time = 0.0
 
 func _get_fire_origin(blind_fire: bool) -> Vector3:
-	if blind_fire and is_instance_valid(active_cover):
-		return global_position + Vector3.UP * (active_cover.cover_height + 0.2)
+	if blind_fire:
+		_apply_weapon_pose(true)
 	return muzzle.global_position
 
 func _update_movement_state(delta: float, moving: bool) -> void:
@@ -659,15 +724,60 @@ func _setup_runtime_components() -> void:
 	stamina_component = StaminaComponent3D.new()
 	stamina_component.name = "Stamina"
 	components.add_child(stamina_component)
+	weapon_feedback_component = WeaponFeedback3D.new()
+	weapon_feedback_component.name = "WeaponFeedback"
+	components.add_child(weapon_feedback_component)
+	weapon_feedback_component.setup(self, weapon_model_root, muzzle)
+	shoulder_animator = ShoulderSpriteAnimator3D.new()
+	shoulder_animator.name = "ShoulderSpriteAnimator"
+	components.add_child(shoulder_animator)
+	shoulder_animator.setup(visual)
 
 func _update_sprite(delta: float, moving: bool) -> void:
 	if visual == null:
+		return
+	var firing := Time.get_ticks_msec() - _last_fire_msec < 150
+	if is_shoulder_view():
+		shoulder_animator.update_animation(delta, is_aiming(), is_reloading, get_reload_progress(), moving)
+		visual.flip_h = false
+		_apply_weapon_pose(blind_fire_active)
 		return
 	if moving:
 		_animation_time += delta
 		visual.frame = int(_animation_time * 10.0) % maxi(1, visual.hframes)
 	else:
 		_animation_time = 0.0
-		visual.frame = 0
+	if not firing:
+		blind_fire_active = false
+	if voxel_visual != null:
+		_top_down_pose_accumulator += delta
+		var frame_duration := 1.0 / maxf(1.0, top_down_pose_fps)
+		var stepped_delta := 0.0
+		if _top_down_pose_accumulator >= frame_duration:
+			var elapsed_frames := floori(_top_down_pose_accumulator / frame_duration)
+			stepped_delta = float(elapsed_frames) * frame_duration
+			_top_down_pose_accumulator -= stepped_delta
+		voxel_visual.update_pose(stepped_delta, velocity, int(movement_mode), int(stance), is_aiming(), firing, dead, String(weapon_definition.get("family", "bolt_rifle")), blind_fire_active)
+	_apply_weapon_pose(blind_fire_active)
+	visual.frame = 0
 	if camera_director != null:
 		visual.flip_h = logical_forward.dot(camera_director.get_flat_right()) < 0.0
+
+func _quantize_top_down_yaw(yaw: float) -> float:
+	var step := TAU / float(maxi(1, top_down_direction_steps))
+	return snappedf(yaw, step)
+
+func get_top_down_facing_index() -> int:
+	var steps := maxi(1, top_down_direction_steps)
+	var step := TAU / float(steps)
+	return posmod(roundi(rotation.y / step), steps)
+
+func _apply_weapon_pose(blind_fire := false) -> void:
+	if voxel_visual == null or weapon_pivot == null:
+		return
+	weapon_pivot.transform = voxel_visual.get_weapon_pivot_pose(
+		String(weapon_definition.get("family", "bolt_rifle")),
+		int(stance),
+		is_aiming(),
+		blind_fire
+	)

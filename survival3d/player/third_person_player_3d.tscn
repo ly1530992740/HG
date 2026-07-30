@@ -1,9 +1,8 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://survival3d/player/third_person_player_3d.gd" id="1"]
 [ext_resource type="Script" path="res://combat3d/combat_hitbox_3d.gd" id="2"]
-[ext_resource type="Texture2D" path="res://Textures/new/Units/Black Units/Pawn/Pawn_Idle.png" id="3"]
-[ext_resource type="Texture2D" path="res://Textures/new/Units/Black Units/Pawn/Pawn_OverShoulder_Back.png" id="4_back"]
+[ext_resource type="Script" path="res://combat3d/voxel_soldier_visual_3d.gd" id="5_voxel"]
 
 [sub_resource type="CapsuleShape3D" id="ActorShape"]
 radius = 0.34
@@ -27,21 +26,11 @@ top_radius = 0.42
 bottom_radius = 0.42
 height = 0.015
 
-[sub_resource type="StandardMaterial3D" id="GunMaterial"]
-albedo_color = Color(0.12, 0.13, 0.14, 1)
-metallic = 0.65
-roughness = 0.35
-
-[sub_resource type="BoxMesh" id="GunMesh"]
-material = SubResource("GunMaterial")
-size = Vector3(0.12, 0.1, 0.72)
-
 [node name="Player3D" type="CharacterBody3D"]
 collision_layer = 2
 collision_mask = 1
 script = ExtResource("1")
 invulnerable = true
-shoulder_back_texture = ExtResource("4_back")
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 position = Vector3(0, 0.9, 0)
@@ -53,20 +42,23 @@ mesh = SubResource("ShadowMesh")
 
 [node name="Visual" type="Sprite3D" parent="."]
 position = Vector3(0, 1, 0)
-pixel_size = 0.023
+pixel_size = 0.015
 billboard = 1
 alpha_cut = 1
-texture = ExtResource("3")
 hframes = 8
+visible = false
+
+[node name="VoxelVisual" type="Node3D" parent="."]
+script = ExtResource("5_voxel")
+faction = 1
 
 [node name="WeaponPivot" type="Node3D" parent="."]
 
-[node name="WeaponMesh" type="MeshInstance3D" parent="WeaponPivot"]
-position = Vector3(0.3, 1.18, -0.42)
-mesh = SubResource("GunMesh")
+[node name="WeaponModelRoot" type="Node3D" parent="WeaponPivot"]
+position = Vector3(0.3, 1.18, -0.15)
 
 [node name="Muzzle" type="Marker3D" parent="WeaponPivot"]
-position = Vector3(0.3, 1.18, -0.82)
+position = Vector3(0.3, 1.23, -1.1)
 
 [node name="BodyHitbox" type="Area3D" parent="."]
 position = Vector3(0, 0.92, 0)

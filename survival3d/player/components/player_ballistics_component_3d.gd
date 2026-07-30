@@ -19,7 +19,7 @@ func apply_spread(direction: Vector3, spread_radians: float) -> Vector3:
 	var up := right.cross(direction).normalized()
 	return (direction + right * randf_range(-spread_radians, spread_radians) + up * randf_range(-spread_radians, spread_radians)).normalized()
 
-func perform_shot(actor: Node3D, origin: Vector3, direction: Vector3, distance: float, collision_mask: int, damage: int) -> Dictionary:
+func perform_shot(actor: Node3D, origin: Vector3, direction: Vector3, distance: float, collision_mask: int, damage: int, weapon_metadata := {}) -> Dictionary:
 	if actor.get_world_3d() == null:
 		return {}
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * distance, collision_mask, [actor.get_rid()])
@@ -30,7 +30,9 @@ func perform_shot(actor: Node3D, origin: Vector3, direction: Vector3, distance: 
 		return {}
 	var collider := hit.get("collider") as Node
 	if collider != null and collider.has_method("receive_shot"):
-		collider.receive_shot(damage, hit.get("position", Vector3.ZERO), actor)
+		var metadata: Dictionary = weapon_metadata.duplicate(true)
+		metadata["impact_normal"] = hit.get("normal", -direction)
+		collider.receive_shot(damage, hit.get("position", Vector3.ZERO), actor, metadata)
 	return hit
 
 func spawn_tracer(actor: Node3D, origin: Vector3, destination: Vector3, tracer_speed: float, tracer_length: float) -> void:
