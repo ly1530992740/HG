@@ -6,9 +6,9 @@ signal level_changed(level: Level)
 
 enum Level { NORMAL, SUPPRESSED, PINNED }
 
-@export var decay_delay := 0.9
-@export var exposed_decay_per_second := 6.0
-@export var covered_decay_per_second := 12.0
+@export var decay_delay := 2.2
+@export var exposed_decay_per_second := 2.5
+@export var covered_decay_per_second := 6.0
 
 var actor: Soldier3D
 var suppression := 0.0
@@ -23,7 +23,10 @@ func _process(delta: float) -> void:
 	time_since_event += delta
 	if actor == null or suppression <= 0.0 or time_since_event <= decay_delay:
 		return
-	var decay := covered_decay_per_second if is_instance_valid(actor.active_cover) else exposed_decay_per_second
+	var directionally_covered := is_instance_valid(actor.active_cover) \
+		and actor.has_method("is_protected_from_position") \
+		and bool(actor.is_protected_from_position(last_source_position))
+	var decay := covered_decay_per_second if directionally_covered else exposed_decay_per_second
 	_set_suppression(suppression - decay * delta)
 
 func report_near_miss(source_position: Vector3, intensity := 1.0) -> void:
@@ -46,6 +49,14 @@ func is_pinned() -> bool:
 
 func get_accuracy_multiplier() -> float:
 	return 1.0 + suppression / 100.0 * 1.8
+
+func get_movement_multiplier() -> float:
+	match level:
+		Level.SUPPRESSED:
+			return 0.52
+		Level.PINNED:
+			return 0.0
+	return 1.0
 
 func get_level_name() -> String:
 	return Level.keys()[level]

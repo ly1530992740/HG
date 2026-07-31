@@ -104,7 +104,7 @@ script = ExtResource("6_zone")
 zone_id = &"right_grass"
 display_name = "Concealed right route"
 size = Vector2(13, 26)
-recon_waypoints = Array[Vector3]([Vector3(-2.3, 0, 13.5), Vector3(-2.3, 0, 9), Vector3(-2.3, 0, 5), Vector3(-2.5, 0, -3.5)])
+recon_waypoints = Array[Vector3]([Vector3(-2.3, 0, 13.5), Vector3(-2.3, 0, 9), Vector3(-2.3, 0, 5), Vector3(-2.5, 0, -5.8)])
 observation_point_path = NodePath("ObservationPoint")
 concealment = 0.9
 cover_value = 0.3
@@ -113,7 +113,7 @@ information_value = 1.4
 zone_color = Color(0.92, 0.78, 0.08, 0.16)
 
 [node name="ObservationPoint" type="Marker3D" parent="RightGrass"]
-position = Vector3(-1, 0, -4)
+position = Vector3(-1, 0, -6)
 
 [node name="GrassVisuals" type="Node3D" parent="."]
 

@@ -1,0 +1,349 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/3d_battles/limited_intel_case_study_3d.gd" id="1_h50is"]
+[ext_resource type="Script" path="res://combat3d/battlefield_registry_3d.gd" id="2_f6wg3"]
+[ext_resource type="Script" path="res://ai3d/tactical_zone_3d.gd" id="3_8b7pu"]
+[ext_resource type="PackedScene" path="res://ai3d/tactical_cover_3d.tscn" id="4_81e7e"]
+[ext_resource type="Script" path="res://ai3d/tactical_cover_3d.gd" id="5_ghdvm"]
+[ext_resource type="Script" path="res://ai3d/squad_coordinator_3d.gd" id="6_s7672"]
+[ext_resource type="PackedScene" path="res://ai3d/soldier_3d.tscn" id="7_uu0ky"]
+[ext_resource type="Script" path="res://ai3d/soldier_3d.gd" id="8_2i537"]
+
+[sub_resource type="Environment" id="EnvironmentMain"]
+background_mode = 1
+background_color = Color(0.47, 0.65, 0.75, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.85, 0.9, 1, 1)
+ambient_light_energy = 0.75
+
+[sub_resource type="StandardMaterial3D" id="FloorMaterial"]
+albedo_color = Color(0.24, 0.31, 0.22, 1)
+
+[sub_resource type="BoxMesh" id="FloorMesh"]
+material = SubResource("FloorMaterial")
+size = Vector3(32, 0.2, 34)
+
+[sub_resource type="BoxShape3D" id="FloorShape"]
+size = Vector3(32, 0.2, 34)
+
+[sub_resource type="StandardMaterial3D" id="GrassMaterial"]
+albedo_color = Color(0.16, 0.48, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="GrassMesh"]
+material = SubResource("GrassMaterial")
+size = Vector3(0.6, 1.1, 0.6)
+
+[sub_resource type="StyleBoxFlat" id="PanelStyle"]
+bg_color = Color(0.03, 0.04, 0.04, 0.82)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.55, 0.65, 0.58, 0.55)
+
+[node name="LimitedIntelCaseStudy3D" type="Node3D" unique_id=1145064750]
+script = ExtResource("1_h50is")
+case_title = "LIMITED INTEL LEFT-FLANK MIRROR"
+defended_route_zone_id = &"right_route"
+flank_route_zone_id = &"left_grass"
+
+[node name="BattlefieldRegistry3D" type="Node" parent="." unique_id=1442766227]
+script = ExtResource("2_f6wg3")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=2048753244]
+environment = SubResource("EnvironmentMain")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=198338340]
+transform = Transform3D(0.88294756, -0.3845686, 0.26927784, 0, 0.57357645, 0.81915206, -0.46947157, -0.72326833, 0.50643796, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=142617935]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 30, 20)
+current = true
+fov = 48.0
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=4967043]
+collision_mask = 0
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor" unique_id=2023678578]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+mesh = SubResource("FloorMesh")
+
+[node name="Collision" type="CollisionShape3D" parent="Floor" unique_id=1375526574]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+shape = SubResource("FloorShape")
+
+[node name="RightRoute" type="Node3D" parent="." unique_id=204414458]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, -1)
+script = ExtResource("3_8b7pu")
+zone_id = &"right_route"
+display_name = "Right defended route"
+size = Vector2(8, 20)
+recon_waypoints = Array[Vector3]([Vector3(-3.8, 0, 10), Vector3(-3.8, 0, 5.4), Vector3(-3.8, 0, -3)])
+observation_point_path = NodePath("ObservationPoint")
+concealment = 0.05
+cover_value = 0.65
+route_exposure = 0.7
+zone_color = Color(0.05, 0.72, 0.85, 0.18)
+
+[node name="ObservationPoint" type="Marker3D" parent="RightRoute" unique_id=873892722]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.9, 0, -4)
+
+[node name="CenterPosition" type="Node3D" parent="." unique_id=1032800390]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+script = ExtResource("3_8b7pu")
+zone_id = &"center_position"
+display_name = "Main defended position"
+size = Vector2(11, 20)
+recon_enabled = false
+cover_value = 0.75
+route_exposure = 0.85
+zone_color = Color(0.92, 0.15, 0.15, 0.16)
+
+[node name="LeftGrass" type="Node3D" parent="." unique_id=1014296944]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.5, 0, -1)
+script = ExtResource("3_8b7pu")
+zone_id = &"left_grass"
+display_name = "Concealed left route"
+size = Vector2(9, 26)
+recon_waypoints = Array[Vector3]([Vector3(2.3, 0, 13.5), Vector3(2.3, 0, 9), Vector3(2.3, 0, 5), Vector3(2.5, 0, -5.8)])
+observation_point_path = NodePath("ObservationPoint")
+concealment = 0.9
+cover_value = 0.3
+route_exposure = 0.15
+information_value = 1.4
+zone_color = Color(0.92, 0.78, 0.08, 0.16)
+
+[node name="ObservationPoint" type="Marker3D" parent="LeftGrass" unique_id=1192557188]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, -6)
+
+[node name="GrassVisuals" type="Node3D" parent="." unique_id=1805277326]
+
+[node name="Grass01" type="MeshInstance3D" parent="GrassVisuals" unique_id=390662836]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.55, 4)
+mesh = SubResource("GrassMesh")
+
+[node name="Grass02" type="MeshInstance3D" parent="GrassVisuals" unique_id=1729308695]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.55, 2)
+mesh = SubResource("GrassMesh")
+
+[node name="Grass03" type="MeshInstance3D" parent="GrassVisuals" unique_id=1948305728]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.55, -1)
+mesh = SubResource("GrassMesh")
+
+[node name="Grass04" type="MeshInstance3D" parent="GrassVisuals" unique_id=1731086431]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.5, 0.55, -4)
+mesh = SubResource("GrassMesh")
+
+[node name="Grass05" type="MeshInstance3D" parent="GrassVisuals" unique_id=1496498966]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.4, 0.55, -7)
+mesh = SubResource("GrassMesh")
+
+[node name="BlueCoverLeft" type="StaticBody3D" parent="." unique_id=484054255 instance=ExtResource("4_81e7e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 0, 7)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 3.4
+material_color = Color(0.32, 0.36, 0.34, 1)
+
+[node name="BlueCoverRight" type="StaticBody3D" parent="." unique_id=1300628545 instance=ExtResource("4_81e7e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 0, 7)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 3.4
+material_color = Color(0.32, 0.36, 0.34, 1)
+
+[node name="CenterRedWall" type="StaticBody3D" parent="." unique_id=356094909 instance=ExtResource("4_81e7e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5.2)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 10.0
+material_color = Color(0.42, 0.33, 0.28, 1)
+
+[node name="LeftRedWall" type="StaticBody3D" parent="." unique_id=1634469744 instance=ExtResource("4_81e7e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, -2.5)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 6.0
+material_color = Color(0.42, 0.33, 0.28, 1)
+
+[node name="LeftDivider" type="StaticBody3D" parent="." unique_id=1221442361 instance=ExtResource("4_81e7e")]
+transform = Transform3D(7.54979e-08, 0, -1, 0, 1, 0, 1, 0, 7.54979e-08, 5.5, 0, -0.5)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 8.0
+cover_height = 2.2
+material_color = Color(0.42, 0.33, 0.28, 1)
+
+[node name="LeftScoutCover" type="StaticBody3D" parent="." unique_id=1263615087 instance=ExtResource("4_81e7e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.2, 0, 4.7)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 3.0
+material_color = Color(0.35, 0.37, 0.33, 1)
+
+[node name="LeftApproachWall" type="StaticBody3D" parent="." unique_id=781369022 instance=ExtResource("4_81e7e")]
+transform = Transform3D(7.54979e-08, 0, -1, 0, 1, 0, 1, 0, 7.54979e-08, 5.5, 0, 5.75)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 4.5
+cover_height = 2.2
+material_color = Color(0.35, 0.37, 0.33, 1)
+
+[node name="LeftObservationCover" type="StaticBody3D" parent="." unique_id=818038879 instance=ExtResource("4_81e7e")]
+transform = Transform3D(7.54979e-08, 0, -1, 0, 1, 0, 1, 0, 7.54979e-08, 6.8, 0, -4.2)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 3.0
+material_color = Color(0.35, 0.37, 0.33, 1)
+
+[node name="RightApproachWall" type="StaticBody3D" parent="." unique_id=1656838043 instance=ExtResource("4_81e7e")]
+transform = Transform3D(7.54979e-08, 0, -1, 0, 1, 0, 1, 0, 7.54979e-08, -6, 0, 8)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 7.0
+cover_height = 2.2
+material_color = Color(0.35, 0.37, 0.33, 1)
+
+[node name="RightDivider" type="StaticBody3D" parent="." unique_id=1443544791 instance=ExtResource("4_81e7e")]
+transform = Transform3D(7.54979e-08, 0, -1, 0, 1, 0, 1, 0, 7.54979e-08, -5.6, 0, -0.5)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 8.0
+cover_height = 2.2
+material_color = Color(0.42, 0.33, 0.28, 1)
+
+[node name="RightGrassCover" type="StaticBody3D" parent="." unique_id=1270027531 instance=ExtResource("4_81e7e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.5, 0, -2.5)
+collision_mask = 0
+script = ExtResource("5_ghdvm")
+cover_length = 3.0
+cover_height = 0.9
+material_color = Color(0.34, 0.38, 0.3, 1)
+
+[node name="RedSquad" type="Node3D" parent="." unique_id=1659867351]
+script = ExtResource("6_s7672")
+squad_id = &"case_red_defenders"
+squad_display_name = "Red defense group"
+can_target_players = false
+use_advanced_tactics = true
+mission_target_path = NodePath("MissionTarget")
+mission_radius = 14.0
+mission_clear_confirmation_seconds = 0.6
+contact_report_delay_max = 0.65
+
+[node name="MissionTarget" type="Marker3D" parent="RedSquad" unique_id=1792554106]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -7)
+
+[node name="Members" type="Node3D" parent="RedSquad" unique_id=1220523421]
+
+[node name="RedLeftMG" type="CharacterBody3D" parent="RedSquad/Members" unique_id=347259538 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 11.2, 0, -4.1)
+collision_layer = 2
+script = ExtResource("8_2i537")
+combat_role = 2
+can_target_players = false
+show_status_label = true
+
+[node name="RedLeftRifle" type="CharacterBody3D" parent="RedSquad/Members" unique_id=1499660942 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 8.7, 0, -4.1)
+collision_layer = 2
+script = ExtResource("8_2i537")
+can_target_players = false
+show_status_label = true
+
+[node name="RedCenterMG" type="CharacterBody3D" parent="RedSquad/Members" unique_id=533585269 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 3.3, 0, -7)
+collision_layer = 2
+script = ExtResource("8_2i537")
+combat_role = 2
+can_target_players = false
+show_status_label = true
+
+[node name="RedRifleA" type="CharacterBody3D" parent="RedSquad/Members" unique_id=560513527 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 1.1, 0, -7)
+collision_layer = 2
+script = ExtResource("8_2i537")
+can_target_players = false
+show_status_label = true
+
+[node name="RedRifleB" type="CharacterBody3D" parent="RedSquad/Members" unique_id=710535309 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -1.1, 0, -7)
+collision_layer = 2
+script = ExtResource("8_2i537")
+can_target_players = false
+show_status_label = true
+
+[node name="RedRifleC" type="CharacterBody3D" parent="RedSquad/Members" unique_id=1607314453 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -3.3, 0, -7)
+collision_layer = 2
+script = ExtResource("8_2i537")
+can_target_players = false
+show_status_label = true
+
+[node name="BlueSquad" type="Node3D" parent="." unique_id=910661399]
+script = ExtResource("6_s7672")
+squad_id = &"case_blue_attackers"
+squad_display_name = "Blue assault group"
+combat_team = 2
+can_target_players = false
+use_advanced_tactics = true
+mission_target_path = NodePath("MissionTarget")
+mission_radius = 14.0
+mission_clear_confirmation_seconds = 0.6
+contact_report_delay_max = 0.65
+
+[node name="MissionTarget" type="Marker3D" parent="BlueSquad" unique_id=1704099108]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -7)
+
+[node name="Members" type="Node3D" parent="BlueSquad" unique_id=693785644]
+
+[node name="BlueSMGScout" type="CharacterBody3D" parent="BlueSquad/Members" unique_id=1209671716 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.7, 0, 11.5)
+collision_layer = 2
+script = ExtResource("8_2i537")
+combat_team = 2
+combat_role = 1
+can_target_players = false
+show_status_label = true
+
+[node name="BlueRifleA" type="CharacterBody3D" parent="BlueSquad/Members" unique_id=1255376834 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.9, 0, 12.2)
+collision_layer = 2
+script = ExtResource("8_2i537")
+combat_team = 2
+can_target_players = false
+show_status_label = true
+
+[node name="BlueRifleB" type="CharacterBody3D" parent="BlueSquad/Members" unique_id=790143333 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0, 12.2)
+collision_layer = 2
+script = ExtResource("8_2i537")
+combat_team = 2
+can_target_players = false
+show_status_label = true
+
+[node name="BlueRifleC" type="CharacterBody3D" parent="BlueSquad/Members" unique_id=1331321778 instance=ExtResource("7_uu0ky")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.7, 0, 11.5)
+collision_layer = 2
+script = ExtResource("8_2i537")
+combat_team = 2
+can_target_players = false
+show_status_label = true
+
+[node name="DebugLayer" type="CanvasLayer" parent="." unique_id=1682380342]
+
+[node name="Panel" type="PanelContainer" parent="DebugLayer" unique_id=113573198]
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 350.0
+offset_bottom = 390.0
+theme_override_styles/panel = SubResource("PanelStyle")
+
+[node name="DebugLabel" type="Label" parent="DebugLayer/Panel" unique_id=75195454]
+custom_minimum_size = Vector2(320, 350)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.9, 0.96, 0.9, 1)
+text = "LIMITED INTEL CASE STUDY"
+vertical_alignment = 1

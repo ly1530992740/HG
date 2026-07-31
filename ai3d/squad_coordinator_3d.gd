@@ -29,7 +29,7 @@ signal leader_changed(previous: Soldier3D, current: Soldier3D)
 @export var autonomous_goap := false
 @export var knows_primary_target_at_start := false
 @export var primary_target_path: NodePath
-@export_range(0.2, 5.0, 0.1) var evaluation_interval := 0.5
+@export_range(0.2, 5.0, 0.1) var evaluation_interval := 2.5
 @export_range(1.0, 30.0, 0.5) var qwen_reconsider_interval := 5.0
 @export_range(0.1, 1.0, 0.05) var low_health_cover_ratio := 0.3
 @export_range(1, 8, 1) var flank_member_count := 3
@@ -67,6 +67,8 @@ var _situation_version := 1
 var _qwen_phases: Array[Array] = []
 var _qwen_phase_index := -1
 var _advanced_tactics: SquadAdvancedTactics3D
+var _has_runtime_mission_target := false
+var _runtime_mission_target_position := Vector3.ZERO
 
 func _ready() -> void:
 	add_to_group("squad3d")
@@ -135,6 +137,12 @@ func is_member(actor: Soldier3D) -> bool:
 func get_advanced_tactics() -> SquadAdvancedTactics3D:
 	return _advanced_tactics
 
+func share_contact_report(observer: Soldier3D, target: Node3D, position: Vector3, confidence: float) -> void:
+	for member in _living_members():
+		if member == observer:
+			continue
+		member.receive_squad_contact(position, target, confidence * 0.62)
+
 func request_advanced_candidate(state: Dictionary, candidates: Array[Dictionary], fallback_id: String, context_version: int) -> void:
 	if not use_qwen or candidates.size() <= 1:
 		return
@@ -152,8 +160,18 @@ func request_advanced_candidate(state: Dictionary, candidates: Array[Dictionary]
 	qwen_debug_updated.emit(last_qwen_input, last_qwen_output, last_command_summary)
 
 func get_mission_target_position() -> Vector3:
+	if _has_runtime_mission_target:
+		return _runtime_mission_target_position
 	var target_node := get_node_or_null(mission_target_path) as Node3D
 	return target_node.global_position if target_node != null else global_position
+
+func set_runtime_mission_target(position: Vector3, radius := -1.0) -> void:
+	_has_runtime_mission_target = true
+	_runtime_mission_target_position = position
+	if radius > 0.0:
+		mission_radius = radius
+	if _advanced_tactics != null:
+		_advanced_tactics.refresh_mission_configuration()
 
 func is_position_allowed_by_mission(position: Vector3) -> bool:
 	if not use_advanced_tactics or _advanced_tactics == null or not _advanced_tactics.mission.is_defense_locked():
@@ -188,6 +206,8 @@ func set_known_combat_objective(target: Node3D) -> void:
 		_situation_version += 1
 		_last_qwen_request_msec = -100000
 	known_target = target
+	if use_advanced_tactics and _advanced_tactics != null:
+		return
 	for member in members:
 		if is_instance_valid(member):
 			member.current_target = target
@@ -284,12 +304,11 @@ func _elect_leader() -> void:
 	if is_instance_valid(leader) and leader in living and leader.can_be_squad_leader:
 		return
 	leader = null
-	if use_qwen:
-		for candidate in living:
-			if not candidate.can_be_squad_leader:
-				continue
-			if leader == null or candidate.leader_priority > leader.leader_priority:
-				leader = candidate
+	for candidate in living:
+		if not candidate.can_be_squad_leader:
+			continue
+		if leader == null or candidate.leader_priority > leader.leader_priority:
+			leader = candidate
 	for member in living:
 		member.set_squad_leader(member == leader)
 	if previous != leader:

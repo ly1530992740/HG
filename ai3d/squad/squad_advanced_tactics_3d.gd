@@ -1,6 +1,8 @@
 extends Node
 class_name SquadAdvancedTactics3D
 
+const CONTACT_EPISODE_RESET_MSEC := 30000
+
 signal belief_report_accepted(report: SquadContactReport3D)
 signal tactical_candidates_evaluated(candidates: Array[Dictionary], selected_id: String)
 signal mission_state_changed(state_name: String)
@@ -8,13 +10,18 @@ signal mission_state_changed(state_name: String)
 var coordinator: SquadCoordinator3D
 var belief := SquadBeliefState3D.new()
 var mission := SquadMissionController3D.new()
-var planner := SquadTacticalPlanner3D.new()
+var utility := SquadUtilityEvaluator3D.new()
+var htn := SquadHtnPlanner3D.new()
+var influence := SquadInfluenceMap3D.new()
+var replan_policy := SquadReplanPolicy3D.new()
+var fire_superiority := FireSuperiorityAssessment3D.new()
 var scheduler: SquadTaskScheduler3D
 var dispatcher: SquadDirectiveDispatcher3D
 var zones: Array[TacticalZone3D] = []
 
 var _pending_reports: Array[Dictionary] = []
 var _pending_zone_observations: Dictionary = {}
+var _persistent_redispatches: Dictionary = {}
 var _last_queued_report: Dictionary = {}
 var _directive_bindings: Dictionary = {}
 var _evaluation_timer := 0.0
@@ -23,11 +30,16 @@ var _plan_sequence := 0
 var _active_intent: StringName = &""
 var _active_candidate_id := ""
 var _contact_started_msec := 0
+var _last_contact_report_msec := 0
 var _contact_cover_complete := false
 var _recon_complete := false
 var _qwen_context_version := 1
 var _qwen_context_signature := ""
 var _rng := RandomNumberGenerator.new()
+var _last_fire_assessment: Dictionary = {}
+var _influence_timer := 0.0
+var _pending_replan_level: SquadReplanPolicy3D.Level = SquadReplanPolicy3D.Level.FULL_TACTIC
+var _last_decision_snapshot: SquadDecisionSnapshot3D
 
 func configure(owner_coordinator: SquadCoordinator3D) -> void:
 	coordinator = owner_coordinator
@@ -42,10 +54,14 @@ func configure(owner_coordinator: SquadCoordinator3D) -> void:
 	scheduler.task_activated.connect(dispatcher.dispatch)
 	dispatcher.directive_bound.connect(_on_directive_bound)
 	dispatcher.task_member_ready.connect(scheduler.mark_member_ready)
+	dispatcher.task_member_succeeded.connect(scheduler.mark_member_succeeded)
 	dispatcher.task_member_failed.connect(_on_task_member_failed)
 	scheduler.plan_completed.connect(_on_plan_completed)
 	scheduler.task_state_changed.connect(_on_task_state_changed)
 	mission.state_changed.connect(_on_mission_state_changed)
+	influence.configure(3.0, 42.0)
+	for member in coordinator.get_configured_member_actors():
+		member.set_squad_influence_map(influence)
 	call_deferred("_finish_configuration")
 
 func _finish_configuration() -> void:
@@ -53,6 +69,12 @@ func _finish_configuration() -> void:
 	for node in get_tree().get_nodes_in_group("tactical_zone3d"):
 		if node is TacticalZone3D:
 			zones.append(node as TacticalZone3D)
+	refresh_mission_configuration()
+	_force_evaluation = true
+
+func refresh_mission_configuration() -> void:
+	if coordinator == null:
+		return
 	mission.configure(
 		coordinator.mission_type,
 		coordinator.get_mission_target_position(),
@@ -65,13 +87,26 @@ func _finish_configuration() -> void:
 
 func process(delta: float) -> void:
 	_process_reports()
+	_monitor_persistent_redispatches()
 	_monitor_recon_tasks()
+	_monitor_cover_tasks()
 	belief.update(delta)
+	var recent_identified_contact := _last_contact_report_msec > 0 \
+			and Time.get_ticks_msec() - _last_contact_report_msec < int(belief.contact_memory_seconds * 1000.0)
+	var unresolved_contact: bool = _contact_started_msec > 0 and (
+		not _recon_complete or not belief.get_living_contacts(0.05).is_empty() \
+				or recent_identified_contact \
+				or belief.has_recent_threat_in_radius(mission.target_position, mission.target_radius)
+	)
 	mission.update(
 		delta,
 		coordinator.get_squad_center(),
-		belief.has_known_hostile_in_radius(mission.target_position, mission.target_radius)
+		belief.has_known_hostile_in_radius(mission.target_position, mission.target_radius) or unresolved_contact
 	)
+	_influence_timer -= delta
+	if _influence_timer <= 0.0:
+		_influence_timer = 0.25
+		_rebuild_influence()
 	_evaluation_timer -= delta
 	if _force_evaluation or _evaluation_timer <= 0.0:
 		_force_evaluation = false
@@ -103,6 +138,11 @@ func get_debug_snapshot() -> Dictionary:
 		"candidate_id": _active_candidate_id,
 		"belief": belief.make_tactical_snapshot(zones),
 		"tasks": scheduler.get_summary(),
+		"fire_superiority": _last_fire_assessment.duplicate(true),
+		"influence_version": influence.version,
+		"htn_method": htn.last_selected_method,
+		"htn_methods": htn.last_method_scores.duplicate(true),
+		"replan_level": SquadReplanPolicy3D.Level.keys()[_pending_replan_level],
 	}
 
 func get_qwen_context_version() -> int:
@@ -140,25 +180,42 @@ func _process_reports() -> void:
 		if report == null or not is_instance_valid(report.get_observer()) or report.get_observer().dead:
 			continue
 		var previous_contact_count := belief.get_estimated_enemy_count()
+		var previous_sector_count := _known_contact_sector_count()
 		belief.merge_report(report)
 		belief_report_accepted.emit(report)
+		coordinator.share_contact_report(report.get_observer(), report.get_target(), report.position, report.confidence)
 		if report.stimulus != SquadContactReport3D.Stimulus.ZONE_OBSERVED:
 			var best := belief.get_best_contact()
 			coordinator.known_target = best.get_target() if best != null else null
 			var next_contact_count := belief.get_estimated_enemy_count()
-			if previous_contact_count == 0 and next_contact_count > 0:
+			var replan_level := replan_policy.classify_report(report, previous_contact_count, next_contact_count)
+			if mission.is_defense_locked() and previous_contact_count > 0 \
+				and _known_contact_sector_count() > previous_sector_count:
+				replan_level = SquadReplanPolicy3D.Level.FULL_TACTIC
+			_request_replan(replan_level)
+			var starts_new_contact_episode := _contact_started_msec <= 0 \
+					or _last_contact_report_msec <= 0 \
+					or now - _last_contact_report_msec >= CONTACT_EPISODE_RESET_MSEC
+			if previous_contact_count == 0 and next_contact_count > 0 and starts_new_contact_episode:
 				_contact_started_msec = now
 				_contact_cover_complete = false
 				_recon_complete = false
-			if next_contact_count != previous_contact_count or report.stimulus == SquadContactReport3D.Stimulus.DAMAGE:
-				if next_contact_count != previous_contact_count and _active_intent == &"DEFEND_CONTACT":
-					_active_candidate_id = ""
-				_force_evaluation = true
+			if report.get_target() != null and next_contact_count > 0:
+				_last_contact_report_msec = now
 			_try_complete_recon_from_contact(report)
 		if report.stimulus == SquadContactReport3D.Stimulus.ZONE_OBSERVED:
 			_pending_zone_observations.erase(report.zone_id)
 			_recon_complete = _all_recon_zones_observed()
-			_force_evaluation = true
+			# Route utility must use the observation that triggered this tactical replan.
+			_rebuild_influence()
+			_influence_timer = 0.25
+			if _recon_complete:
+				_request_replan(SquadReplanPolicy3D.Level.FULL_TACTIC)
+				# Let delayed reports and the influence map settle before committing the route choice.
+				_force_evaluation = false
+				_evaluation_timer = 0.8
+			else:
+				_request_replan(SquadReplanPolicy3D.Level.PLAN_REPAIR)
 
 func _evaluate() -> void:
 	if coordinator.get_configured_member_actors().is_empty():
@@ -166,14 +223,15 @@ func _evaluate() -> void:
 	if not _pending_zone_observations.is_empty():
 		return
 	var contact_elapsed := 0.0 if _contact_started_msec <= 0 else float(Time.get_ticks_msec() - _contact_started_msec) / 1000.0
-	var candidates := planner.build_candidates(
+	_last_fire_assessment = fire_superiority.assess(coordinator.get_living_members(), belief.get_estimated_enemy_count())
+	_last_decision_snapshot = SquadDecisionSnapshot3D.capture(belief, mission, coordinator.get_living_members(), _last_fire_assessment)
+	var candidates := utility.build_candidates(
+		_last_decision_snapshot,
 		belief,
 		zones,
-		coordinator.get_living_members(),
-		mission,
+		influence,
 		_contact_cover_complete,
 		_recon_complete,
-		_active_intent,
 		contact_elapsed
 	)
 	if candidates.is_empty():
@@ -181,15 +239,31 @@ func _evaluate() -> void:
 	_update_qwen_context(candidates)
 	var selected: Dictionary = candidates[0]
 	tactical_candidates_evaluated.emit(candidates, String(selected.get("id", "")))
-	_apply_candidate(selected, "UTILITY")
+	var level := _pending_replan_level
+	_pending_replan_level = SquadReplanPolicy3D.Level.NONE
+	var active_plan := scheduler.active_plan != null
+	if active_plan and _active_plan_has_failed_task():
+		level = SquadReplanPolicy3D.Level.FULL_TACTIC
+	var immediate_contact_drill := String(selected.get("kind", "")) == "CONTACT_COVER"
+	var should_apply := false
+	if immediate_contact_drill:
+		should_apply = not active_plan or _active_candidate_id != "CONTACT_COVER" or _active_plan_has_failed_task()
+	else:
+		should_apply = replan_policy.should_apply(
+			selected, candidates, _active_candidate_id, level, active_plan, Time.get_ticks_msec()
+		)
+	if should_apply:
+		_apply_candidate(selected, "UTILITY", "", active_plan and String(selected.get("id", "")) == _active_candidate_id)
 	coordinator.request_advanced_candidate(
 		get_qwen_snapshot(), candidates, String(selected.get("id", "")), _qwen_context_version
 	)
 
 func apply_qwen_candidate(candidate_id: String, reason: String) -> bool:
-	var candidates := planner.build_candidates(
-		belief, zones, coordinator.get_living_members(), mission,
-		_contact_cover_complete, _recon_complete, _active_intent,
+	_last_fire_assessment = fire_superiority.assess(coordinator.get_living_members(), belief.get_estimated_enemy_count())
+	var snapshot := SquadDecisionSnapshot3D.capture(belief, mission, coordinator.get_living_members(), _last_fire_assessment)
+	var candidates := utility.build_candidates(
+		snapshot, belief, zones, influence,
+		_contact_cover_complete, _recon_complete,
 		0.0 if _contact_started_msec <= 0 else float(Time.get_ticks_msec() - _contact_started_msec) / 1000.0
 	)
 	for candidate in candidates:
@@ -198,19 +272,23 @@ func apply_qwen_candidate(candidate_id: String, reason: String) -> bool:
 			return true
 	return false
 
-func _apply_candidate(candidate: Dictionary, source: String, reason_override := "") -> void:
+func _apply_candidate(candidate: Dictionary, source: String, reason_override := "", patch_existing := false) -> void:
 	var candidate_id := String(candidate.get("id", ""))
 	var kind := StringName(candidate.get("kind", ""))
-	if candidate_id == _active_candidate_id and scheduler.active_plan != null:
+	if candidate_id == _active_candidate_id and scheduler.active_plan != null and not patch_existing:
 		return
 	_plan_sequence += 1
-	var plan := planner.compile_candidate(candidate, belief, coordinator.get_living_members(), mission, _plan_sequence)
+	var snapshot := _last_decision_snapshot
+	if snapshot == null:
+		snapshot = SquadDecisionSnapshot3D.capture(belief, mission, coordinator.get_living_members(), _last_fire_assessment)
+	var plan := htn.compile(candidate, snapshot, belief, zones, influence, mission, _plan_sequence)
 	if plan == null:
 		return
 	if not reason_override.is_empty():
 		plan.reason = reason_override
 	plan.source = source
-	if not scheduler.start_plan(plan):
+	var accepted := scheduler.patch_plan(plan) if patch_existing else scheduler.start_plan(plan)
+	if not accepted:
 		return
 	_active_candidate_id = candidate_id
 	_active_intent = kind
@@ -219,6 +297,7 @@ func _apply_candidate(candidate: Dictionary, source: String, reason_override := 
 	coordinator.last_command_source = source
 	coordinator.last_command_summary = "%s | %s" % [candidate_id, plan.reason]
 	coordinator.command_changed.emit(coordinator.current_plan, coordinator.last_command_summary, source)
+	replan_policy.note_applied()
 	print("[TACTICAL3D_PLAN] squad=%s mission=%s belief=%d candidate=%s source=%s" % [
 		coordinator.squad_display_name, mission.get_state_name(), belief.version, candidate_id, source
 	])
@@ -234,15 +313,55 @@ func on_member_directive_completed(member: Soldier3D, directive: SquadDirective3
 	_directive_bindings.erase(key)
 	var task_id := StringName(binding.get("task_id", ""))
 	var task := scheduler.tasks_by_id.get(task_id) as SquadTask3D
-	if task != null and task.type in [SquadTask3D.Type.RECON_ZONE, SquadTask3D.Type.FLANK_ZONE]:
+	if task != null and task.type == SquadTask3D.Type.RECON_ZONE:
 		_queue_zone_observation(member, task.zone_id)
+	if task != null and task.persistent:
+		scheduler.mark_member_ready(task_id, StringName(member.name))
+		_queue_persistent_redispatch(task, member)
+		return
 	scheduler.mark_member_succeeded(task_id, StringName(member.name))
 
+func _queue_persistent_redispatch(task: SquadTask3D, member: Soldier3D) -> void:
+	if task == null or member == null or task.type == SquadTask3D.Type.HOLD_OBJECTIVE:
+		return
+	var key := "%s:%s" % [task.task_id, member.name]
+	_persistent_redispatches[key] = {
+		"task": task,
+		"member_id": StringName(member.name),
+		"due_at": Time.get_ticks_msec() + _rng.randi_range(250, 600),
+	}
+
+func _monitor_persistent_redispatches() -> void:
+	if scheduler == null:
+		_persistent_redispatches.clear()
+		return
+	var now := Time.get_ticks_msec()
+	for key in _persistent_redispatches.keys():
+		var pending: Dictionary = _persistent_redispatches.get(key, {})
+		if now < int(pending.get("due_at", 0)):
+			continue
+		_persistent_redispatches.erase(key)
+		var task := pending.get("task") as SquadTask3D
+		var member_id := StringName(pending.get("member_id", ""))
+		if task == null or scheduler.tasks_by_id.get(task.task_id) != task \
+				or task.state not in [SquadTask3D.State.ACTIVE, SquadTask3D.State.READY]:
+			continue
+		var member := coordinator.get_member_by_id(String(member_id))
+		if member == null or member.dead or (member.active_directive != null \
+				and member.active_directive.version > member.last_completed_directive_version):
+			continue
+		dispatcher.redispatch_persistent_member(task, member)
+
 func on_member_died(member: Soldier3D) -> void:
+	var active_task_failed := false
 	for task in scheduler.tasks_by_id.values():
 		if String(member.name) in (task as SquadTask3D).recipient_ids:
 			scheduler.mark_member_failed((task as SquadTask3D).task_id, StringName(member.name))
-	_force_evaluation = true
+			active_task_failed = active_task_failed or (task as SquadTask3D).state == SquadTask3D.State.FAILED
+	_request_replan(
+		SquadReplanPolicy3D.Level.FULL_TACTIC if active_task_failed \
+		else SquadReplanPolicy3D.Level.PLAN_REPAIR
+	)
 
 func _queue_zone_observation(observer: Soldier3D, zone_id: StringName) -> void:
 	var zone := get_zone_by_id(zone_id)
@@ -253,6 +372,8 @@ func _queue_zone_observation(observer: Soldier3D, zone_id: StringName) -> void:
 		if known_contact.reported_by.has(String(observer.name)):
 			visible_ids.append(known_contact.contact_id)
 	for candidate in observer.perception_component.find_visible_hostiles():
+		if not zone.contains_world_position(candidate.global_position):
+			continue
 		var contact_report := SquadContactReport3D.new().configure_contact(
 			observer, candidate, candidate.global_position, 1.0, SquadContactReport3D.Stimulus.VISUAL
 		)
@@ -301,6 +422,36 @@ func _monitor_recon_tasks() -> void:
 			if member != null and member.is_pinned() and zone.contains_world_position(member.global_position):
 				_complete_recon_information_goal(task, member, "pinned after entering assigned zone")
 
+func _monitor_cover_tasks() -> void:
+	if scheduler == null or scheduler.active_plan == null:
+		return
+	for value in scheduler.active_plan.tasks:
+		var task := value as SquadTask3D
+		if task == null or task.type != SquadTask3D.Type.TAKE_COVER or task.state != SquadTask3D.State.ACTIVE:
+			continue
+		for member_id in task.recipient_ids:
+			if task.member_states.get(StringName(member_id)) != SquadTask3D.State.ACTIVE:
+				continue
+			var member := coordinator.get_member_by_id(String(member_id))
+			if member == null:
+				continue
+			var already_protected := is_instance_valid(member.active_cover) \
+				and member.is_protected_from_position(task.target_position)
+			var pinned_low := member.is_pinned() \
+				and (is_instance_valid(member.active_cover) or member.stance == Soldier3D.Stance.PRONE)
+			var timed_out := task.activated_msec > 0 and Time.get_ticks_msec() - task.activated_msec >= 4500
+			if not already_protected and not pinned_low and not timed_out:
+				continue
+			if member.active_directive != null:
+				_directive_bindings.erase("%s:%d" % [member.name, member.active_directive.version])
+			if timed_out and not is_instance_valid(member.active_cover):
+				member.set_stance(Soldier3D.Stance.PRONE)
+			scheduler.mark_member_succeeded(task.task_id, StringName(member.name))
+			var ready_reason := "already_protected" if already_protected else ("timeout_low" if timed_out else "pinned_low")
+			print("[TACTICAL3D_COVER_READY] squad=%s member=%s reason=%s" % [
+				coordinator.squad_display_name, member.name, ready_reason
+			])
+
 func _get_active_recon_task_for(member: Soldier3D) -> SquadTask3D:
 	if member == null or scheduler == null or scheduler.active_plan == null:
 		return null
@@ -341,11 +492,12 @@ func _on_plan_completed(plan: SquadCommandPlan3D) -> void:
 		&"RECON_SPLIT":
 			_recon_complete = _all_recon_zones_observed()
 	_active_candidate_id = ""
-	_force_evaluation = true
+	_request_replan(SquadReplanPolicy3D.Level.FULL_TACTIC)
 
 func _on_task_state_changed(task: SquadTask3D, _previous: SquadTask3D.State, current: SquadTask3D.State) -> void:
 	if current == SquadTask3D.State.FAILED:
 		print("[TACTICAL3D_TASK_FAIL] squad=%s task=%s" % [coordinator.squad_display_name, task.task_id])
+		_request_replan(SquadReplanPolicy3D.Level.PLAN_REPAIR)
 	if scheduler.active_plan != null and scheduler.active_plan.intent == &"RECON_SPLIT":
 		_resolve_partial_recon_plan()
 
@@ -353,11 +505,17 @@ func _on_task_member_failed(task_id: StringName, member_id: StringName, reason: 
 	print("[TACTICAL3D_MEMBER_FAIL] squad=%s task=%s member=%s reason=%s" % [coordinator.squad_display_name, task_id, member_id, reason])
 	scheduler.mark_member_failed(task_id, member_id)
 
-func _on_mission_state_changed(_previous: SquadMissionController3D.State, current: SquadMissionController3D.State) -> void:
+func _on_mission_state_changed(previous: SquadMissionController3D.State, current: SquadMissionController3D.State) -> void:
 	mission_state_changed.emit(SquadMissionController3D.State.keys()[current])
-	_active_candidate_id = ""
-	_force_evaluation = true
 	coordinator.refresh_member_mission_constraints()
+	var strategic_states := [
+		SquadMissionController3D.State.HOLDING,
+		SquadMissionController3D.State.RETURNING,
+		SquadMissionController3D.State.COMPLETE,
+	]
+	if current in strategic_states or previous in strategic_states:
+		_active_candidate_id = ""
+		_request_replan(SquadReplanPolicy3D.Level.FULL_TACTIC)
 
 func _stimulus_from_name(value: StringName) -> SquadContactReport3D.Stimulus:
 	match value:
@@ -375,6 +533,21 @@ func _all_recon_zones_observed() -> bool:
 		if not belief.is_zone_observed(zone.zone_id):
 			return false
 	return found
+
+func _known_contact_sector_count() -> int:
+	var sectors := {}
+	var center := coordinator.get_squad_center() if coordinator != null else Vector3.ZERO
+	for contact in belief.get_living_contacts():
+		var direction := contact.last_known_position - center
+		direction.y = 0.0
+		if direction.length_squared() > 0.01:
+			sectors[roundi(atan2(direction.z, direction.x) / (PI * 0.5))] = true
+	return sectors.size()
+
+func _active_plan_has_failed_task() -> bool:
+	if scheduler == null or scheduler.active_plan == null:
+		return false
+	return scheduler.active_plan.tasks.any(func(task: SquadTask3D): return task.state == SquadTask3D.State.FAILED)
 
 func _update_qwen_context(candidates: Array[Dictionary]) -> void:
 	var candidate_ids := PackedStringArray()
@@ -417,4 +590,23 @@ func _resolve_partial_recon_plan() -> void:
 	scheduler.cancel_active_plan("partial recon complete")
 	_recon_complete = _all_recon_zones_observed()
 	_active_candidate_id = ""
-	_force_evaluation = true
+	_request_replan(SquadReplanPolicy3D.Level.PLAN_REPAIR)
+
+func _request_replan(level: SquadReplanPolicy3D.Level) -> void:
+	_pending_replan_level = maxi(int(_pending_replan_level), int(level))
+	if level >= SquadReplanPolicy3D.Level.PLAN_REPAIR:
+		_force_evaluation = true
+
+func _rebuild_influence() -> void:
+	if coordinator == null:
+		return
+	var assessment := fire_superiority.assess(coordinator.get_living_members(), belief.get_estimated_enemy_count())
+	var snapshot := SquadDecisionSnapshot3D.capture(belief, mission, coordinator.get_living_members(), assessment)
+	influence.rebuild(
+		belief,
+		zones,
+		snapshot.members,
+		coordinator.get_registered_covers(),
+		snapshot.squad_center,
+		mission.target_position
+	)

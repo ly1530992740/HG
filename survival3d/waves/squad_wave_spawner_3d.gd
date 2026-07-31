@@ -87,9 +87,13 @@ func _spawn_current_wave() -> void:
 			serial += 1
 			squad.squad_id = StringName("wave3d_%d_%d_%d" % [current_wave_index + 1, serial, get_instance_id()])
 			squad.free_when_all_members_dead = true
+			squad.use_advanced_tactics = true
+			squad.use_qwen = false
+			var target := _find_target()
+			if target != null:
+				squad.set_runtime_mission_target(target.global_position, 9.0)
 			get_tree().current_scene.add_child(squad)
 			squad.global_position = _random_ring_position()
-			var target := _find_target()
 			if target != null:
 				squad.set_known_combat_objective(target)
 			active_squads.append(squad)

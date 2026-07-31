@@ -24,7 +24,7 @@ var agent: GoapAgent
 ## Shortcut to the agent's currently active [GoapGoal].
 var goal: GoapGoal:
 	get:
-		return agent._current_goal
+		return agent.get_context_goal()
 
 ## World-state changes this action produces when completed.
 ## Keys are state names, values are the target values.
@@ -39,6 +39,9 @@ var preconditions: Dictionary = {}
 
 ## If [code]false[/code], the planner will skip this action entirely.
 @export var enabled: bool = true
+
+## If false, ordinary goal changes wait for this action to finish.
+@export var interruptible := true
 
 
 ## Called by [GoapAgent] during initialization. Stores references to the
@@ -56,6 +59,24 @@ func get_action_name(): return self.name
 ## Override to add dynamic validation (e.g. cooldowns, resource checks).
 func is_valid() -> bool:
 	return enabled
+
+
+func is_valid_for_planning(_predicted_state: Dictionary) -> bool:
+	return is_valid()
+
+
+func is_valid_at_runtime() -> bool:
+	if not is_valid():
+		return false
+	var required := get_preconditions()
+	for key in required:
+		if not GoapWorldState.is_satisfied(_world_state.get_state(key), required[key]):
+			return false
+	return true
+
+
+func is_interruptible() -> bool:
+	return interruptible
 
 
 ## Returns the cost of this action for plan evaluation.

@@ -24,7 +24,10 @@ func merge_report(report: SquadContactReport3D) -> void:
 	if report.estimated_role >= 0:
 		estimated_role = report.estimated_role
 	estimated_firepower = maxf(0.25, report.estimated_firepower)
-	enemy_awareness_probability = clampf(report.enemy_awareness_probability, 0.0, 1.0)
+	enemy_awareness_probability = maxf(
+		enemy_awareness_probability * 0.95,
+		clampf(report.enemy_awareness_probability, 0.0, 1.0)
+	)
 	stimulus = SquadContactReport3D.Stimulus.keys()[report.stimulus].to_lower()
 	reported_by[String(report.observer_id)] = report.timestamp_msec
 
@@ -40,4 +43,3 @@ func get_decayed_confidence(memory_seconds: float, now_msec := Time.get_ticks_ms
 	if memory_seconds <= 0.0:
 		return 0.0
 	return confidence * clampf(1.0 - age_seconds(now_msec) / memory_seconds, 0.0, 1.0)
-

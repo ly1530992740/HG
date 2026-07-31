@@ -47,6 +47,13 @@ func can_see(candidate: Node3D) -> bool:
 		var threshold := cos(deg_to_rad(actor.field_of_view_degrees * 0.5))
 		if actor.logical_forward.normalized().dot(to_target.normalized()) < threshold:
 			return false
+	return has_line_of_sight(candidate)
+
+func has_line_of_sight(candidate: Node3D) -> bool:
+	if actor == null or not is_instance_valid(candidate):
+		return false
+	if not _is_within_effective_sight(candidate):
+		return false
 	var origin := actor.global_position + Vector3.UP * 1.45
 	var endpoint: Vector3 = candidate.get_aim_point() if candidate.has_method("get_aim_point") else candidate.global_position + Vector3.UP
 	if candidate.has_method("get_visibility_multiplier") \

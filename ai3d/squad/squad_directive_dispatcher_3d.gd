@@ -3,6 +3,7 @@ class_name SquadDirectiveDispatcher3D
 
 signal directive_bound(task_id: StringName, member_id: StringName, directive_version: int)
 signal task_member_ready(task_id: StringName, member_id: StringName)
+signal task_member_succeeded(task_id: StringName, member_id: StringName)
 signal task_member_failed(task_id: StringName, member_id: StringName, reason: String)
 
 var coordinator: SquadCoordinator3D
@@ -35,8 +36,29 @@ func dispatch(task: SquadTask3D) -> void:
 			_dispatch_fire_task(task, recipients, target, SquadDirective3D.Type.SUPPRESS)
 		SquadTask3D.Type.ATTACK_CONTACT:
 			_dispatch_fire_task(task, recipients, target, SquadDirective3D.Type.ATTACK)
+		SquadTask3D.Type.AIM_CONTACT:
+			_dispatch_fire_task(task, recipients, target, SquadDirective3D.Type.AIM)
 		SquadTask3D.Type.HOLD_OBJECTIVE:
 			_dispatch_hold(task, recipients)
+		SquadTask3D.Type.RECOVER_IN_COVER:
+			_dispatch_recover(task, recipients)
+
+func redispatch_persistent_member(task: SquadTask3D, member: Soldier3D) -> void:
+	if coordinator == null or task == null or member == null or not task.persistent:
+		return
+	var recipients: Array[Soldier3D] = [member]
+	var contact := _find_contact(task.contact_id)
+	var target := contact.get_target() if contact != null else null
+	match task.type:
+		SquadTask3D.Type.SUPPRESS_CONTACT:
+			_dispatch_fire_task(task, recipients, target, SquadDirective3D.Type.SUPPRESS)
+		SquadTask3D.Type.ATTACK_CONTACT:
+			_dispatch_fire_task(task, recipients, target, SquadDirective3D.Type.ATTACK)
+		SquadTask3D.Type.HOLD_OBJECTIVE:
+			_bind(task, member, coordinator.issue_tactical_directive(
+				member, SquadDirective3D.Type.HOLD_SECTOR, null, member.global_position, [], null,
+				1.2, task.reason, task.zone_id, task.rules_of_engagement
+			))
 
 func _dispatch_formation_move(task: SquadTask3D, recipients: Array[Soldier3D]) -> void:
 	for index in recipients.size():
@@ -48,6 +70,15 @@ func _dispatch_formation_move(task: SquadTask3D, recipients: Array[Soldier3D]) -
 
 func _dispatch_cover(task: SquadTask3D, recipients: Array[Soldier3D], target: Node3D) -> void:
 	for member in recipients:
+		if member.is_pinned():
+			var pinned_directive := coordinator.issue_tactical_directive(
+				member, SquadDirective3D.Type.HOLD_SECTOR, target, member.global_position, [], null, 1.4,
+				"Pinned: stay prone and survive the fire", task.zone_id, SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
+			)
+			_bind(task, member, pinned_directive)
+			if pinned_directive != null:
+				task_member_succeeded.emit(task.task_id, StringName(member.name))
+			continue
 		var assignment := _reserve_nearest_cover(member, task.target_position)
 		var cover := assignment.get("cover") as TacticalCover3D
 		var slot := assignment.get("slot") as Marker3D
@@ -74,13 +105,14 @@ func _dispatch_fire_task(task: SquadTask3D, recipients: Array[Soldier3D], target
 	for member in recipients:
 		var member_contact_id := StringName(task.member_contact_ids.get(StringName(member.name), task.contact_id))
 		var member_contact := _find_contact(member_contact_id)
-		if type == SquadDirective3D.Type.ATTACK:
+		if type in [SquadDirective3D.Type.ATTACK, SquadDirective3D.Type.AIM]:
 			member_contact = _best_visible_contact_for(member, member_contact)
 		var member_target := member_contact.get_target() if member_contact != null else target
 		var member_target_position := member_contact.last_known_position if member_contact != null else task.target_position
-		if member_target == null or (type == SquadDirective3D.Type.ATTACK and not member.perception_component.can_see(member_target)):
+		if member_target == null or (type in [SquadDirective3D.Type.ATTACK, SquadDirective3D.Type.AIM] \
+				and not member.perception_component.has_line_of_sight(member_target)):
 			var hold := coordinator.issue_tactical_directive(
-				member, SquadDirective3D.Type.HOLD_SECTOR, null, member.global_position, [], null, 0.0,
+				member, SquadDirective3D.Type.HOLD_SECTOR, null, member.global_position, [], null, 0.8 if task.persistent else 0.0,
 				"No visible assigned target; observe sector", task.zone_id, SquadDirective3D.RulesOfEngagement.RETURN_FIRE
 			)
 			_bind(task, member, hold)
@@ -95,11 +127,12 @@ func _dispatch_fire_task(task: SquadTask3D, recipients: Array[Soldier3D], target
 			task_member_ready.emit(task.task_id, StringName(member.name))
 
 func _best_visible_contact_for(member: Soldier3D, preferred: CombatContact3D) -> CombatContact3D:
-	if preferred != null and is_instance_valid(preferred.get_target()) and member.perception_component.can_see(preferred.get_target()):
+	if preferred != null and is_instance_valid(preferred.get_target()) \
+			and member.perception_component.has_line_of_sight(preferred.get_target()):
 		return preferred
 	for candidate in belief.get_living_contacts():
 		var target := candidate.get_target()
-		if is_instance_valid(target) and member.perception_component.can_see(target):
+		if is_instance_valid(target) and member.perception_component.has_line_of_sight(target):
 			return candidate
 	return null
 
@@ -113,9 +146,20 @@ func _dispatch_hold(task: SquadTask3D, recipients: Array[Soldier3D]) -> void:
 		if directive != null:
 			task_member_ready.emit(task.task_id, StringName(recipients[index].name))
 
+func _dispatch_recover(task: SquadTask3D, recipients: Array[Soldier3D]) -> void:
+	for member in recipients:
+		_bind(task, member, coordinator.issue_tactical_directive(
+			member, SquadDirective3D.Type.HOLD_SECTOR, null, member.global_position, [], null,
+			maxf(1.0, task.duration), "Recover under cover before re-engaging", task.zone_id,
+			SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
+		))
+
 func _reserve_nearest_cover(member: Soldier3D, threat_position: Vector3) -> Dictionary:
 	var covers: Array = coordinator.get_registered_covers()
-	covers.sort_custom(func(a: TacticalCover3D, b: TacticalCover3D): return member.global_position.distance_to(a.global_position) < member.global_position.distance_to(b.global_position))
+	covers.sort_custom(func(a: TacticalCover3D, b: TacticalCover3D):
+		return a.score_for_actor(member, threat_position, member.weapon_component.effective_range * 0.72) \
+			> b.score_for_actor(member, threat_position, member.weapon_component.effective_range * 0.72)
+	)
 	for node in covers:
 		if not node is TacticalCover3D:
 			continue

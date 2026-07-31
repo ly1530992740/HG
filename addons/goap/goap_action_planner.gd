@@ -1,130 +1,101 @@
-## A* backward-search planner that builds action chains for [GoapGoal]s.
-##
-## Given a goal's [member GoapGoal.desired_state] and the current world state
-## (blackboard), the planner searches all registered [GoapAction]s to find
-## the cheapest sequence whose effects satisfy the desired state.[br][br]
-## You don't interact with this class directly — [GoapAgent] creates and
-## manages it internally.
+## Forward A* planner for symbolic GOAP world states.
 @icon("res://addons/goap/icons/goap_action_planner.svg")
 class_name GoapActionPlanner
 extends Node
 
-var _actions: Array
+const MAX_EXPANDED_NODES := 4096
 
+var _actions: Array = []
 
-## Registers the array of [GoapAction]s available for planning.
-func set_actions(actions: Array):
+func set_actions(actions: Array) -> void:
 	_actions = actions
 
-
-## Builds and returns the cheapest action plan for [param goal].[br]
-## Returns an empty [Array] if no valid plan exists.
-func get_plan(goal: GoapGoal, blackboard = {}) -> Array:
-	if not goal:
+func get_plan(goal: GoapGoal, blackboard := {}) -> Array:
+	if goal == null:
 		return []
-	
-	var desired_state: Dictionary = goal.get_desired_state().duplicate()
-
-	if desired_state.is_empty():
+	var desired := goal.get_desired_state()
+	if desired.is_empty() or _state_satisfies(blackboard, desired):
 		return []
+	return _search(goal, blackboard.duplicate(true), desired)
 
-	return _find_best_plan(goal, desired_state, blackboard)
-
-## Finds the best plan for [param goal] given [param desired_state].
-func _find_best_plan(goal, desired_state, blackboard):
-	var root = {
-		"action": goal,
-		"state": desired_state,
-		"children": []
-	}
-
-	if _build_plans(root, blackboard.duplicate(), {}):
-		var plans = _transform_tree_into_array(root, blackboard)
-		return _get_cheapest_plan(plans)
-
+func _search(goal: GoapGoal, start: Dictionary, desired: Dictionary) -> Array:
+	var open: Array[Dictionary] = [{
+		"state": start,
+		"actions": [],
+		"cost": 0,
+		"score": _heuristic(start, desired),
+	}]
+	var best_cost: Dictionary = {_state_key(start): 0}
+	var expanded := 0
+	while not open.is_empty() and expanded < MAX_EXPANDED_NODES:
+		var best_index := _lowest_score_index(open)
+		var current: Dictionary = open.pop_at(best_index)
+		var state: Dictionary = current["state"]
+		if _state_satisfies(state, desired):
+			var result: Array = current["actions"].duplicate()
+			result.append(goal)
+			return result
+		expanded += 1
+		for action_value in _actions:
+			var action := action_value as GoapAction
+			if action == null or not action.is_valid_for_planning(state):
+				continue
+			if not _state_satisfies(state, action.get_preconditions()):
+				continue
+			var next_state := _apply_effects(state, action.get_effects())
+			if next_state == state:
+				continue
+			var next_cost := int(current["cost"]) + maxi(0, action.get_cost(state))
+			var key := _state_key(next_state)
+			if best_cost.has(key) and int(best_cost[key]) <= next_cost:
+				continue
+			best_cost[key] = next_cost
+			var next_actions: Array = current["actions"].duplicate()
+			next_actions.append(action)
+			open.append({
+				"state": next_state,
+				"actions": next_actions,
+				"cost": next_cost,
+				"score": next_cost + _heuristic(next_state, desired),
+			})
 	return []
 
-## Returns the plan with the lowest total cost.
-func _get_cheapest_plan(plans):
-	var best_plan = null
-	for p in plans:
-		if best_plan == null or p.cost < best_plan.cost:
-			best_plan = p
-	
-	if best_plan != null:
-		return best_plan.actions
-	
-	return []
+func _lowest_score_index(nodes: Array[Dictionary]) -> int:
+	var best_index := 0
+	var best_score := int(nodes[0]["score"])
+	var best_cost_value := int(nodes[0]["cost"])
+	for index in range(1, nodes.size()):
+		var score := int(nodes[index]["score"])
+		var cost_value := int(nodes[index]["cost"])
+		if score < best_score or (score == best_score and cost_value < best_cost_value):
+			best_index = index
+			best_score = score
+			best_cost_value = cost_value
+	return best_index
 
-## Recursively expands the search tree, returning [code]true[/code] if at
-## least one complete path to a satisfied state was found.
-func _build_plans(step, blackboard, visited_actions: Dictionary):
-	var has_followup = false
+func _state_satisfies(state: Dictionary, conditions: Dictionary) -> bool:
+	for key in conditions:
+		if not GoapWorldState.is_satisfied(state.get(key), conditions[key]):
+			return false
+	return true
 
-	var state = step.state.duplicate()
+func _apply_effects(state: Dictionary, effects: Dictionary) -> Dictionary:
+	var result := state.duplicate(true)
+	for key in effects:
+		result[key] = effects[key]
+	return result
 
-	for s in step.state:
-		var blackboard_value = blackboard.get(s)
-		var desired_value = state[s]
+func _heuristic(state: Dictionary, desired: Dictionary) -> int:
+	var missing := 0
+	for key in desired:
+		if not GoapWorldState.is_satisfied(state.get(key), desired[key]):
+			missing += 1
+	return missing
 
-		var is_state_satisfied := GoapWorldState.is_satisfied(blackboard_value, desired_value)
-		
-		if is_state_satisfied:
-			state.erase(s)
-
-	if state.is_empty():
-		return true
-	
-	for action in _actions:
-		if not action.is_valid():
-			continue
-		if visited_actions.has(action):
-			continue
-
-		var should_use_action = false
-		var effects = action.get_effects()
-		var desired_state = state.duplicate()
-
-		for s in desired_state:
-			if desired_state[s] == effects.get(s):
-				desired_state.erase(s)
-				should_use_action = true
-
-		if should_use_action:
-			var preconditions = action.get_preconditions()
-			for p in preconditions:
-				desired_state[p] = preconditions[p]
-
-			var s = {
-				"action": action,
-				"state": desired_state,
-				"children": []
-				}
-
-			var branch_visited := visited_actions.duplicate()
-			branch_visited[action] = true
-			if desired_state.is_empty() or _build_plans(s, blackboard.duplicate(), branch_visited):
-				step.children.push_back(s)
-				has_followup = true
-
-	return has_followup
-
-
-## Converts the recursive tree into a flat array of plans with total costs.
-func _transform_tree_into_array(p, blackboard):
-	var plans = []
-
-	if p.children.size() == 0:
-		var cost = 0
-		if p.action.has_method("get_cost"):
-			cost = p.action.get_cost(blackboard)
-		plans.push_back({ "actions": [p.action], "cost": cost })
-		return plans
-
-	for c in p.children:
-		for child_plan in _transform_tree_into_array(c, blackboard):
-			if p.action.has_method("get_cost"):
-				child_plan.actions.push_back(p.action)
-				child_plan.cost += p.action.get_cost(blackboard)
-			plans.push_back(child_plan)
-	return plans
+func _state_key(state: Dictionary) -> String:
+	var keys := state.keys()
+	keys.sort_custom(func(a, b): return str(a) < str(b))
+	var parts: PackedStringArray = []
+	for key in keys:
+		parts.append("%s=%s" % [str(key), var_to_str(state[key])])
+	return "|".join(parts)

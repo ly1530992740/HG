@@ -115,9 +115,9 @@ func reserve_slot(actor: Node3D, threat_position: Vector3) -> Marker3D:
 	if actor == null:
 		return null
 	for slot in get_slots_against(threat_position):
-		var reserved: Node = _reservations.get(slot) as Node
-		if not is_instance_valid(reserved) or reserved == actor:
-			_reservations[slot] = actor
+		var reserved := _get_reserved_actor(slot)
+		if reserved == null or reserved == actor:
+			_set_reservation(slot, actor)
 			return slot
 	return null
 
@@ -134,8 +134,8 @@ func reserve_reachable_slot(actor: Node3D, threat_position: Vector3) -> Marker3D
 		# that requires crossing the cover body itself.
 		if absf(local_actor.z) > cover_width * 0.5 and signf(local_actor.z) != signf(local_slot.z):
 			continue
-		if not is_instance_valid(_reservations.get(slot)):
-			_reservations[slot] = actor
+		if _get_reserved_actor(slot) == null:
+			_set_reservation(slot, actor)
 			return slot
 	return null
 
@@ -151,7 +151,7 @@ func get_nearest_available_slot(actor: Node3D) -> Marker3D:
 	var nearest: Marker3D
 	var nearest_distance := INF
 	for child in slots.get_children():
-		if not child is Marker3D or is_instance_valid(_reservations.get(child)):
+		if not child is Marker3D or _get_reserved_actor(child as Marker3D) != null:
 			continue
 		var slot := child as Marker3D
 		var distance := actor.global_position.distance_to(slot.global_position)
@@ -163,29 +163,80 @@ func get_nearest_available_slot(actor: Node3D) -> Marker3D:
 func reserve_specific_slot(actor: Node3D, slot: Marker3D) -> bool:
 	if actor == null or slot == null or slot.get_parent() != get_node_or_null("Slots"):
 		return false
-	var reserved := _reservations.get(slot) as Node
-	if is_instance_valid(reserved) and reserved != actor:
+	var reserved := _get_reserved_actor(slot)
+	if reserved != null and reserved != actor:
 		return false
-	_reservations[slot] = actor
+	_set_reservation(slot, actor)
 	return true
 
 func get_reserved_slot(actor: Node3D) -> Marker3D:
-	for slot in _reservations:
-		if _reservations.get(slot) == actor and is_instance_valid(slot):
-			return slot as Marker3D
+	for slot_value in _reservations.keys():
+		if not is_instance_valid(slot_value) or not slot_value is Marker3D:
+			_reservations.erase(slot_value)
+			continue
+		var slot := slot_value as Marker3D
+		if _get_reserved_actor(slot) == actor:
+			return slot
 	return null
 
 func release_slot(actor: Node3D) -> void:
-	for slot in _reservations.keys():
-		if _reservations.get(slot) == actor:
+	for slot_value in _reservations.keys():
+		if not is_instance_valid(slot_value) or not slot_value is Marker3D:
+			_reservations.erase(slot_value)
+			continue
+		var slot := slot_value as Marker3D
+		if _get_reserved_actor(slot) == actor:
 			_reservations.erase(slot)
+
+func report_projectile_impact(threat_position: Vector3, intensity := 1.0) -> void:
+	for slot in get_slots_against(threat_position):
+		var occupant := _get_reserved_actor(slot)
+		if occupant != null and occupant.has_method("notify_cover_impact"):
+			occupant.notify_cover_impact(threat_position, intensity)
 
 func get_available_slot_count_against(threat_position: Vector3) -> int:
 	var count := 0
 	for slot in get_slots_against(threat_position):
-		if not is_instance_valid(_reservations.get(slot)):
+		if _get_reserved_actor(slot) == null:
 			count += 1
 	return count
+
+func score_for_actor(actor: Node3D, threat_position: Vector3, preferred_range := 18.0) -> float:
+	if actor == null:
+		return -INF
+	var slots := get_slots_against(threat_position)
+	var best := -INF
+	for slot in slots:
+		var occupant := _get_reserved_actor(slot)
+		if occupant != null and occupant != actor:
+			continue
+		var travel := actor.global_position.distance_to(slot.global_position)
+		var threat_distance := slot.global_position.distance_to(threat_position)
+		var range_error := absf(threat_distance - maxf(2.0, preferred_range))
+		var score := 80.0 - travel * 4.0 - range_error * 0.65
+		score += cover_height * 5.0
+		score += float(get_available_slot_count_against(threat_position)) * 1.5
+		if occupant == actor:
+			score += 12.0
+		best = maxf(best, score)
+	return best
+
+func _set_reservation(slot: Marker3D, actor: Node3D) -> void:
+	_reservations[slot] = weakref(actor)
+
+func _get_reserved_actor(slot: Marker3D) -> Node:
+	if slot == null or not _reservations.has(slot):
+		return null
+	var stored = _reservations.get(slot)
+	var occupant: Object
+	if stored is WeakRef:
+		occupant = (stored as WeakRef).get_ref()
+	elif is_instance_valid(stored):
+		occupant = stored as Object
+	if not is_instance_valid(occupant) or not occupant is Node:
+		_reservations.erase(slot)
+		return null
+	return occupant as Node
 
 func get_flank_route(squad_position: Vector3, target_position: Vector3, clearance := 1.4) -> Array[Vector3]:
 	var axis := get_cover_axis()
@@ -201,3 +252,43 @@ func get_flank_route(squad_position: Vector3, target_position: Vector3, clearanc
 		global_position + axis * (half_length + clearance) + normal * clearance,
 		global_position + axis * (half_length + clearance) - normal * clearance,
 	]
+
+func get_departure_route(slot: Marker3D, destination: Vector3, clearance := 0.8) -> Array[Vector3]:
+	if slot == null:
+		return []
+	var axis := get_cover_axis()
+	var exit_sign := signf(axis.dot(destination - global_position))
+	if is_zero_approx(exit_sign):
+		exit_sign = signf(axis.dot(slot.global_position - global_position))
+	if is_zero_approx(exit_sign):
+		exit_sign = 1.0
+	var local_slot := to_local(slot.global_position)
+	var side_sign := signf(local_slot.z)
+	if is_zero_approx(side_sign):
+		side_sign = 1.0
+	var safe_normal := global_transform.basis.z.normalized() * side_sign
+	var exit_position := global_position \
+		+ axis * exit_sign * (cover_length * 0.5 + clearance) \
+		+ safe_normal * (cover_width * 0.5 + slot_clearance)
+	return [exit_position]
+
+func get_bypass_point(from_position: Vector3, destination: Vector3, clearance := 0.9) -> Vector3:
+	var points := get_bypass_points(from_position, destination, clearance)
+	var first := points[0]
+	var second := points[1]
+	var first_score := from_position.distance_to(first) + first.distance_to(destination)
+	var second_score := from_position.distance_to(second) + second.distance_to(destination)
+	return first if first_score <= second_score else second
+
+func get_bypass_points(from_position: Vector3, destination: Vector3, clearance := 0.9) -> Array[Vector3]:
+	var local_from := to_local(from_position)
+	var side_sign := signf(local_from.z)
+	if is_zero_approx(side_sign):
+		side_sign = signf(to_local(destination).z)
+	if is_zero_approx(side_sign):
+		side_sign = 1.0
+	var side_offset := side_sign * (cover_width * 0.5 + slot_clearance + clearance * 0.35)
+	var end_offset := cover_length * 0.5 + clearance
+	var first := to_global(Vector3(-end_offset, 0.0, side_offset))
+	var second := to_global(Vector3(end_offset, 0.0, side_offset))
+	return [first, second]

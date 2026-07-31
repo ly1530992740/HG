@@ -229,6 +229,8 @@ func _physics_process(delta: float) -> void:
 	_update_sprite(delta, move_direction.length_squared() > 0.01)
 
 func set_aiming(enabled: bool) -> void:
+	if enabled and is_in_cover() and not cover_peeking:
+		enabled = false
 	if camera_director != null:
 		camera_director.set_aiming(enabled)
 
@@ -247,7 +249,11 @@ func is_cover_peeking() -> bool:
 func toggle_cover() -> bool:
 	if is_in_cover():
 		cover_peeking = not cover_peeking
-		set_stance(Stance.STAND if cover_peeking else Stance.CROUCH)
+		blind_fire_active = false
+		if not cover_peeking:
+			set_aiming(false)
+		_apply_stance_geometry()
+		_apply_weapon_pose(false)
 		cover_state_changed.emit(true, cover_peeking)
 		return true
 	return try_enter_nearest_cover()
@@ -274,8 +280,11 @@ func try_enter_nearest_cover() -> bool:
 	active_cover_slot = nearest_slot
 	global_position = nearest_slot.global_position
 	velocity = Vector3.ZERO
+	set_stance(Stance.STAND)
 	cover_peeking = false
-	set_stance(Stance.CROUCH)
+	blind_fire_active = false
+	_apply_stance_geometry()
+	_apply_weapon_pose(false)
 	_set_movement_mode(MoveMode.WALK)
 	cover_state_changed.emit(true, false)
 	return true
@@ -287,12 +296,15 @@ func exit_cover() -> void:
 	active_cover = null
 	active_cover_slot = null
 	cover_peeking = false
-	if was_in_cover and stance == Stance.CROUCH:
-		set_stance(Stance.STAND)
+	blind_fire_active = false
 	if was_in_cover:
+		_apply_stance_geometry()
+		_apply_weapon_pose(false)
 		cover_state_changed.emit(false, false)
 
 func set_stance(new_stance: Stance) -> void:
+	if is_in_cover() and new_stance != Stance.STAND:
+		return
 	if stance == new_stance:
 		return
 	stance = new_stance
@@ -331,7 +343,7 @@ func get_visibility_multiplier() -> float:
 
 func get_stance_label() -> String:
 	if is_in_cover():
-		return "掩体探身" if cover_peeking else "掩体盲射"
+		return "掩体站立" if cover_peeking else "掩体隐藏"
 	return ["站立", "下蹲", "卧倒"][int(stance)]
 
 func get_movement_mode_label() -> String:
@@ -365,6 +377,8 @@ func get_top_down_aim_point(ray_origin: Vector3, ray_direction: Vector3) -> Vect
 	return fire_origin + flat_direction.normalized() * maximum_range
 
 func fire_at_world_point(world_point: Vector3) -> Dictionary:
+	if is_in_cover() and not cover_peeking:
+		return {"fired": false, "reason": "hidden_in_cover"}
 	if is_reloading:
 		return {"fired": false, "reason": "reloading"}
 	if fire_cooldown > 0.0:
@@ -378,7 +392,7 @@ func fire_at_world_point(world_point: Vector3) -> Dictionary:
 	_last_fire_msec = Time.get_ticks_msec()
 	fire_cooldown = fire_interval
 	ammo_changed.emit(current_ammo, reserve_ammo)
-	var blind_fire := is_in_cover() and not cover_peeking
+	var blind_fire := false
 	blind_fire_active = blind_fire
 	_apply_weapon_pose(blind_fire)
 	var origin := _get_fire_origin(blind_fire)
@@ -642,7 +656,7 @@ func _apply_stance_geometry() -> void:
 	var visual_height := 1.0
 	var visual_scale_y := 1.0
 	var weapon_offset_y := 0.0
-	match stance:
+	match _get_effective_pose_stance():
 		Stance.CROUCH:
 			actor_height = 1.22
 			body_height = 0.82
@@ -673,12 +687,17 @@ func _apply_stance_geometry() -> void:
 	weapon_pivot.position.y = weapon_offset_y
 
 func _get_aim_height() -> float:
-	match stance:
+	match _get_effective_pose_stance():
 		Stance.CROUCH:
 			return 0.98
 		Stance.PRONE:
 			return 0.5
 	return 1.25
+
+func _get_effective_pose_stance() -> Stance:
+	if is_in_cover() and not cover_peeking:
+		return Stance.CROUCH
+	return stance
 
 func _get_move_input() -> Vector2:
 	var input := Vector2.ZERO
@@ -757,7 +776,7 @@ func _update_sprite(delta: float, moving: bool) -> void:
 			var elapsed_frames := floori(_top_down_pose_accumulator / frame_duration)
 			stepped_delta = float(elapsed_frames) * frame_duration
 			_top_down_pose_accumulator -= stepped_delta
-		voxel_visual.update_pose(stepped_delta, velocity, int(movement_mode), int(stance), is_aiming(), firing, dead, String(weapon_definition.get("family", "bolt_rifle")), blind_fire_active)
+		voxel_visual.update_pose(stepped_delta, velocity, int(movement_mode), int(_get_effective_pose_stance()), is_aiming(), firing, dead, String(weapon_definition.get("family", "bolt_rifle")), blind_fire_active)
 	_apply_weapon_pose(blind_fire_active)
 	visual.frame = 0
 	if camera_director != null:
@@ -777,7 +796,7 @@ func _apply_weapon_pose(blind_fire := false) -> void:
 		return
 	weapon_pivot.transform = voxel_visual.get_weapon_pivot_pose(
 		String(weapon_definition.get("family", "bolt_rifle")),
-		int(stance),
+		int(_get_effective_pose_stance()),
 		is_aiming(),
 		blind_fire
 	)

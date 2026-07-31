@@ -45,8 +45,13 @@ func configure_contact(
 		if target is Soldier3D and observed_stimulus == Stimulus.VISUAL:
 			estimated_role = int((target as Soldier3D).combat_role)
 			estimated_firepower = (target as Soldier3D).get_combat_power()
-		var recently_fired := target is Soldier3D and Time.get_ticks_msec() - (target as Soldier3D).last_weapon_fired_msec <= 1800
-		enemy_awareness_probability = 0.9 if recently_fired or observed_stimulus != Stimulus.VISUAL else 0.25
+		var target_recently_fired := target is Soldier3D \
+			and Time.get_ticks_msec() - (target as Soldier3D).last_weapon_fired_msec <= 1800
+		var target_alerted := target is Soldier3D and (target as Soldier3D).aware_of_enemy
+		var observer_engaged := is_instance_valid(observer) \
+			and Time.get_ticks_msec() - observer.last_weapon_fired_msec <= 1800
+		enemy_awareness_probability = 0.9 \
+			if target_alerted or target_recently_fired or observer_engaged or observed_stimulus != Stimulus.VISUAL else 0.25
 	else:
 		var bucket_x := roundi(position.x / 3.0)
 		var bucket_z := roundi(position.z / 3.0)

@@ -14,6 +14,8 @@ var _spawned := false
 func _ready() -> void:
 	_blue = $BlueSquad
 	_initial_red = $RedSquad
+	_blue.set_runtime_mission_target(_initial_red.global_position, 12.0)
+	_initial_red.set_runtime_mission_target(_initial_red.global_position, 10.0)
 	$World/QwenDebugPanel3D.set_debug_visible(true)
 	for member in _initial_red.get_configured_member_actors():
 		member.aware_of_enemy = false
@@ -48,6 +50,7 @@ func _spawn_east_wave() -> void:
 	squad.global_position = Vector3(18, 0, -2)
 	squad.rotation.y = -PI * 0.5
 	var blue_target := _blue.get_configured_member_actors()[0]
+	squad.set_runtime_mission_target(_blue.global_position, 12.0)
 	squad.set_known_combat_objective(blue_target)
 	print("[AMBUSH3D] 东侧第二波已生成，人数=%d" % squad.get_configured_member_actors().size())
 	reinforcement_wave_spawned.emit(squad)

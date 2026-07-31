@@ -2,7 +2,7 @@ extends CharacterBody2D
 # --------------------------------------------------
 # ENUMS
 # --------------------------------------------------
-enum Tool { HAND, HAMMER, PICKAXE, AXE, KNIFE, GUN }
+enum Tool { HAND, HAMMER, PICKAXE, AXE, KNIFE }
 enum State { IDLE, RUN, USE, DEAD }
 
 # --------------------------------------------------
@@ -17,13 +17,6 @@ enum State { IDLE, RUN, USE, DEAD }
 @export var attack_effect_scene := preload("res://unit/player/attack_effect.tscn")
 @export var attack_repair_scene := preload("res://unit/pawn_/repair_effect.tscn")
 @export var skull_scene := preload("res://Materiels/skull/skull.tscn")
-@export var enable_player_firearm := true
-@export var firearm_test_invulnerable := false
-@export var firearm_data: WeaponData
-@export var firearm_muzzle_offset := Vector2(24, -8)
-@export var starting_firearms: PackedStringArray = PackedStringArray(["rifle"])
-
-const DEFAULT_PROJECTILE_SCENE := preload("res://weapons/projectile.tscn")
 
 # --------------------------------------------------
 # INPUT CONSTANTS (CLEAN)
@@ -77,19 +70,6 @@ var can_use_tool := true     # Cooldown system
 var life: int
 var knockback_velocity := Vector2.ZERO
 var last_input_dir := Vector2.DOWN
-var firearm_weapon: FirearmWeapon
-var firearm_muzzle: Marker2D
-var firearm_crosshair: WeaponCrosshair
-var firearm_tool_button: Button
-var firearm_selector_panel: PanelContainer
-var firearm_buttons: Array[Button] = []
-var unlocked_firearms: PackedStringArray = []
-var firearm_ammo_state: Dictionary = {}
-var current_firearm_id := ""
-var cover_user: CoverUser
-var aim_component: AimComponent
-var concealment_component: ConcealmentComponent
-var recent_fire_threat_timer := 0.0
 
 # Inventory
 var collected := {
@@ -123,12 +103,6 @@ func _ready() -> void:
 	toolbox_panel.hide()
 	use_timer.wait_time = use_duration
 	use_timer.one_shot = true
-	_setup_firearm()
-	_setup_firearm_tool_button()
-	_setup_firearm_selector()
-	_setup_cover_user()
-	_setup_aim_component()
-	_setup_concealment_component()
 
 # --------------------------------------------------
 # PICKUP RESOURCE FUNCTION
@@ -165,26 +139,6 @@ func _input(event: InputEvent) -> void:
 	if not active or state == State.DEAD:
 		return
 
-	if event is InputEventKey and not event.echo:
-		var key_event := event as InputEventKey
-		if key_event.pressed and key_event.physical_keycode == KEY_Q:
-			cycle_firearm(-1)
-			get_viewport().set_input_as_handled()
-			return
-		if key_event.pressed and key_event.physical_keycode == KEY_E:
-			cycle_firearm(1)
-			get_viewport().set_input_as_handled()
-			return
-		if key_event.physical_keycode == KEY_C and key_event.pressed:
-			if cover_user:
-				cover_user.toggle_nearest_cover()
-			get_viewport().set_input_as_handled()
-			return
-		if key_event.physical_keycode == KEY_SPACE and cover_user and cover_user.is_in_cover():
-			cover_user.set_precision(key_event.pressed)
-			get_viewport().set_input_as_handled()
-			return
-
 	# Toggle toolbox with T key
 	if event.is_action_pressed("tools"):
 		toolbox_panel.visible = !toolbox_panel.visible
@@ -194,33 +148,6 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("attack_knight"):
 		use_current_tool()
 		hide_toolbox_if_visible()
-
-	if event.is_action_released("attack_knight") and current_tool == Tool.GUN and firearm_weapon:
-		firearm_weapon.stop_attack()
-		get_viewport().set_input_as_handled()
-
-	if event.is_action_pressed("reload_weapon"):
-		if firearm_weapon:
-			firearm_weapon.reload()
-		get_viewport().set_input_as_handled()
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not active or state == State.DEAD:
-		return
-	if event.is_action_pressed("fire_weapon"):
-		if _is_world_click_reserved():
-			return
-		set_tool_and_activate(Tool.GUN)
-		_fire_weapon_at_mouse()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_released("fire_weapon") and firearm_weapon:
-		firearm_weapon.stop_attack()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("aim_weapon") and firearm_weapon:
-		if _is_world_click_reserved():
-			return
-		set_tool_and_activate(Tool.GUN)
-		get_viewport().set_input_as_handled()
 
 # --------------------------------------------------
 # HIDE TOOLBOX IF VISIBLE
@@ -234,18 +161,11 @@ func hide_toolbox_if_visible() -> void:
 # PHYSICS LOOP
 # --------------------------------------------------
 func _physics_process(delta: float) -> void:
-	recent_fire_threat_timer = maxf(0.0, recent_fire_threat_timer - delta)
-	if concealment_component:
-		concealment_component.process(delta)
-	if aim_component:
-		aim_component.set_aiming(active and current_tool == Tool.GUN and (Input.is_action_pressed("aim_weapon") or is_cover_precision()))
-		aim_component.process(delta, velocity.length_squared() > 25.0)
 	if active==true:
 		GlobalPlayer.active_player_position=global_position
-		if firearm_weapon and firearm_weapon.trigger_held:
-			firearm_weapon.update_trigger_target(get_global_mouse_position())
 	if active and not busy:
-		if _is_move_input_pressed():
+		if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_LEFT) or \
+		Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_UP):
 				hide_toolbox_if_visible()
 
 	# Handle combat UI auto-hide
@@ -269,9 +189,6 @@ func _physics_process(delta: float) -> void:
 		update_animation()
 		return
 
-	if cover_user and cover_user.is_in_cover():
-		cover_user.maintain_position()
-
 	if active and not busy:
 		handle_movement()
 	else:
@@ -281,28 +198,26 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	update_animation()
-	_update_firearm_muzzle()
 
 # --------------------------------------------------
 # MOVEMENT LOGIC (ARROW KEYS ONLY)
 # --------------------------------------------------
 func handle_movement() -> void:
-	if cover_user and cover_user.is_in_cover():
-		var cover_input := _get_move_input_vector()
-		var lateral_strength := 0.0
-		if cover_input != Vector2.ZERO:
-			lateral_strength = cover_input.normalized().dot(cover_user.get_cover_axis())
-		cover_user.move_along_cover(lateral_strength, get_physics_process_delta_time())
-		velocity = Vector2.ZERO
-		state = State.RUN if absf(lateral_strength) > 0.1 else State.IDLE
-		return
-
 	if action_lock or is_guarding:
 		velocity = Vector2.ZERO
 		state = State.IDLE
 		return
 
-	var input_vector := _get_move_input_vector()
+	var input_vector := Vector2.ZERO
+
+	if Input.is_key_pressed(KEY_RIGHT):
+		input_vector.x += 1
+	if Input.is_key_pressed(KEY_LEFT):
+		input_vector.x -= 1
+	if Input.is_key_pressed(KEY_DOWN):
+		input_vector.y += 1
+	if Input.is_key_pressed(KEY_UP):
+		input_vector.y -= 1
 
 	if input_vector == Vector2.ZERO:
 		velocity = Vector2.ZERO
@@ -310,405 +225,9 @@ func handle_movement() -> void:
 		return
 
 	last_input_dir = input_vector.normalized()
-	var aim_move_multiplier := aim_component.get_movement_speed_multiplier() if aim_component else 1.0
-	velocity = last_input_dir * speed * aim_move_multiplier
+	velocity = last_input_dir * speed
 	state = State.RUN
 	flip_sprite(last_input_dir)
-	_update_firearm_muzzle()
-
-func _is_move_input_pressed() -> bool:
-	return Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_LEFT) or \
-		Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_UP) or \
-		Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_A) or \
-		Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_W)
-
-func _get_move_input_vector() -> Vector2:
-	var input_vector := Vector2.ZERO
-
-	if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
-		input_vector.x += 1
-	if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
-		input_vector.x -= 1
-	if Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S):
-		input_vector.y += 1
-	if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
-		input_vector.y -= 1
-
-	return input_vector
-
-# --------------------------------------------------
-# FIREARM TEST HOOK
-# --------------------------------------------------
-func _setup_firearm() -> void:
-	if not enable_player_firearm:
-		return
-
-	firearm_muzzle = Marker2D.new()
-	firearm_muzzle.name = "WeaponMuzzle"
-	firearm_muzzle.position = firearm_muzzle_offset
-	add_child(firearm_muzzle)
-
-	for weapon_id in starting_firearms:
-		if not unlocked_firearms.has(weapon_id):
-			unlocked_firearms.append(weapon_id)
-	if unlocked_firearms.is_empty():
-		unlocked_firearms.append("rifle")
-	current_firearm_id = "custom" if firearm_data != null else unlocked_firearms[0]
-	var data := firearm_data if firearm_data != null else _make_firearm_data(current_firearm_id)
-
-	firearm_weapon = FirearmWeapon.new()
-	firearm_weapon.name = "FirearmWeapon"
-	firearm_weapon.weapon_data = data
-	firearm_weapon.muzzle_path = NodePath("../WeaponMuzzle")
-	add_child(firearm_weapon)
-	firearm_weapon.equip(self)
-	firearm_crosshair = WeaponCrosshair.new()
-	firearm_crosshair.name = "WeaponCrosshair"
-	add_child(firearm_crosshair)
-	firearm_crosshair.setup(firearm_weapon, self)
-	if not firearm_weapon.fired.is_connected(_on_player_firearm_fired):
-		firearm_weapon.fired.connect(_on_player_firearm_fired)
-
-func _on_player_firearm_fired() -> void:
-	recent_fire_threat_timer = 0.9
-	report_weapon_fired()
-	reveal_from_concealment()
-	for listener in get_tree().get_nodes_in_group("perception_listener"):
-		if listener.has_method("hear_stimulus"):
-			listener.hear_stimulus(global_position, self, 1.0)
-
-func is_aiming_at(candidate: Node2D) -> bool:
-	if not active or firearm_weapon == null or candidate == null:
-		return false
-	if current_tool != Tool.GUN and not firearm_weapon.trigger_held and recent_fire_threat_timer <= 0.0:
-		return false
-	var aim_vector := get_global_mouse_position() - global_position
-	var target_vector := candidate.global_position - global_position
-	if aim_vector == Vector2.ZERO or target_vector == Vector2.ZERO or target_vector.length() > 900.0:
-		return false
-	var angle_difference := absf(wrapf(aim_vector.angle() - target_vector.angle(), -PI, PI))
-	return angle_difference <= deg_to_rad(11.0)
-
-func _setup_cover_user() -> void:
-	cover_user = CoverUser.new()
-	cover_user.name = "CoverUser"
-	add_child(cover_user)
-	cover_user.setup(self)
-
-func _setup_aim_component() -> void:
-	aim_component = AimComponent.new()
-	aim_component.name = "AimComponent"
-	aim_component.aimed_spread_multiplier = 0.08
-	aim_component.moving_aim_multiplier = 1.35
-	aim_component.aim_settle_time = 0.22
-	aim_component.recoil_per_shot = 0.04
-	aim_component.maximum_recoil = 0.18
-	aim_component.recoil_recovery_per_second = 3.5
-	add_child(aim_component)
-
-func _is_world_click_reserved() -> bool:
-	if get_tree().get_first_node_in_group("active_building_placement") != null:
-		return true
-	var hovered := get_viewport().gui_get_hovered_control()
-	return hovered != null and hovered.mouse_filter != Control.MOUSE_FILTER_IGNORE
-
-func _setup_concealment_component() -> void:
-	concealment_component = ConcealmentComponent.new()
-	concealment_component.name = "ConcealmentComponent"
-	add_child(concealment_component)
-
-func _setup_firearm_tool_button() -> void:
-	if not enable_player_firearm or toolbox_panel == null:
-		return
-
-	firearm_tool_button = toolbox_panel.get_node_or_null("Gun") as Button
-	if firearm_tool_button == null:
-		firearm_tool_button = Button.new()
-		firearm_tool_button.name = "Gun"
-		firearm_tool_button.z_index = 1
-		firearm_tool_button.offset_left = 131.33333
-		firearm_tool_button.offset_top = 232.0
-		firearm_tool_button.offset_right = 195.33333
-		firearm_tool_button.offset_bottom = 296.0
-		firearm_tool_button.text = "GUN"
-		firearm_tool_button.tooltip_text = "Gun"
-		firearm_tool_button.focus_mode = Control.FOCUS_NONE
-		firearm_tool_button.add_theme_font_size_override("font_size", 15)
-		_copy_button_styles(hand_btn, firearm_tool_button)
-		toolbox_panel.add_child(firearm_tool_button)
-
-	if not firearm_tool_button.pressed.is_connected(_on_gun_pressed):
-		firearm_tool_button.pressed.connect(_on_gun_pressed)
-
-func _setup_firearm_selector() -> void:
-	if not enable_player_firearm or toolbox_panel == null:
-		return
-
-	firearm_selector_panel = toolbox_panel.get_node_or_null("FirearmSelector") as PanelContainer
-	if firearm_selector_panel == null:
-		firearm_selector_panel = PanelContainer.new()
-		firearm_selector_panel.name = "FirearmSelector"
-		firearm_selector_panel.offset_left = 64.0
-		firearm_selector_panel.offset_top = 304.0
-		firearm_selector_panel.offset_right = 236.0
-		firearm_selector_panel.offset_bottom = 404.0
-		firearm_selector_panel.z_index = 2
-		toolbox_panel.add_child(firearm_selector_panel)
-
-		var list := VBoxContainer.new()
-		list.name = "WeaponList"
-		list.add_theme_constant_override("separation", 3)
-		firearm_selector_panel.add_child(list)
-
-		var title := Label.new()
-		title.text = "已拥有武器（Q/E切换）"
-		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title.add_theme_font_size_override("font_size", 9)
-		list.add_child(title)
-
-		var grid := GridContainer.new()
-		grid.name = "WeaponGrid"
-		grid.columns = 2
-		grid.add_theme_constant_override("h_separation", 3)
-		grid.add_theme_constant_override("v_separation", 3)
-		list.add_child(grid)
-
-	var weapon_list := firearm_selector_panel.get_node("WeaponList") as VBoxContainer
-	var weapon_grid := weapon_list.get_node("WeaponGrid") as GridContainer
-	_refresh_firearm_selector(weapon_grid)
-
-func _refresh_firearm_selector(grid: GridContainer = null) -> void:
-	if grid == null and firearm_selector_panel != null:
-		grid = firearm_selector_panel.get_node_or_null("WeaponList/WeaponGrid") as GridContainer
-	if grid == null:
-		return
-	for button in firearm_buttons:
-		if is_instance_valid(button):
-			button.queue_free()
-	firearm_buttons.clear()
-	for weapon_id in unlocked_firearms:
-		_add_firearm_option(grid, _get_firearm_label(weapon_id), weapon_id)
-
-func _add_firearm_option(parent: Container, label: String, weapon_id: String) -> void:
-	var button := Button.new()
-	button.text = label
-	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(78, 20)
-	button.add_theme_font_size_override("font_size", 8)
-	_copy_button_styles(hand_btn, button)
-	parent.add_child(button)
-	button.pressed.connect(_on_firearm_option_pressed.bind(weapon_id))
-	firearm_buttons.append(button)
-
-func _copy_button_styles(source: Button, target: Button) -> void:
-	if source == null or target == null:
-		return
-
-	for style_name in ["normal", "pressed", "hover", "hover_pressed", "disabled", "focus"]:
-		var stylebox := source.get_theme_stylebox(style_name)
-		if stylebox:
-			target.add_theme_stylebox_override(style_name, stylebox)
-
-func _make_default_firearm_data() -> WeaponData:
-	var data := WeaponData.new()
-	data.weapon_name = "Prototype Rifle"
-	data.damage = 4
-	data.fire_mode = WeaponData.FireMode.SEMI_AUTO
-	data.fire_cooldown = 0.35
-	data.spread_degrees = 2.0
-	data.magazine_size = 6
-	data.reserve_ammo = 24
-	data.reload_time = 1.2
-	data.projectile_scene = DEFAULT_PROJECTILE_SCENE
-	data.effective_range = 1800.0
-	data.projectile_speed = 2600.0
-	data.projectile_lifetime = 0.8
-	data.hit_groups = ["goblin", "goblinbuildings"]
-	return data
-
-func _make_firearm_data(weapon_id: String) -> WeaponData:
-	var data := WeaponData.new()
-	data.projectile_scene = DEFAULT_PROJECTILE_SCENE
-	data.hit_groups = ["goblin", "goblinbuildings"]
-
-	match weapon_id:
-		"rifle":
-			return _make_default_firearm_data()
-		"pistol":
-			data.weapon_name = "Pistol"
-			data.damage = 3
-			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
-			data.fire_cooldown = 0.28
-			data.spread_degrees = 2.0
-			data.magazine_size = 10
-			data.reserve_ammo = 50
-			data.reload_time = 1.0
-			data.effective_range = 1200.0
-			data.projectile_speed = 2500.0
-			data.projectile_lifetime = 0.55
-		"smg":
-			data.weapon_name = "SMG"
-			data.damage = 2
-			data.fire_mode = WeaponData.FireMode.AUTO
-			data.fire_cooldown = 0.09
-			data.spread_degrees = 5.5
-			data.magazine_size = 30
-			data.reserve_ammo = 120
-			data.reload_time = 1.4
-			data.effective_range = 1600.0
-			data.projectile_speed = 2400.0
-			data.projectile_lifetime = 0.75
-		"shotgun":
-			data.weapon_name = "Shotgun"
-			data.damage = 2
-			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
-			data.fire_cooldown = 0.85
-			data.spread_degrees = 1.5
-			data.projectile_count = 8
-			data.projectile_spread_degrees = 30.0
-			data.magazine_size = 6
-			data.reserve_ammo = 36
-			data.reload_time = 1.7
-			data.effective_range = 850.0
-			data.projectile_speed = 2100.0
-			data.projectile_lifetime = 0.45
-		"bolt_rifle":
-			data.weapon_name = "Bolt Rifle"
-			data.damage = 8
-			data.fire_mode = WeaponData.FireMode.SEMI_AUTO
-			data.fire_cooldown = 0.1
-			data.spread_degrees = 0.5
-			data.cycle_time = 1.05
-			data.magazine_size = 5
-			data.reserve_ammo = 25
-			data.reload_time = 1.6
-			data.effective_range = 2400.0
-			data.projectile_speed = 3400.0
-			data.projectile_lifetime = 0.8
-		"lmg":
-			data.weapon_name = "LMG"
-			data.damage = 3
-			data.fire_mode = WeaponData.FireMode.AUTO
-			data.fire_cooldown = 0.11
-			data.spread_degrees = 6.5
-			data.magazine_size = 70
-			data.reserve_ammo = 210
-			data.reload_time = 3.4
-			data.effective_range = 1900.0
-			data.projectile_speed = 2600.0
-			data.projectile_lifetime = 0.8
-		_:
-			return _make_default_firearm_data()
-
-	return data
-
-func set_firearm_weapon(weapon_id: String) -> void:
-	if firearm_weapon == null:
-		return
-	if weapon_id == current_firearm_id:
-		set_tool_and_activate(Tool.GUN)
-		return
-	_store_current_firearm_ammo()
-	if not unlocked_firearms.has(weapon_id):
-		unlocked_firearms.append(weapon_id)
-		_refresh_firearm_selector()
-	current_firearm_id = weapon_id
-	firearm_weapon.set_weapon_data(_make_firearm_data(weapon_id), true)
-	if firearm_ammo_state.has(weapon_id):
-		var ammo: Dictionary = firearm_ammo_state[weapon_id]
-		firearm_weapon.magazine_ammo = int(ammo.get("magazine", firearm_weapon.magazine_ammo))
-		firearm_weapon.reserve_ammo = int(ammo.get("reserve", firearm_weapon.reserve_ammo))
-		firearm_weapon.ammo_changed.emit(firearm_weapon.magazine_ammo, firearm_weapon.reserve_ammo)
-	set_tool_and_activate(Tool.GUN)
-	Global.pawn_tool = "gun"
-	update_animation()
-
-func unlock_firearm(weapon_id: String, equip_now := true) -> bool:
-	if weapon_id.is_empty():
-		return false
-	var newly_unlocked := not unlocked_firearms.has(weapon_id)
-	if newly_unlocked:
-		unlocked_firearms.append(weapon_id)
-		_refresh_firearm_selector()
-	if equip_now:
-		set_firearm_weapon(weapon_id)
-	return newly_unlocked
-
-func cycle_firearm(direction: int) -> void:
-	if unlocked_firearms.is_empty() or firearm_weapon == null:
-		return
-	var index := unlocked_firearms.find(current_firearm_id)
-	if index < 0:
-		index = 0
-	var next_index := posmod(index + signi(direction), unlocked_firearms.size())
-	set_firearm_weapon(unlocked_firearms[next_index])
-
-func add_firearm_ammo(amount: int, weapon_id := "") -> void:
-	if amount <= 0:
-		return
-	var target_id := current_firearm_id if weapon_id.is_empty() else weapon_id
-	if target_id == current_firearm_id and firearm_weapon != null:
-		firearm_weapon.add_reserve_ammo(amount)
-		return
-	var ammo: Dictionary = firearm_ammo_state.get(target_id, {"magazine": 0, "reserve": 0})
-	ammo["reserve"] = int(ammo.get("reserve", 0)) + amount
-	firearm_ammo_state[target_id] = ammo
-
-func receive_ammo_pickup(amount: int) -> void:
-	add_firearm_ammo(amount)
-
-func receive_weapon_pickup(weapon_id: String, ammo_amount: int) -> bool:
-	if weapon_id.is_empty() or firearm_weapon == null:
-		return false
-	var newly_unlocked := unlock_firearm(weapon_id, true)
-	if not newly_unlocked and ammo_amount > 0:
-		add_firearm_ammo(ammo_amount, weapon_id)
-	return true
-
-func _store_current_firearm_ammo() -> void:
-	if current_firearm_id.is_empty() or firearm_weapon == null:
-		return
-	firearm_ammo_state[current_firearm_id] = {
-		"magazine": firearm_weapon.magazine_ammo,
-		"reserve": firearm_weapon.reserve_ammo,
-	}
-
-func _get_firearm_label(weapon_id: String) -> String:
-	match weapon_id:
-		"rifle":
-			return "步枪"
-		"pistol":
-			return "手枪"
-		"smg":
-			return "冲锋枪"
-		"shotgun":
-			return "霰弹枪"
-		"bolt_rifle":
-			return "精确步枪"
-		"lmg":
-			return "轻机枪"
-	return weapon_id
-
-func _fire_weapon_at_mouse() -> void:
-	if firearm_weapon == null:
-		return
-
-	var target_position := get_global_mouse_position()
-	_face_firearm_target(target_position)
-	firearm_weapon.start_trigger(target_position)
-
-func _face_firearm_target(target_position: Vector2) -> void:
-	var dir := target_position - global_position
-	if abs(dir.x) > 0.1:
-		anim.flip_h = dir.x < 0
-	_update_firearm_muzzle()
-
-func _update_firearm_muzzle() -> void:
-	if firearm_muzzle == null:
-		return
-
-	var x_sign := -1.0 if anim.flip_h else 1.0
-	firearm_muzzle.position = Vector2(abs(firearm_muzzle_offset.x) * x_sign, firearm_muzzle_offset.y)
 
 # --------------------------------------------------
 # USE CURRENT TOOL WITH Q KEY (WITH COOLDOWN)
@@ -729,8 +248,6 @@ func use_current_tool() -> void:
 			repeat_tool_action(Tool.KNIFE, "meat", "knife", 1)
 		Tool.HAND:
 			repeat_tool_action(Tool.HAND, "", "hand", 1)
-		Tool.GUN:
-			_fire_weapon_at_mouse()
 
 
 # --------------------------------------------------
@@ -830,8 +347,6 @@ func spawn_attack_effect() -> void:
 	var fx := attack_effect_scene.instantiate()
 	fx.global_position = marker_2d.global_position
 	fx.scale=Vector2(0.2,0.2)
-	if fx.has_method("configure_attack"):
-		fx.configure_attack(self, _get_current_melee_damage())
 	get_parent().add_child(fx)
 	
 	match current_tool:
@@ -852,18 +367,6 @@ func spawn_attack_effect() -> void:
 		Tool.HAND: 
 			fx.scale = Vector2(0.2, 0.2)
 
-func _get_current_melee_damage() -> int:
-	match current_tool:
-		Tool.KNIFE:
-			return 15
-		Tool.AXE:
-			return 12
-		Tool.PICKAXE:
-			return 10
-		Tool.HAND:
-			return 4
-	return 10
-
 func spawn_repair_effect() -> void:
 	var fx := attack_repair_scene.instantiate()
 	fx.global_position = marker_2d.global_position
@@ -883,29 +386,16 @@ func spawn_repair_effect() -> void:
 # --------------------------------------------------
 func take_damage(amount: int, from_pos: Vector2) -> void:
 	show_combat_ui()
-	if amount <= 0:
-		if cover_user:
-			cover_user.show_blocked()
-		return
-	if firearm_test_invulnerable:
-		life = max_life
-		progress_bar.value = life
-		knockback_velocity = Vector2.ZERO
-		red_flash()
-		return
 	life -= amount
 	if GlobalPlayer.camera_shake_func.is_valid():
 		GlobalPlayer.camera_shake_func.call()
 	progress_bar.value = life
-	knockback_velocity = Vector2.ZERO
+	knockback_velocity = (global_position - from_pos).normalized() * knockback_force
 
 	red_flash()
 
 	if life <= 0:
 		die()
-
-func receive_projectile_hit(base_damage: int, source_position: Vector2, _projectile: Node = null) -> void:
-	take_damage(base_damage, source_position)
 
 func red_flash() -> void:
 	anim.modulate = Color.RED
@@ -956,7 +446,6 @@ func update_animation() -> void:
 		Tool.PICKAXE: suffix = "pickaxe"
 		Tool.AXE: suffix = "axe"
 		Tool.KNIFE: suffix = "knife"
-		Tool.GUN: suffix = ""
 		Tool.HAND: suffix = ""
 
 	if state == State.USE:
@@ -1009,16 +498,6 @@ func _on_hand_pressed() -> void:
 	Global.pawn_tool="hand"
 	equip_audio.play()
 
-func _on_gun_pressed() -> void:
-	set_tool_and_activate(Tool.GUN)
-	hide_toolbox_if_visible()
-	Global.pawn_tool="gun"
-	equip_audio.play()
-
-func _on_firearm_option_pressed(weapon_id: String) -> void:
-	set_firearm_weapon(weapon_id)
-	hide_toolbox_if_visible()
-	equip_audio.play()
 
 func scale_bump(node) -> void:
 	var tween = create_tween()
@@ -1081,72 +560,6 @@ func get_health() -> int:
 
 func get_max_health() -> int:
 	return max_life  # or whatever your max health variable is
-
-func register_cover_candidate(cover: Node) -> void:
-	if cover_user:
-		cover_user.register_cover(cover)
-
-func unregister_cover_candidate(cover: Node) -> void:
-	if cover_user:
-		cover_user.unregister_cover(cover)
-
-func enter_cover(cover: Node, precision := false) -> bool:
-	return cover_user != null and cover_user.enter_cover(cover, precision)
-
-func exit_cover() -> void:
-	if cover_user:
-		cover_user.exit_cover()
-
-func set_cover_precision(enabled: bool) -> void:
-	if cover_user:
-		cover_user.set_precision(enabled)
-
-func is_cover_precision() -> bool:
-	return cover_user != null and cover_user.is_precision()
-
-func get_active_cover() -> Node:
-	return cover_user.get_active_cover() if cover_user else null
-
-func get_weapon_spread_multiplier() -> float:
-	var cover_multiplier := cover_user.get_spread_multiplier() if cover_user else 1.0
-	var blind_firing := cover_user != null and cover_user.is_in_cover() and not cover_user.is_precision()
-	var aim_multiplier := 1.0
-	if aim_component and not blind_firing:
-		aim_multiplier = aim_component.get_spread_multiplier(velocity.length_squared() > 25.0)
-	return cover_multiplier * aim_multiplier
-
-func set_weapon_aiming(enabled: bool) -> void:
-	if aim_component:
-		aim_component.set_aiming(enabled)
-
-func is_weapon_aiming() -> bool:
-	return aim_component != null and aim_component.is_aiming()
-
-func get_aim_quality() -> float:
-	return aim_component.get_aim_quality() if aim_component else 0.0
-
-func report_weapon_fired() -> void:
-	if aim_component:
-		aim_component.report_shot()
-
-func register_concealment_source(source: Node) -> void:
-	if concealment_component:
-		concealment_component.register_source(source)
-
-func unregister_concealment_source(source: Node) -> void:
-	if concealment_component:
-		concealment_component.unregister_source(source)
-
-func reveal_from_concealment(duration := -1.0) -> void:
-	if concealment_component:
-		concealment_component.reveal(duration)
-
-func is_visually_concealed() -> bool:
-	return concealment_component != null and concealment_component.is_concealed()
-
-func on_cover_blocked_projectile() -> void:
-	if cover_user:
-		cover_user.show_blocked()
 
 func show_combat_ui():
 	ui_visible = true

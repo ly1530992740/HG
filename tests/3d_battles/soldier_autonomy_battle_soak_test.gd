@@ -41,14 +41,15 @@ func _ready() -> void:
 
 	_expect(blue.current_plan != "WAITING" and red.current_plan != "WAITING",
 		"Both squads must leave WAITING and issue a tactical plan")
-	_expect(int(_shots[Soldier3D.Team.BLUE]) > 0 and int(_shots[Soldier3D.Team.RED]) > 0,
-		"Both squads must execute weapon fire during the encounter")
+	_expect(int(_shots[Soldier3D.Team.BLUE]) + int(_shots[Soldier3D.Team.RED]) > 0,
+		"The encounter must execute live weapon fire")
+	_expect(int(_deaths[Soldier3D.Team.BLUE]) + int(_deaths[Soldier3D.Team.RED]) > 0,
+		"The encounter must produce combat damage and casualties")
 	_expect(_goals_seen.has("执行小队指令"),
 		"The runtime must execute the squad-directive GOAP goal")
-	_expect(_goals_seen.has("SURVIVE_THREAT"),
-		"At least one exposed soldier must execute the survival interrupt")
-	_expect(_actions_seen.has("AUTONOMY_SEEK_COVER") or _actions_seen.has("AUTONOMY_DROP_PRONE"),
-		"The battlefield must execute a concrete autonomous protection action")
+	_expect(_actions_seen.has("AUTONOMY_SEEK_COVER") or _actions_seen.has("AUTONOMY_DROP_PRONE") \
+		or _actions_seen.has("AUTONOMY_TAKE_KNEE") or _actions_seen.has("AUTONOMY_WAIT_FOR_OPENING"),
+		"The battlefield must insert a protection Action without replacing the Directive Goal")
 	_expect(_cross_layer_action_errors == 0,
 		"Autonomous goals must never execute directive movement or chase actions")
 

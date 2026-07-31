@@ -7,6 +7,8 @@ func _ready() -> void:
 	var blue := get_node(blue_path) as SquadCoordinator3D
 	var red := get_node(red_path) as SquadCoordinator3D
 	get_node("World/QwenDebugPanel3D").set_debug_visible(true)
+	blue.set_runtime_mission_target(red.global_position, 12.0)
+	red.set_runtime_mission_target(blue.global_position, 12.0)
 	_set_contact(blue, red)
 	_set_contact(red, blue)
 

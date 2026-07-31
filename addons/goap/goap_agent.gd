@@ -1,59 +1,36 @@
-## Central GOAP brain that selects goals, builds plans, and executes actions.
-##
-## Attach this node to any actor and assign [member goals_node] and
-## [member actions_node] to containers holding [GoapGoal] and [GoapAction]
-## children respectively. Call [method init] once after the scene is ready,
-## then call [method process] every frame.[br][br]
-## [b]Signals:[/b][br]
-## - [signal plan_changed] — emitted when a new action plan is generated.[br]
-## - [signal goal_changed] — emitted when the active goal switches.[br]
-## - [signal action_changed] — emitted when the currently running action changes.
+## GOAP brain with F.E.A.R.-style goal arbitration and runtime validation.
 @icon("res://addons/goap/icons/goap_agent.svg")
 class_name GoapAgent
 extends Node
 
 const DEBUG_PREFIX := "goap_debug"
+const RELEVANCE_EPSILON := 0.001
 
-## Emitted when a new action plan is generated or cleared.
 signal plan_changed(new_plan: Array)
-
-## Emitted when the active [GoapGoal] changes.
 signal goal_changed(new_goal: GoapGoal)
-
-## Emitted when the currently executing [GoapAction] changes.
 signal action_changed(new_action: GoapAction)
 
-## Node whose children are the available [GoapAction]s.
 @export var actions_node: Node
-
-## Node whose children are the available [GoapGoal]s.
 @export var goals_node: Node
-
-## When [code]true[/code], sends runtime data to the editor debugger panel.
 @export var debug_enabled := true
-
-## Rebuilds the active plan when a world-state value actually changes.
 @export var replan_on_world_state_change := true
 
-var _goals = []
-var _current_goal
-var _current_plan = []
-var _current_plan_step = 0
+var _goals: Array[GoapGoal] = []
+var _actions: Array[GoapAction] = []
+var _current_goal: GoapGoal
+var _planning_goal: GoapGoal
+var _current_plan: Array = []
+var _current_plan_step := 0
 var _actor
 var _world_state: GoapWorldState
 var _action_planner: GoapActionPlanner
-var _finished_last_plan = false
-var _last_blackboard = {}
+var _last_blackboard: Dictionary = {}
 var _replan_requested := false
-
-## The last [GoapAction] that finished executing.
-var previous_action: GoapAction = null
+var _goal_reevaluation_remaining := 0.0
+var previous_action: GoapAction
 var _debug_id := ""
 
-
 func _exit_tree() -> void:
-	# These helper Nodes are created with new() and are not children, so the
-	# agent owns their lifetime explicitly.
 	if is_instance_valid(_action_planner):
 		_action_planner.free()
 		_action_planner = null
@@ -61,330 +38,279 @@ func _exit_tree() -> void:
 		_world_state.free()
 		_world_state = null
 
-
-## Main tick — call once per frame from [code]_process[/code] or [code]_physics_process[/code].
-func process(delta):
-	if _replan_requested:
-		_replan_requested = false
-		if _current_goal != null:
-			_interrupt_current_action()
-			if _current_goal.has_method("exit"):
-				_current_goal.exit()
-			_current_goal = null
-			_current_plan = []
-			_current_plan_step = 0
-			plan_changed.emit([])
-
-	var goal = _get_best_goal()
-	if _finished_last_plan:
-		if _current_goal and _current_goal.has_method("exit"):
-			_current_goal.exit()
-		_current_goal = null
-		_finished_last_plan = false
-	if !goal: return
-	if _current_goal != goal:
-		plan_changed.emit([])
-		goal_changed.emit(goal)
-	if _current_goal and !_current_goal.is_valid():
-		if _current_goal.has_method("exit"):
-			_current_goal.exit()
-		_current_goal = null
-	if _current_goal == null or goal != _current_goal:
-		if _actor:
-			if _current_plan.size() > 0 and _current_plan_step < _current_plan.size() - 1:
-				var running = _current_plan[_current_plan_step]
-				if running is GoapAction and running.get_meta("_entered", false):
-					running.exit()
-					running.set_meta("_entered", false)
-			if _current_goal and _current_goal != goal and _current_goal.has_method("exit"):
-				_current_goal.exit()
-			
-			_current_goal = goal
-			if _current_goal.has_method("enter"):
-				_current_goal.enter()
-			if _current_goal.has_method("prepare"):
-				_current_goal.prepare()
-
-			var blackboard = {
-				"global_position": _actor.global_position,
-				}
-			for s in _world_state._state:
-				blackboard[s] = _world_state._state[s]
-	
-			var desired_state = goal.get_desired_state()
-			var is_already_satisfied = not desired_state.is_empty()
-			for state_key in desired_state:
-				if not GoapWorldState.is_satisfied(blackboard.get(state_key), desired_state[state_key]):
-					is_already_satisfied = false
-					break
-			if is_already_satisfied:
-				if _current_goal.has_method("exit"):
-					_current_goal.exit()
-				_current_goal = null
-				return
-			
-			_current_plan = _action_planner.get_plan(_current_goal, blackboard)
-			plan_changed.emit(_current_plan)
-			_current_plan_step = 0
-			_last_blackboard = blackboard
-			if _current_plan.size() == 0:
-				if _current_goal.has_method("on_goal_failed"):
-					_current_goal.on_goal_failed()
-				if _current_goal.has_method("exit"):
-					_current_goal.exit()
-				_current_goal = null
-			elif _current_plan.size() == 1:
-				if _current_goal.has_method("on_goal_achieved"):
-					_current_goal.on_goal_achieved()
-				_finished_last_plan = true
-	else:
-		_follow_plan(_current_plan, delta)
-
-
-## Initialises the agent with the owning [param actor] node.[br]
-## Creates the [GoapWorldState], discovers goals and actions from the
-## exported node containers, and registers with the editor debugger.
-func init(actor):
+func init(actor) -> void:
 	_actor = actor
 	_world_state = GoapWorldState.new()
 	_debug_id = str(get_path())
-	var actions = []
 	for child in goals_node.get_children():
-		if not child is GoapGoal:
-			continue
-		_goals.push_back(child)
-		child.agent = self
+		if child is GoapGoal:
+			var goal := child as GoapGoal
+			_goals.append(goal)
+			goal.agent = self
+			goal.init(_actor, _world_state)
 	for child in actions_node.get_children():
-		if not child is GoapAction:
-			continue
-		actions.push_back(child)
-		child.agent = self
+		if child is GoapAction:
+			var action := child as GoapAction
+			_actions.append(action)
+			action.agent = self
+			action.init(_actor, _world_state)
 	_action_planner = GoapActionPlanner.new()
-	_action_planner.set_actions(actions)
-
-	for goal in _goals:
-		goal.init(_actor, _world_state)
-
-	for action in actions:
-		action.init(_actor, _world_state)
-
+	_action_planner.set_actions(_actions)
 	_connect_debug_signals()
-	_send_debug_register(actions)
+	_send_debug_register(_actions)
 
+func process(delta) -> void:
+	_goal_reevaluation_remaining = maxf(0.0, _goal_reevaluation_remaining - float(delta))
+	var force_replan := _replan_requested
+	_replan_requested = false
+	var must_select := force_replan or _current_goal == null \
+		or not _current_goal.enabled or not _current_goal.is_valid() \
+		or _goal_reevaluation_remaining <= 0.0
+	if must_select:
+		if _select_relevant_goal(force_replan):
+			return
+	if _current_goal != null and not _current_plan.is_empty():
+		_follow_plan(float(delta))
 
-## Requests that the active action be interrupted and the goal be planned again.
-## The request is processed at the start of the next GOAP tick.
 func request_replan() -> void:
 	_replan_requested = true
 
+func _select_relevant_goal(force_replan: bool) -> bool:
+	var candidates: Array[GoapGoal] = []
+	for goal in _goals:
+		if goal.enabled and goal.is_valid():
+			candidates.append(goal)
+	candidates.sort_custom(_goal_precedes)
+
+	var current_action := get_current_action()
+	var locked := _current_goal != null and (
+		not _current_goal.is_plan_interruptible()
+		or (current_action != null and not current_action.is_interruptible())
+	)
+	var selected_goal: GoapGoal
+	var selected_plan: Array = []
+	for candidate in candidates:
+		if locked and candidate != _current_goal \
+			and candidate.get_interrupt_priority() <= _current_goal.get_interrupt_priority():
+			continue
+		if candidate != _current_goal and randf() > candidate.get_activation_chance():
+			continue
+		candidate.prepare()
+		var blackboard := _build_blackboard()
+		if _state_satisfies(blackboard, candidate.get_desired_state()):
+			if candidate == _current_goal:
+				_complete_current_goal()
+			continue
+		_planning_goal = candidate
+		var plan := _action_planner.get_plan(candidate, blackboard)
+		_planning_goal = null
+		if plan.is_empty():
+			_trace("no-plan goal=%s relevance=%.1f world=%s desired=%s" % [candidate.name, candidate.get_relevance(), str(blackboard), str(candidate.get_desired_state())])
+			candidate.on_goal_failed()
+			continue
+		selected_goal = candidate
+		selected_plan = plan
+		break
+
+	if selected_goal == null:
+		if _current_goal != null and (not _current_goal.is_valid() or force_replan):
+			_deactivate_current_goal()
+		_goal_reevaluation_remaining = 0.1
+		return false
+
+	var goal_changed_value := selected_goal != _current_goal
+	var plan_changed_value := force_replan or goal_changed_value or _current_plan.is_empty()
+	if not plan_changed_value:
+		_goal_reevaluation_remaining = selected_goal.get_reevaluation_interval()
+		return false
+
+	_interrupt_current_action()
+	if goal_changed_value and _current_goal != null:
+		_current_goal.exit()
+	_current_goal = selected_goal
+	if goal_changed_value:
+		_current_goal.enter()
+		goal_changed.emit(_current_goal)
+	_current_plan = selected_plan
+	_current_plan_step = 0
+	_last_blackboard = _build_blackboard()
+	_goal_reevaluation_remaining = _current_goal.get_reevaluation_interval()
+	plan_changed.emit(_current_plan)
+	_trace("selected goal=%s plan=%s" % [_current_goal.name, str(_current_plan.map(func(item): return item.name))])
+	return true
+
+func _goal_precedes(a: GoapGoal, b: GoapGoal) -> bool:
+	var relevance_a := a.get_relevance()
+	var relevance_b := b.get_relevance()
+	if absf(relevance_a - relevance_b) <= RELEVANCE_EPSILON:
+		if a == _current_goal:
+			return true
+		if b == _current_goal:
+			return false
+		return a.get_interrupt_priority() > b.get_interrupt_priority()
+	return relevance_a > relevance_b
+
+func _follow_plan(delta: float) -> void:
+	if _current_plan_step >= _current_plan.size() - 1:
+		if _state_satisfies(_build_blackboard(), _current_goal.get_desired_state()):
+			_complete_current_goal()
+		else:
+			_fail_current_plan()
+		return
+	_current_goal.perform(delta)
+	var action := _current_plan[_current_plan_step] as GoapAction
+	if action == null or not action.is_valid_at_runtime():
+		_fail_current_plan()
+		return
+	if not action.get_meta("_entered", false):
+		action.enter()
+		action.set_meta("_entered", true)
+		action_changed.emit(action)
+	if not action.perform(delta):
+		return
+	previous_action = action
+	action.exit()
+	action.set_meta("_entered", false)
+	action_changed.emit(null)
+	action.set_effects(action.get_effects())
+	if not _verify_action_effects(action):
+		_fail_current_plan()
+		return
+	_current_plan_step += 1
+	if _state_satisfies(_build_blackboard(), _current_goal.get_desired_state()):
+		_complete_current_goal()
+
+func _complete_current_goal() -> void:
+	if _current_goal == null:
+		return
+	var completed := _current_goal
+	completed.on_goal_achieved()
+	completed.exit()
+	_current_goal = null
+	_current_plan = []
+	_current_plan_step = 0
+	_goal_reevaluation_remaining = 0.0
+	plan_changed.emit([])
+
+func _fail_current_plan() -> void:
+	_interrupt_current_action()
+	_current_plan = []
+	_current_plan_step = 0
+	_replan_requested = true
+	_goal_reevaluation_remaining = 0.0
+	plan_changed.emit([])
+
+func _deactivate_current_goal() -> void:
+	_interrupt_current_action()
+	if _current_goal != null:
+		_current_goal.exit()
+	_current_goal = null
+	_current_plan = []
+	_current_plan_step = 0
+	plan_changed.emit([])
 
 func _interrupt_current_action() -> void:
-	if _current_plan.is_empty() or _current_plan_step >= _current_plan.size():
-		return
-	var running = _current_plan[_current_plan_step]
-	if running is GoapAction and running.get_meta("_entered", false):
-		running.exit()
-		running.set_meta("_entered", false)
+	var action := get_current_action()
+	if action != null and action.get_meta("_entered", false):
+		action.exit()
+		action.set_meta("_entered", false)
 		action_changed.emit(null)
 
+func _build_blackboard() -> Dictionary:
+	var blackboard := {"global_position": _actor.global_position}
+	for key in _world_state._state:
+		blackboard[key] = _world_state._state[key]
+	return blackboard
 
-## Returns the highest-priority, valid, enabled [GoapGoal], or [code]null[/code].
-func _get_best_goal():
-	var highest_priority = null
-	var _debug_text = ""
+func _state_satisfies(state: Dictionary, desired: Dictionary) -> bool:
+	if desired.is_empty():
+		return false
+	for key in desired:
+		if not GoapWorldState.is_satisfied(state.get(key), desired[key]):
+			return false
+	return true
+
+func _verify_action_effects(action: GoapAction) -> bool:
+	for key in action.get_effects():
+		if not GoapWorldState.is_satisfied(_world_state.get_state(key), action.get_effects()[key]):
+			return false
+	return true
+
+func _get_best_goal() -> GoapGoal:
+	var candidates: Array[GoapGoal] = []
 	for goal in _goals:
-		if goal.enabled and goal.is_valid() and (highest_priority == null or \
-				goal.get_priority() > highest_priority.get_priority()):
-			highest_priority = goal
-		_debug_text += "\n Is %s valid? %s "%[goal.get_action_name(), goal.is_valid()]
-	return highest_priority
+		if goal.enabled and goal.is_valid():
+			candidates.append(goal)
+	candidates.sort_custom(_goal_precedes)
+	return candidates[0] if not candidates.is_empty() else null
 
-
-## Steps through the current action plan, executing one action at a time.
-func _follow_plan(plan, delta):
-	if plan.size() == 0:
-		print("Warning: _follow_plan called with empty plan")
-		_finished_last_plan = true
-		return
-
-	if _current_goal and _current_goal.has_method("perform"):
-		_current_goal.perform(delta)
-
-
-	if _current_plan_step < plan.size() - 1:
-		var current_action = plan[_current_plan_step]
-
-		if current_action.has_method("enter") and (not current_action.has_meta("_entered") or not current_action.get_meta("_entered")):
-			current_action.enter()
-			action_changed.emit(current_action)
-			current_action.set_meta("_entered", true)
-	
-		var is_step_complete = current_action.perform(delta)
-		if is_step_complete:
-			previous_action = current_action
-			if current_action.has_method("exit"):
-				action_changed.emit(null)
-				current_action.exit()
-			current_action.set_meta("_entered", false)
-			if current_action.has_method("set_effects"):
-				current_action.set_effects(current_action.get_effects())
-			if not _verify_action_effects(current_action):
-				var blackboard = {
-					"global_position": _actor.global_position,
-				}
-				for s in _world_state._state:
-					blackboard[s] = _world_state._state[s]
-				
-				_current_plan = _action_planner.get_plan(_current_goal, blackboard)
-				plan_changed.emit(_current_plan)
-				_current_plan_step = 0
-				
-				if _current_plan.size() == 0:
-					if _current_goal and _current_goal.has_method("on_goal_failed"):
-						_current_goal.on_goal_failed()
-					if _current_goal and _current_goal.has_method("exit"):
-						_current_goal.exit()
-					_current_goal = null
-					_current_plan = []
-					_current_plan_step = 0
-				return
-
-			_current_plan_step += 1
-
-			if _current_goal:
-				var desired_state = _current_goal.get_desired_state()
-				var is_goal_satisfied = true
-				for state_key in desired_state:
-					if _world_state.get_state(state_key) != desired_state[state_key]:
-						is_goal_satisfied = false
-						break
-
-				if is_goal_satisfied:
-					if _current_goal.has_method("on_goal_achieved"):
-						_current_goal.on_goal_achieved()
-					_finished_last_plan = true
-					return
-
-	if _current_plan_step >= plan.size() - 1:
-		if _current_goal:
-			var desired_state = _current_goal.get_desired_state()
-			var is_goal_satisfied = true
-			for state_key in desired_state:
-				if _world_state.get_state(state_key) != desired_state[state_key]:
-					is_goal_satisfied = false
-					break
-			
-			if is_goal_satisfied:
-
-				if _current_goal.has_method("on_goal_achieved"):
-					_current_goal.on_goal_achieved()
-				_finished_last_plan = true
-			else:
-				_current_goal = null
-				_current_plan = []
-				_current_plan_step = 0
-
-
-## Returns the currently active [GoapGoal], or [code]null[/code].
 func get_current_goal() -> GoapGoal:
 	return _current_goal
 
+func get_context_goal() -> GoapGoal:
+	return _planning_goal if _planning_goal != null else _current_goal
 
-## Returns the [GoapAction] currently being executed, or [code]null[/code].
 func get_current_action() -> GoapAction:
-	if _current_plan.size() > 0 and _current_plan_step < _current_plan.size():
-		var current_item = _current_plan[_current_plan_step]
-
-		if current_item is GoapAction:
-			return current_item
+	if _current_plan_step < _current_plan.size() - 1:
+		return _current_plan[_current_plan_step] as GoapAction
 	return null
 
-## Returns the agent's [GoapWorldState] instance.
 func get_world_state() -> GoapWorldState:
 	return _world_state
-
-
-## Returns [code]true[/code] if the action's declared effects match the world state.
-func _verify_action_effects(action: GoapAction) -> bool:
-	var effects = action.get_effects()
-	for effect_key in effects:
-		var expected_value = effects[effect_key]
-		var actual_value = _world_state.get_state(effect_key)
-		if actual_value != expected_value:
-			return false
-	
-	return true
-
 
 func debug_select() -> void:
 	_send_debug("select", [])
 
-
 func _send_debug(msg_type: String, data: Array) -> void:
-	if not debug_enabled or not EngineDebugger.is_active():
-		return
-	EngineDebugger.send_message(DEBUG_PREFIX + ":" + msg_type, [_debug_id] + data)
+	if debug_enabled and EngineDebugger.is_active():
+		EngineDebugger.send_message(DEBUG_PREFIX + ":" + msg_type, [_debug_id] + data)
 
-
-func _connect_debug_signals():
+func _connect_debug_signals() -> void:
 	goal_changed.connect(_on_debug_goal_changed)
 	plan_changed.connect(_on_debug_plan_changed)
 	action_changed.connect(_on_debug_action_changed)
 	_world_state.state_updated.connect(_on_world_state_updated)
 
-
-func _send_debug_register(actions: Array):
+func _send_debug_register(actions: Array) -> void:
 	var goal_data := []
-	for g in _goals:
+	for goal in _goals:
 		goal_data.append({
-			"name": g.get_action_name(),
-			"priority": g.get_priority(),
-			"desired_state": g.get_desired_state(),
-			"cost": g.get_cost({}),
+			"name": goal.get_action_name(),
+			"priority": goal.get_priority(),
+			"desired_state": goal.get_desired_state(),
+			"cost": goal.get_cost({}),
 		})
 	var action_data := []
-	for a in actions:
+	for action in actions:
 		action_data.append({
-			"name": a.get_action_name(),
-			"cost": a.cost,
-			"preconditions": a.get_preconditions(),
-			"effects": a.get_effects(),
+			"name": action.get_action_name(),
+			"cost": action.cost,
+			"preconditions": action.get_preconditions(),
+			"effects": action.get_effects(),
 		})
 	_send_debug("registry", [goal_data, action_data])
 
+func _on_debug_goal_changed(new_goal: GoapGoal) -> void:
+	_send_debug("goal", [new_goal.get_action_name(), new_goal.get_relevance(), new_goal.get_desired_state()] if new_goal else ["", 0, {}])
 
-func _on_debug_goal_changed(new_goal: GoapGoal):
-	if new_goal:
-		_send_debug("goal", [new_goal.get_action_name(), new_goal.get_priority(), new_goal.get_desired_state()])
-	else:
-		_send_debug("goal", ["", 0, {}])
-
-
-func _on_debug_plan_changed(plan: Array):
-	var plan_data := []
+func _on_debug_plan_changed(plan: Array) -> void:
+	var data := []
 	for item in plan:
 		if item is GoapAction:
-			plan_data.append({
-				"name": item.get_action_name(),
-				"cost": item.cost,
-				"preconditions": item.get_preconditions(),
-				"effects": item.get_effects(),
-			})
+			data.append({"name": item.get_action_name(), "cost": item.get_cost(_last_blackboard)})
 		elif item is GoapGoal:
-			plan_data.append({
-				"name": item.get_action_name(),
-				"cost": item.cost,
-			})
-	_send_debug("plan", [plan_data])
+			data.append({"name": item.get_action_name(), "cost": item.get_cost(_last_blackboard)})
+	_send_debug("plan", [data])
 
-
-func _on_debug_action_changed(new_action: GoapAction):
-	var action_name = new_action.get_action_name() if new_action else ""
-	_send_debug("action", [action_name])
+func _on_debug_action_changed(new_action: GoapAction) -> void:
+	_send_debug("action", [new_action.get_action_name() if new_action else ""])
 	_send_debug("step", [_current_plan_step, _current_plan.size()])
 
-
-func _on_world_state_updated():
+func _on_world_state_updated() -> void:
 	if replan_on_world_state_change:
 		request_replan()
 	_send_debug("world_state", [_world_state._state.duplicate()])
+
+func _trace(message: String) -> void:
+	if OS.has_environment("GOAP_TRACE"):
+		print("[GOAP] actor=%s %s" % [_actor.name if _actor != null else "?", message])

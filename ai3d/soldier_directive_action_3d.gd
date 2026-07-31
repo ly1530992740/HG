@@ -18,7 +18,7 @@ enum Operation {
 func is_valid() -> bool:
 	if not enabled or _actor == null or not _actor.has_method("get_active_directive"):
 		return false
-	if agent != null and agent.get_current_goal() is SoldierAutonomyGoal3D:
+	if agent != null and agent.get_context_goal() is SoldierAutonomyGoal3D:
 		return false
 	var directive := _actor.get_active_directive() as SquadDirective3D
 	if directive == null:
@@ -44,15 +44,22 @@ func is_valid() -> bool:
 			return directive.type == SquadDirective3D.Type.RECON
 	return false
 
+func get_cost(_blackboard) -> int:
+	if _actor != null and _actor.has_method("get_directive_action_cost"):
+		return _actor.get_directive_action_cost(operation)
+	return cost
+
 func get_preconditions() -> Dictionary:
 	var directive := _actor.get_active_directive() as SquadDirective3D if _actor != null else null
 	if directive == null:
 		return {}
 	match operation:
+		Operation.MOVE:
+			return {&"movement_safe": true, &"movement_posture_ready": true}
 		Operation.ENTER_COVER:
 			return {&"at_destination": true}
 		Operation.APPROACH_TARGET:
-			return {&"target_acquired": true}
+			return {&"target_acquired": true, &"movement_safe": true, &"movement_posture_ready": true}
 		Operation.AIM:
 			var result := {&"target_acquired": true}
 			if directive.type != SquadDirective3D.Type.AIM:

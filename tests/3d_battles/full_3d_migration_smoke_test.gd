@@ -25,7 +25,9 @@ func _ready() -> void:
 func _test_ambush_task_graph() -> void:
 	var scene := AMBUSH_SCENE.instantiate()
 	(scene.get_node("BlueSquad") as SquadCoordinator3D).use_qwen = false
+	(scene.get_node("BlueSquad") as SquadCoordinator3D).use_advanced_tactics = false
 	(scene.get_node("RedSquad") as SquadCoordinator3D).use_qwen = false
+	(scene.get_node("RedSquad") as SquadCoordinator3D).use_advanced_tactics = false
 	add_child(scene)
 	await get_tree().process_frame
 	var blue := scene.get_node("BlueSquad") as SquadCoordinator3D
@@ -52,7 +54,9 @@ func _test_ambush_task_graph() -> void:
 func _test_flank_route_switching() -> void:
 	var scene := FLANK_SCENE.instantiate()
 	(scene.get_node("BlueSquad") as SquadCoordinator3D).use_qwen = false
+	(scene.get_node("BlueSquad") as SquadCoordinator3D).use_advanced_tactics = false
 	(scene.get_node("RedSquad") as SquadCoordinator3D).use_qwen = false
+	(scene.get_node("RedSquad") as SquadCoordinator3D).use_advanced_tactics = false
 	add_child(scene)
 	await get_tree().process_frame
 	var blue := scene.get_node("BlueSquad") as SquadCoordinator3D
@@ -93,9 +97,12 @@ func _test_wave_and_shop_systems() -> void:
 	spawner.set("_countdown", 0.0)
 	spawner._process(0.0)
 	assert(spawner.active_squads.size() == 1, "第一波没有生成一支敌军小队")
-	assert(spawner.active_squads[0].use_qwen, "配备小队长的波次敌军没有默认启用Qwen")
+	assert(not spawner.active_squads[0].use_qwen, "波次敌军不应在实时战斗中默认启用Qwen")
+	assert(spawner.active_squads[0].use_advanced_tactics, "正式波次敌军没有启用有限情报高级战术")
 	assert(is_instance_valid(spawner.active_squads[0].leader), "Qwen敌军生成后没有自动选举实体小队长")
 	assert(spawner.active_squads[0].known_target == scene.get_node("World/Player3D"), "波次敌人没有在出生时获得玩家目标")
+	assert(spawner.active_squads[0].get_mission_target_position().distance_to(scene.get_node("World/Player3D").global_position) < 0.1,
+		"波次敌军的高级任务点没有指向地图防守目标")
 	_cancel_squad_qwen(spawner.active_squads[0])
 	spawner.active_squads[0].queue_free()
 	scene.queue_free()

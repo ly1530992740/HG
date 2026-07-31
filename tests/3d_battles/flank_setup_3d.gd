@@ -6,6 +6,8 @@ func _ready() -> void:
 	$World/QwenDebugPanel3D.set_debug_visible(true)
 	var red_target := red.get_configured_member_actors()[0]
 	var blue_target := blue.get_configured_member_actors()[0]
+	blue.set_runtime_mission_target(red.global_position, 12.0)
+	red.set_runtime_mission_target(blue.global_position, 12.0)
 	for member in blue.get_configured_member_actors():
 		member.aware_of_enemy = true
 		member.current_target = red_target

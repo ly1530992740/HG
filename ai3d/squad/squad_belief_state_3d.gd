@@ -67,7 +67,8 @@ func get_living_contacts(minimum_confidence := 0.12) -> Array[CombatContact3D]:
 	var result: Array[CombatContact3D] = []
 	for contact in get_known_contacts(minimum_confidence):
 		var target := contact.get_target()
-		if target == null or not target.has_method("is_combat_alive") or bool(target.is_combat_alive()):
+		if contact.target_ref == null \
+				or (target != null and (not target.has_method("is_combat_alive") or bool(target.is_combat_alive()))):
 			result.append(contact)
 	return result
 
@@ -96,6 +97,17 @@ func get_estimated_enemy_power() -> float:
 func has_known_hostile_in_radius(center: Vector3, radius: float) -> bool:
 	for contact in get_living_contacts(0.2):
 		var delta := contact.last_known_position - center
+		delta.y = 0.0
+		if delta.length() <= radius:
+			return true
+	return false
+
+func has_recent_threat_in_radius(center: Vector3, radius: float, max_age_seconds := 8.0) -> bool:
+	var cutoff := Time.get_ticks_msec() - int(maxf(0.0, max_age_seconds) * 1000.0)
+	for event in threat_events:
+		if int(event.get("reported_at", 0)) < cutoff:
+			continue
+		var delta := (event.get("position", Vector3.ZERO) as Vector3) - center
 		delta.y = 0.0
 		if delta.length() <= radius:
 			return true

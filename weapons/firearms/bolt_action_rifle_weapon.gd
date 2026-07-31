@@ -1,2 +1,0 @@
-extends FirearmWeapon
-class_name BoltActionRifleWeapon

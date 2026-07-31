@@ -27,7 +27,7 @@ BuildingManager="*res://buildings/unit construction/building_manager.gd"
 GlobalPlayer="*res://global_player.gd"
 TargetManager="*res://target_manager.gd"
 tutomanager="*res://tutomanager.gd"
-SurvivalEconomy="*res://survival/economy/survival_economy.gd"
+SurvivalEconomy="*res://survival3d/economy/survival_economy_3d.gd"
 
 [display]
 

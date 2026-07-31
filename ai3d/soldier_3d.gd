@@ -51,7 +51,7 @@ enum MoveMode { WALK, QUIET, RUN }
 @export var dangerous_sound_range := 24.0
 @export var threat_memory_seconds := 6.0
 @export var immediate_threat_seconds := 2.8
-@export var emergency_cover_max_distance := 8.0
+@export var emergency_cover_max_distance := 15.0
 @export var autonomy_return_fire_seconds := 0.9
 @export var autonomy_scan_seconds := 1.2
 @export var security_cycle_interval := 1.5
@@ -78,6 +78,7 @@ enum MoveMode { WALK, QUIET, RUN }
 @onready var stamina_component: StaminaComponent3D = $Components/Stamina
 @onready var limb_damage_component: LimbDamageComponent3D = $Components/LimbDamage
 @onready var suppression_component: SuppressionComponent3D = $Components/Suppression
+@onready var fire_cycle_component: WeaponFireCycle3D = $Components/FireCycle
 
 var health: int:
 	get: return health_component.current if is_instance_valid(health_component) else 0
@@ -95,11 +96,11 @@ var logical_forward := Vector3.FORWARD
 var current_target: Node3D
 var active_cover: TacticalCover3D
 var active_cover_slot: Marker3D
+var cover_exposed := false
 var active_directive: SquadDirective3D
 var last_completed_directive_version := 0
 var aware_of_enemy := false
 var is_aimed := false
-var fire_cooldown := 0.0
 var dead := false
 var is_squad_leader := false
 var last_weapon_fired_msec := -100000
@@ -109,7 +110,10 @@ var stamina: float:
 	get: return stamina_component.current if is_instance_valid(stamina_component) else 0.0
 
 var _goap_agent: GoapAgent
+var working_memory: SoldierWorkingMemory3D
+var local_threat_field: SoldierLocalThreatField3D
 var _operation_elapsed := 0.0
+var _directive_started_msec := 0
 var _route_index := 0
 var _scan_timer := 0.0
 var _reaction_timer := 0.0
@@ -120,6 +124,7 @@ var weapon_feedback_component: WeaponFeedback3D
 var _threat_position := Vector3.ZERO
 var _threat_memory_timer := 0.0
 var _immediate_threat_timer := 0.0
+var _emergency_prone_timer := 0.0
 var _threat_confidence := 0.0
 var _threat_actor: Node3D
 var _contact_response_complete := true
@@ -130,6 +135,22 @@ var _autonomy_operation_completed := false
 var _movement_constraint_enabled := false
 var _movement_constraint_center := Vector3.ZERO
 var _movement_constraint_radius := 0.0
+var _movement_requested_last_frame := false
+var _last_movement_destination := Vector3.ZERO
+var _movement_best_distance := INF
+var _movement_stall_timer := 0.0
+var _movement_detour_timer := 0.0
+var _movement_detour_direction := Vector3.ZERO
+var _movement_detour_target := Vector3.ZERO
+var _has_local_waypoint := false
+var _local_waypoint := Vector3.ZERO
+var _local_waypoint_destination := Vector3.ZERO
+var _local_navigation_decisions := 0
+var _local_direct_risk := 0.0
+var _local_selected_risk := 0.0
+var _last_collision_normal := Vector3.ZERO
+var _last_collision_cover: TacticalCover3D
+var _cover_exposure_shots_remaining := 0
 
 func _ready() -> void:
 	add_to_group("combatant3d")
@@ -144,6 +165,7 @@ func _ready() -> void:
 	_make_stance_shapes_unique()
 	_apply_stance_geometry()
 	weapon_component.configure(combat_role, combat_team)
+	fire_cycle_component.configure(weapon_component.definition, combat_role, int(get_instance_id()))
 	weapon_feedback_component = WeaponFeedback3D.new()
 	weapon_feedback_component.name = "WeaponFeedback"
 	$Components.add_child(weapon_feedback_component)
@@ -152,6 +174,12 @@ func _ready() -> void:
 	limb_damage_component.configure(self, voxel_visual)
 	perception_component.configure(self)
 	suppression_component.configure(self)
+	working_memory = SoldierWorkingMemory3D.new()
+	working_memory.name = "WorkingMemory"
+	$Components.add_child(working_memory)
+	working_memory.configure(self)
+	local_threat_field = SoldierLocalThreatField3D.new()
+	local_threat_field.configure(self, working_memory)
 	_apply_team_visual()
 	status_label.visible = show_status_label
 	_setup_goap()
@@ -161,10 +189,13 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if dead:
 		return
-	fire_cooldown = maxf(0.0, fire_cooldown - delta)
+	_update_movement_stall(delta)
+	fire_cycle_component.process(delta)
+	working_memory.tick(delta)
 	_reaction_timer = maxf(0.0, _reaction_timer - delta)
 	_threat_memory_timer = maxf(0.0, _threat_memory_timer - delta)
 	_immediate_threat_timer = maxf(0.0, _immediate_threat_timer - delta)
+	_emergency_prone_timer = maxf(0.0, _emergency_prone_timer - delta)
 	_security_cycle_timer = maxf(0.0, _security_cycle_timer - delta)
 	_scan_timer -= delta
 	if _scan_timer <= 0.0:
@@ -175,6 +206,13 @@ func _physics_process(delta: float) -> void:
 	_sync_dynamic_goap_state()
 	if _goap_agent != null:
 		_goap_agent.process(delta)
+	if is_pinned():
+		_desired_velocity = Vector3.ZERO
+		if is_instance_valid(active_cover):
+			if cover_exposed:
+				set_cover_exposed(false)
+		else:
+			set_stance(Stance.PRONE)
 	_update_stamina(delta, _desired_velocity.length_squared() > 0.01)
 	var gravity := float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 	if not is_on_floor():
@@ -184,6 +222,7 @@ func _physics_process(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, _desired_velocity.x, 14.0 * delta)
 	velocity.z = move_toward(velocity.z, _desired_velocity.z, 14.0 * delta)
 	move_and_slide()
+	_capture_movement_collision()
 	_update_visual_animation(delta)
 
 func receive_directive(directive: SquadDirective3D) -> void:
@@ -193,17 +232,32 @@ func receive_directive(directive: SquadDirective3D) -> void:
 		and active_directive.type == SquadDirective3D.Type.AIM \
 		and directive.type in [SquadDirective3D.Type.ATTACK, SquadDirective3D.Type.SUPPRESS] \
 		and is_instance_valid(current_target) and current_target == directive.target
-	var keeps_cover := directive.type in [SquadDirective3D.Type.TAKE_COVER, SquadDirective3D.Type.AIM, SquadDirective3D.Type.ATTACK, SquadDirective3D.Type.SUPPRESS]
+	var keeps_cover := directive.type in [
+		SquadDirective3D.Type.GUARD,
+		SquadDirective3D.Type.HOLD_SECTOR,
+		SquadDirective3D.Type.TAKE_COVER,
+		SquadDirective3D.Type.AIM,
+		SquadDirective3D.Type.ATTACK,
+		SquadDirective3D.Type.SUPPRESS,
+	]
 	if directive.type == SquadDirective3D.Type.TAKE_COVER and active_cover != directive.assigned_cover:
-		if active_cover != null:
-			active_cover.release_slot(self)
-		active_cover = null
-		active_cover_slot = null
+		_clear_cover_state()
 	if active_cover != null and not keeps_cover:
-		active_cover.release_slot(self)
-		active_cover = null
-		active_cover_slot = null
+		var departure_target := directive.route[0] if not directive.route.is_empty() else directive.target_position
+		var departure_route := active_cover.get_departure_route(active_cover_slot, departure_target)
+		if not departure_route.is_empty():
+			directive.route = departure_route + directive.route
+		_clear_cover_state()
 	active_directive = directive
+	_reset_local_waypoint()
+	_directive_started_msec = Time.get_ticks_msec()
+	if working_memory != null:
+		working_memory.remember_task(
+			StringName("directive_%d" % directive.version),
+			directive.target_position,
+			maxf(6.0, directive.duration + 2.0),
+			{"directive_type": directive.type, "reason": directive.reason}
+		)
 	is_aimed = preserves_aim
 	_route_index = 0
 	_select_tactical_movement()
@@ -230,8 +284,41 @@ func has_active_directive() -> bool:
 func get_active_directive() -> SquadDirective3D:
 	return active_directive
 
+func set_squad_influence_map(value: SquadInfluenceMap3D) -> void:
+	if local_threat_field != null:
+		local_threat_field.set_shared_influence(value)
+
+func get_local_navigation_debug() -> Dictionary:
+	return {
+		"has_waypoint": _has_local_waypoint,
+		"waypoint": _local_waypoint,
+		"decisions": _local_navigation_decisions,
+		"direct_risk": snappedf(_local_direct_risk, 0.1),
+		"selected_risk": snappedf(_local_selected_risk, 0.1),
+	}
+
 func get_directive_version() -> int:
 	return active_directive.version if active_directive != null else 0
+
+func get_directive_goal_relevance() -> float:
+	if active_directive == null:
+		return 0.0
+	match active_directive.type:
+		SquadDirective3D.Type.TAKE_COVER:
+			return 145.0
+		SquadDirective3D.Type.SUPPRESS:
+			return 120.0
+		SquadDirective3D.Type.ATTACK, SquadDirective3D.Type.FLANK:
+			return 110.0
+		SquadDirective3D.Type.AIM:
+			return 105.0
+		SquadDirective3D.Type.RECON:
+			return 85.0
+		SquadDirective3D.Type.MOVE, SquadDirective3D.Type.WITHDRAW:
+			return 80.0
+		SquadDirective3D.Type.GUARD, SquadDirective3D.Type.HOLD_SECTOR:
+			return 70.0
+	return 100.0
 
 func on_directive_plan_completed() -> void:
 	if active_directive == null or last_completed_directive_version >= active_directive.version:
@@ -243,12 +330,10 @@ func on_directive_plan_completed() -> void:
 func begin_goap_operation(operation: SoldierDirectiveAction3D.Operation) -> void:
 	_operation_elapsed = 0.0
 	if operation == SoldierDirectiveAction3D.Operation.APPROACH_TARGET and active_cover != null:
-		active_cover.release_slot(self)
-		active_cover = null
-		active_cover_slot = null
-		set_stance(Stance.STAND)
+		_clear_cover_state()
 	if operation in [SoldierDirectiveAction3D.Operation.MOVE, SoldierDirectiveAction3D.Operation.ENTER_COVER, SoldierDirectiveAction3D.Operation.APPROACH_TARGET]:
 		is_aimed = false
+		fire_cycle_component.notify_movement_started()
 	_update_status(_operation_label(operation))
 
 func perform_goap_operation(operation: SoldierDirectiveAction3D.Operation, delta: float) -> bool:
@@ -274,8 +359,11 @@ func perform_goap_operation(operation: SoldierDirectiveAction3D.Operation, delta
 			return _perform_observe()
 	return false
 
-func end_goap_operation(_operation: SoldierDirectiveAction3D.Operation) -> void:
+func end_goap_operation(operation: SoldierDirectiveAction3D.Operation) -> void:
 	_desired_velocity = Vector3.ZERO
+	if operation == SoldierDirectiveAction3D.Operation.ENGAGE and is_instance_valid(active_cover):
+		is_aimed = false
+		set_cover_exposed(false)
 
 func _perform_move() -> bool:
 	if active_directive == null:
@@ -290,7 +378,7 @@ func _perform_move() -> bool:
 	if _flat_distance_to(destination) <= 0.5:
 		_desired_velocity = Vector3.ZERO
 		return active_directive.route.is_empty() or _route_index >= active_directive.route.size()
-	_move_toward(destination)
+	_move_toward(_get_local_movement_target(destination))
 	return false
 
 func _perform_enter_cover() -> bool:
@@ -305,16 +393,18 @@ func _perform_enter_cover() -> bool:
 	if active_cover_slot == null:
 		return false
 	global_position = active_cover_slot.global_position
+	set_stance(Stance.STAND)
 	active_cover = cover
-	set_stance(Stance.CROUCH if cover.cover_height <= 1.45 else Stance.STAND)
+	set_cover_exposed(false)
 	set_movement_mode(MoveMode.WALK)
 	_desired_velocity = Vector3.ZERO
 	return true
 
 func _perform_acquire_target() -> bool:
-	if active_directive != null and is_instance_valid(active_directive.target) and is_hostile_target(active_directive.target) \
-		and (active_directive.type == SquadDirective3D.Type.SUPPRESS or perception_component.can_see(active_directive.target)):
-		current_target = active_directive.target
+	if active_directive != null and is_instance_valid(active_directive.target) and is_hostile_target(active_directive.target):
+		_face_position(active_directive.target.global_position)
+		if active_directive.type == SquadDirective3D.Type.SUPPRESS or perception_component.can_see(active_directive.target):
+			current_target = active_directive.target
 	elif not is_instance_valid(current_target) or not perception_component.can_see(current_target):
 		current_target = perception_component.find_best_hostile(true)
 	return is_instance_valid(current_target)
@@ -325,15 +415,72 @@ func _perform_approach_target() -> bool:
 	if _is_target_in_weapon_range(current_target):
 		_desired_velocity = Vector3.ZERO
 		return true
-	_move_toward(current_target.global_position)
+	_move_toward(_get_local_movement_target(current_target.global_position))
 	return false
+
+func get_directive_action_cost(operation: SoldierDirectiveAction3D.Operation) -> int:
+	if local_threat_field == null:
+		return 1
+	if operation not in [SoldierDirectiveAction3D.Operation.MOVE, SoldierDirectiveAction3D.Operation.APPROACH_TARGET]:
+		return 1
+	var destination := global_position
+	if operation == SoldierDirectiveAction3D.Operation.APPROACH_TARGET and is_instance_valid(current_target):
+		destination = current_target.global_position
+	elif active_directive != null:
+		destination = active_directive.target_position
+		if not active_directive.route.is_empty() and _route_index < active_directive.route.size():
+			destination = active_directive.route[_route_index]
+	var distance := minf(4.0, _flat_distance_to(destination))
+	if distance <= 0.05:
+		return 1
+	var direction := destination - global_position
+	direction.y = 0.0
+	var endpoint := global_position + direction.normalized() * distance
+	return 1 + clampi(ceili(local_threat_field.score_segment(global_position, endpoint) / 22.0), 0, 12)
+
+func _get_local_movement_target(destination: Vector3) -> Vector3:
+	var uses_tactical_steering := active_directive != null and active_directive.type in [
+		SquadDirective3D.Type.MOVE,
+		SquadDirective3D.Type.WITHDRAW,
+		SquadDirective3D.Type.RECON,
+		SquadDirective3D.Type.FLANK,
+	]
+	var precision_distance := 5.0 if active_directive != null and not active_directive.route.is_empty() else 1.2
+	if local_threat_field == null or not uses_tactical_steering or _flat_distance_to(destination) <= precision_distance:
+		_reset_local_waypoint()
+		return destination
+	var destination_changed := _flat_distance(_local_waypoint_destination, destination) > 0.75
+	var waypoint_reached := _has_local_waypoint and _flat_distance_to(_local_waypoint) <= 0.42
+	if not _has_local_waypoint or destination_changed or waypoint_reached:
+		var choice := local_threat_field.choose_local_detour(global_position, destination, 3.0, 4.0)
+		_local_waypoint = choice.get("point", destination) as Vector3
+		_local_waypoint_destination = destination
+		_local_direct_risk = float(choice.get("direct_risk", 0.0))
+		_local_selected_risk = float(choice.get("selected_risk", _local_direct_risk))
+		_has_local_waypoint = true
+		_local_navigation_decisions += 1
+	return _local_waypoint
+
+func _reset_local_waypoint() -> void:
+	_has_local_waypoint = false
+	_local_waypoint = Vector3.ZERO
+	_local_waypoint_destination = Vector3.ZERO
 
 func _perform_aim() -> bool:
 	if not is_instance_valid(current_target):
 		return false
+	if is_pinned():
+		is_aimed = false
+		if is_instance_valid(active_cover):
+			set_cover_exposed(false)
+		return false
+	if is_instance_valid(active_cover):
+		_begin_cover_exposure()
 	_face_position(current_target.global_position)
-	var settle_time := 0.65 if combat_role == CombatRole.MARKSMAN else 0.38
+	var settle_time := fire_cycle_component.get_required_aim_duration()
 	is_aimed = _operation_elapsed >= settle_time
+	if is_aimed:
+		fire_cycle_component.complete_aim(current_target.global_position - global_position)
 	return is_aimed
 
 func _perform_reload() -> bool:
@@ -342,7 +489,7 @@ func _perform_reload() -> bool:
 		return true
 	if reserve_ammo <= 0:
 		return false
-	if _operation_elapsed < 1.4:
+	if _operation_elapsed < fire_cycle_component.reload_duration:
 		return false
 	var reloaded := weapon_component.reload()
 	if reloaded and weapon_feedback_component != null:
@@ -359,16 +506,34 @@ func _perform_engage() -> bool:
 		_set_goap_state(&"target_acquired", false, true)
 		_set_goap_state(&"aimed", false)
 		return false
+	if is_pinned():
+		is_aimed = false
+		if is_instance_valid(active_cover):
+			set_cover_exposed(false)
+		_set_goap_state(&"aimed", false, true)
+		return false
+	if is_instance_valid(active_cover):
+		_begin_cover_exposure()
+	if fire_cycle_component.requires_reaim(current_target.global_position - global_position):
+		is_aimed = false
+		_set_goap_state(&"aimed", false, true)
+		return false
 	_face_position(current_target.global_position)
+	var fired := false
 	if _reaction_timer <= 0.0:
-		_try_attack_target(current_target)
+		fired = _try_attack_target(current_target)
+	if _update_cover_exposure_after_shot(fired):
+		_set_goap_state(&"aimed", false, true)
+		return false
 	if active_directive != null and active_directive.type == SquadDirective3D.Type.SUPPRESS:
-		return _operation_elapsed >= maxf(1.5, active_directive.duration)
+		var directive_elapsed := float(Time.get_ticks_msec() - _directive_started_msec) / 1000.0
+		return directive_elapsed >= maxf(1.5, active_directive.duration)
 	return not is_instance_valid(current_target) or not is_combat_target_alive(current_target)
 
 func _perform_guard() -> bool:
 	_desired_velocity = Vector3.ZERO
-	return _operation_elapsed >= 0.35
+	var hold_duration := active_directive.duration if active_directive != null else 0.0
+	return _operation_elapsed >= maxf(0.35, hold_duration)
 
 func _perform_observe() -> bool:
 	_desired_velocity = Vector3.ZERO
@@ -394,13 +559,102 @@ func _move_toward(destination: Vector3) -> void:
 	direction.y = 0.0
 	if direction.length_squared() <= 0.001:
 		return
+	var destination_delta := destination - _last_movement_destination
+	destination_delta.y = 0.0
+	if destination_delta.length() > 0.5:
+		_movement_best_distance = direction.length()
+		_movement_stall_timer = 0.0
+	_last_movement_destination = destination
 	direction = direction.normalized()
+	if _movement_detour_timer > 0.0 and _movement_detour_direction.length_squared() > 0.01:
+		if _movement_detour_target != Vector3.ZERO:
+			var detour_offset := _movement_detour_target - global_position
+			detour_offset.y = 0.0
+			if detour_offset.length() <= 0.35:
+				_movement_detour_timer = 0.0
+				_movement_detour_target = Vector3.ZERO
+			else:
+				direction = detour_offset.normalized()
+		else:
+			direction = _movement_detour_direction
+	elif _movement_stall_timer >= 0.55:
+		_begin_movement_detour(direction, destination)
+		direction = _movement_detour_direction
 	logical_forward = direction
 	rotation.y = lerp_angle(rotation.y, atan2(-direction.x, -direction.z), 0.18)
 	_desired_velocity = direction * get_current_move_speed()
+	_movement_requested_last_frame = true
+
+func _update_movement_stall(delta: float) -> void:
+	if _movement_requested_last_frame:
+		var current_distance := _flat_distance_to(_last_movement_destination)
+		if current_distance + 0.03 < _movement_best_distance:
+			_movement_best_distance = current_distance
+			_movement_stall_timer = 0.0
+		else:
+			_movement_stall_timer += delta
+	else:
+		_movement_stall_timer = 0.0
+		_movement_best_distance = INF
+	_movement_requested_last_frame = false
+	_movement_detour_timer = maxf(0.0, _movement_detour_timer - delta)
+
+func _begin_movement_detour(desired_direction: Vector3, destination: Vector3) -> void:
+	if is_instance_valid(_last_collision_cover):
+		_movement_detour_target = _select_reachable_bypass(_last_collision_cover, destination)
+		var bypass_direction := _movement_detour_target - global_position
+		bypass_direction.y = 0.0
+		if bypass_direction.length_squared() > 0.01:
+			_movement_detour_direction = bypass_direction.normalized()
+			_movement_detour_timer = clampf(bypass_direction.length() / maxf(0.5, get_current_move_speed()) + 0.8, 1.0, 4.0)
+			_movement_stall_timer = 0.0
+			return
+	var normal := _last_collision_normal
+	normal.y = 0.0
+	if normal.length_squared() <= 0.01:
+		normal = Vector3(-desired_direction.z, 0.0, desired_direction.x)
+	normal = normal.normalized()
+	var tangent := desired_direction.slide(normal)
+	if tangent.length_squared() <= 0.01:
+		tangent = Vector3(-normal.z, 0.0, normal.x)
+	if tangent.dot(desired_direction) < 0.0:
+		tangent = -tangent
+	_movement_detour_direction = (tangent.normalized() + normal * 0.45).normalized()
+	_movement_detour_timer = 0.8
+	_movement_detour_target = Vector3.ZERO
+	_movement_stall_timer = 0.0
+
+func _select_reachable_bypass(cover: TacticalCover3D, destination: Vector3) -> Vector3:
+	var points := cover.get_bypass_points(global_position, destination)
+	var best_point := points[0]
+	var best_score := INF
+	for point in points:
+		var from := global_position + Vector3.UP * 0.55
+		var to := (point as Vector3) + Vector3.UP * 0.55
+		var query := PhysicsRayQueryParameters3D.create(from, to)
+		query.exclude = [get_rid(), cover.get_rid()]
+		query.collide_with_areas = false
+		var blocked := not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+		var score := global_position.distance_to(point) + (point as Vector3).distance_to(destination)
+		if blocked:
+			score += 10000.0
+		if score < best_score:
+			best_score = score
+			best_point = point
+	return best_point
+
+func _capture_movement_collision() -> void:
+	if get_slide_collision_count() <= 0:
+		return
+	var collision_info := get_slide_collision(get_slide_collision_count() - 1)
+	if collision_info != null:
+		_last_collision_normal = collision_info.get_normal()
+		_last_collision_cover = collision_info.get_collider() as TacticalCover3D
 
 func _try_attack_target(target: Node3D) -> bool:
-	if fire_cooldown > 0.0 or target == null:
+	if target == null or is_pinned():
+		return false
+	if is_instance_valid(active_cover) and not cover_exposed:
 		return false
 	if active_directive != null:
 		if active_directive.rules_of_engagement == SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD and _immediate_threat_timer <= 0.0:
@@ -413,15 +667,18 @@ func _try_attack_target(target: Node3D) -> bool:
 	if weapon_component.uses_ammunition() and weapon_component.magazine_ammo <= 0:
 		_set_goap_state(&"weapon_loaded", false, true)
 		return false
+	if weapon_component.uses_ammunition() and not fire_cycle_component.can_fire(target):
+		return false
 	if not weapon_component.try_attack(self, target, _get_fire_origin()):
 		return false
+	if weapon_component.uses_ammunition():
+		fire_cycle_component.record_shot()
 	if weapon_feedback_component != null:
 		var direction := (weapon_component.get_target_point(target) - _get_fire_origin()).normalized()
 		weapon_feedback_component.play_fire(direction, weapon_component.last_hit_result)
 	last_weapon_fired_msec = Time.get_ticks_msec()
 	if weapon_component.uses_ammunition() and weapon_component.magazine_ammo <= 0:
 		_set_goap_state(&"weapon_loaded", false, true)
-	fire_cooldown = weapon_component.shot_cooldown
 	aware_of_enemy = true
 	get_tree().call_group("soldier3d", "hear_combat_sound", global_position, self, 1.0)
 	weapon_fired.emit(self, target)
@@ -436,7 +693,7 @@ func _scan_for_hostiles() -> void:
 	var hostile := perception_component.find_best_hostile(true)
 	if hostile == null:
 		return
-	_register_autonomy_threat(hostile.global_position, hostile, 1.0, true)
+	_register_autonomy_threat(hostile.global_position, hostile, 1.0, false)
 	current_target = hostile
 	aware_of_enemy = true
 	contact_spotted.emit(self, hostile)
@@ -453,11 +710,13 @@ func receive_hit(damage: int, hit_location: String, hit_position: Vector3, insti
 	aware_of_enemy = true
 	_reaction_timer = reaction_delay
 	if instigator is Node3D and is_hostile_target(instigator):
+		_emergency_prone_timer = maxf(_emergency_prone_timer, immediate_threat_seconds)
 		current_target = instigator
 		_register_autonomy_threat((instigator as Node3D).global_position, instigator, 1.0, true)
 		contact_spotted.emit(self, instigator)
 		perception_report_ready.emit(self, instigator, (instigator as Node3D).global_position, 1.0, &"damage")
 	else:
+		_emergency_prone_timer = maxf(_emergency_prone_timer, immediate_threat_seconds)
 		_register_autonomy_threat(hit_position, null, 0.85, true)
 	health_changed.emit(health, health_component.maximum)
 	if suppression_component != null:
@@ -495,15 +754,35 @@ func hear_combat_sound(source_position: Vector3, instigator: Node = null, intens
 func notify_near_miss(source_position: Vector3, instigator: Node = null, intensity := 1.0) -> void:
 	if dead or (instigator != null and not is_hostile_target(instigator)):
 		return
+	_emergency_prone_timer = maxf(_emergency_prone_timer, immediate_threat_seconds)
 	_register_autonomy_threat(source_position, instigator if instigator is Node3D else null, 0.95, true)
 	if suppression_component != null:
 		suppression_component.report_near_miss(source_position, intensity)
 	perception_report_ready.emit(self, instigator as Node3D if instigator is Node3D else null, source_position, 0.9, &"near_miss")
 
+func notify_cover_impact(source_position: Vector3, intensity := 1.0) -> void:
+	if dead or suppression_component == null:
+		return
+	suppression_component.report_cover_impact(source_position, intensity)
+	_register_autonomy_threat(source_position, null, 0.5, true)
+
+func is_protected_from_position(threat_position: Vector3) -> bool:
+	if stance == Stance.PRONE:
+		return true
+	if not is_instance_valid(active_cover) or not is_instance_valid(active_cover_slot):
+		return false
+	if cover_exposed:
+		return false
+	if _flat_distance_to(active_cover_slot.global_position) > 0.9:
+		return false
+	return active_cover_slot in active_cover.get_slots_against(threat_position)
+
 func get_aim_point() -> Vector3:
 	return global_position + Vector3.UP * _get_aim_height()
 
 func set_stance(new_stance: Stance) -> void:
+	if is_instance_valid(active_cover) and new_stance != Stance.STAND:
+		return
 	if stance == new_stance:
 		return
 	stance = new_stance
@@ -512,6 +791,53 @@ func set_stance(new_stance: Stance) -> void:
 	_apply_stance_geometry()
 	stance_changed.emit(self, stance)
 	_update_status()
+
+func is_cover_exposed() -> bool:
+	return is_instance_valid(active_cover) and is_instance_valid(active_cover_slot) and cover_exposed
+
+func set_cover_exposed(exposed: bool) -> void:
+	var next_exposed := exposed and is_instance_valid(active_cover) and is_instance_valid(active_cover_slot)
+	if cover_exposed == next_exposed:
+		if is_instance_valid(active_cover):
+			_apply_stance_geometry()
+		return
+	cover_exposed = next_exposed
+	if not cover_exposed:
+		is_aimed = false
+		_cover_exposure_shots_remaining = 0
+	_apply_stance_geometry()
+	_update_status()
+
+func _begin_cover_exposure() -> void:
+	if not is_instance_valid(active_cover) or not is_instance_valid(active_cover_slot):
+		return
+	var starts_new_window := not cover_exposed
+	set_cover_exposed(true)
+	if starts_new_window or _cover_exposure_shots_remaining <= 0:
+		_cover_exposure_shots_remaining = fire_cycle_component.roll_cover_exposure_shot_budget(
+			magazine_ammo,
+			get_suppression_ratio()
+		)
+
+func _update_cover_exposure_after_shot(fired: bool) -> bool:
+	if not fired or not is_instance_valid(active_cover):
+		return false
+	_cover_exposure_shots_remaining = maxi(0, _cover_exposure_shots_remaining - 1)
+	if _cover_exposure_shots_remaining > 0 and magazine_ammo > 0:
+		return false
+	set_cover_exposed(false)
+	return true
+
+func _clear_cover_state(release_slot := true) -> void:
+	var had_cover := active_cover != null or active_cover_slot != null or cover_exposed
+	if release_slot and is_instance_valid(active_cover):
+		active_cover.release_slot(self)
+	active_cover = null
+	active_cover_slot = null
+	cover_exposed = false
+	_cover_exposure_shots_remaining = 0
+	if had_cover:
+		_apply_stance_geometry()
 
 func set_movement_mode(new_mode: MoveMode) -> void:
 	if new_mode == MoveMode.RUN and (stance != Stance.STAND or not stamina_component.can_run()):
@@ -523,17 +849,20 @@ func set_movement_mode(new_mode: MoveMode) -> void:
 	_update_status()
 
 func get_current_move_speed() -> float:
+	var base_speed := move_speed
 	match stance:
 		Stance.CROUCH:
-			return crouch_speed
+			base_speed = crouch_speed
 		Stance.PRONE:
-			return prone_speed
-	match movement_mode:
-		MoveMode.RUN:
-			return run_speed
-		MoveMode.QUIET:
-			return quiet_speed
-	return move_speed
+			base_speed = prone_speed
+		_:
+			match movement_mode:
+				MoveMode.RUN:
+					base_speed = run_speed
+				MoveMode.QUIET:
+					base_speed = quiet_speed
+	var suppression_multiplier := suppression_component.get_movement_multiplier() if suppression_component != null else 1.0
+	return maxf(0.0, base_speed * suppression_multiplier)
 
 func get_visibility_multiplier() -> float:
 	var multiplier := 1.0
@@ -564,7 +893,24 @@ func is_pinned() -> bool:
 func get_suppression_accuracy_multiplier() -> float:
 	return suppression_component.get_accuracy_multiplier() if suppression_component != null else 1.0
 
+func get_mobility_ratio() -> float:
+	var ratio := 1.0
+	for leg in ["left_leg", "right_leg"]:
+		var damage_ratio := clampf(
+			float(limb_damage_component.accumulated_damage.get(leg, 0)) \
+				/ maxf(1.0, float(limb_damage_component.leg_sever_threshold)),
+			0.0,
+			1.0
+		)
+		var leg_penalty := damage_ratio * 0.32
+		if voxel_visual != null and voxel_visual.is_limb_detached(leg):
+			leg_penalty = 0.45
+		ratio -= leg_penalty
+	return clampf(ratio, 0.1, 1.0)
+
 func get_stance_label() -> String:
+	if is_instance_valid(active_cover):
+		return "掩体站立" if cover_exposed else "掩体隐藏"
 	return ["站立", "下蹲", "卧倒"][int(stance)]
 
 func get_movement_mode_label() -> String:
@@ -632,7 +978,7 @@ func _die() -> void:
 	dead = true
 	velocity = Vector3.ZERO
 	if active_cover != null:
-		active_cover.release_slot(self)
+		_clear_cover_state()
 	death_reward_requested.emit(
 		self,
 		_last_instigator,
@@ -694,7 +1040,13 @@ func _setup_goap() -> void:
 	world.set_state(&"safe_posture", false)
 	world.set_state(&"oriented_to_threat", false)
 	world.set_state(&"contact_response_complete", true)
+	world.set_state(&"reacted_to_threat", true)
+	world.set_state(&"contact_reported", true)
+	world.set_state(&"threat_suppressed", false)
+	world.set_state(&"disturbance_investigated", false)
 	world.set_state(&"security_cycle_complete", false)
+	world.set_state(&"movement_safe", true)
+	world.set_state(&"movement_posture_ready", true)
 
 func uses_ammunition() -> bool:
 	return weapon_component.uses_ammunition()
@@ -717,6 +1069,10 @@ func _sync_dynamic_goap_state() -> void:
 		_set_goap_state(&"oriented_to_threat", false)
 		_set_goap_state(&"target_acquired", false)
 		_set_goap_state(&"contact_response_complete", true)
+		_set_goap_state(&"reacted_to_threat", true)
+		_set_goap_state(&"contact_reported", true)
+		_set_goap_state(&"threat_suppressed", false)
+		_set_goap_state(&"disturbance_investigated", false)
 	if _security_cycle_timer <= 0.0 \
 		and bool(_goap_agent.get_world_state().get_state(&"security_cycle_complete", false)):
 		_set_goap_state(&"security_cycle_complete", false, true)
@@ -725,7 +1081,9 @@ func _sync_dynamic_goap_state() -> void:
 		_set_goap_state(&"in_weapon_range", _is_target_in_weapon_range(current_target), true)
 	_set_goap_state(&"immediate_threat", _immediate_threat_timer > 0.0)
 	_set_goap_state(&"protected_from_threat", _is_protected_from_threat())
-	_set_goap_state(&"safe_posture", active_cover != null or stance == Stance.PRONE)
+	_set_goap_state(&"movement_safe", _is_order_movement_safe(), true)
+	_set_goap_state(&"safe_posture", active_cover != null or stance in [Stance.CROUCH, Stance.PRONE])
+	_set_goap_state(&"movement_posture_ready", active_cover != null or stance == Stance.STAND, true)
 	_set_goap_state(&"contact_response_complete", _contact_response_complete)
 
 func _set_goap_state(key: StringName, value: Variant, request_replan := false) -> void:
@@ -754,8 +1112,13 @@ func _register_autonomy_threat(position_value: Vector3, source: Node3D, confiden
 		_threat_actor = null
 	if immediate:
 		_immediate_threat_timer = maxf(_immediate_threat_timer, immediate_threat_seconds)
+	var directly_observed := is_instance_valid(source) and perception_component.can_see(source)
+	if working_memory != null:
+		working_memory.remember_threat(source, position_value, confidence, threat_memory_seconds,
+			directly_observed, immediate, &"visual" if directly_observed else (&"danger" if immediate else &"sound"))
 	_set_goap_state(&"immediate_threat", _immediate_threat_timer > 0.0)
 	_set_goap_state(&"protected_from_threat", _is_protected_from_threat())
+	_set_goap_state(&"movement_safe", _is_order_movement_safe(), true)
 	if not starts_new_response:
 		return
 	if immediate:
@@ -765,31 +1128,61 @@ func _register_autonomy_threat(position_value: Vector3, source: Node3D, confiden
 	_set_goap_state(&"target_acquired", false)
 	_set_goap_state(&"aimed", false)
 	_set_goap_state(&"contact_response_complete", false)
+	_set_goap_state(&"reacted_to_threat", not immediate or directly_observed)
+	_set_goap_state(&"contact_reported", false)
+	_set_goap_state(&"threat_suppressed", false)
+	_set_goap_state(&"disturbance_investigated", false)
 	_set_goap_state(&"security_cycle_complete", false)
 	if _goap_agent != null:
 		_goap_agent.request_replan()
 
+func receive_squad_contact(position_value: Vector3, source: Node3D, confidence: float) -> void:
+	if dead or confidence <= 0.0:
+		return
+	if is_instance_valid(source) and not is_hostile_target(source):
+		return
+	if working_memory != null:
+		working_memory.remember_threat(source, position_value, minf(0.65, confidence), threat_memory_seconds * 0.75,
+			false, false, &"squad_report")
+	# A radio report provides a search sector, never personal visual confirmation.
+	if _threat_memory_timer <= 0.0 or confidence > _threat_confidence:
+		_threat_position = position_value
+		_threat_actor = source if is_instance_valid(source) else null
+		_threat_confidence = minf(0.65, confidence)
+		_threat_memory_timer = threat_memory_seconds * 0.75
+		_contact_response_complete = false
+		_set_goap_state(&"oriented_to_threat", false)
+		_set_goap_state(&"contact_response_complete", false)
+		_goap_agent.request_replan()
+
 func _is_protected_from_threat() -> bool:
-	if stance == Stance.PRONE:
+	return is_protected_from_position(_threat_position)
+
+func _is_order_movement_safe() -> bool:
+	if is_pinned():
+		return false
+	if _immediate_threat_timer <= 0.0:
 		return true
-	if not is_instance_valid(active_cover) or not is_instance_valid(active_cover_slot):
-		return false
-	if _flat_distance_to(active_cover_slot.global_position) > 0.9:
-		return false
-	return active_cover_slot in active_cover.get_slots_against(_threat_position)
+	return is_instance_valid(active_cover) and _is_protected_from_threat()
 
 func is_autonomy_goal_valid(kind: SoldierAutonomyGoal3D.Kind) -> bool:
 	match kind:
 		SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT:
-			return _immediate_threat_timer > 0.0 and not _is_protected_from_threat()
+			return not has_active_directive() and _immediate_threat_timer > 0.0 and not _is_protected_from_threat()
+		SoldierAutonomyGoal3D.Kind.REACT_TO_THREAT:
+			return not has_active_directive() and _immediate_threat_timer > 0.0 and _is_protected_from_threat() \
+				and not bool(_goap_agent.get_world_state().get_state(&"reacted_to_threat", false))
+		SoldierAutonomyGoal3D.Kind.SUPPRESS_THREAT:
+			return false
 		SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT:
-			return not has_active_directive() and _threat_memory_timer > 0.0 and not _contact_response_complete
+			return false
+		SoldierAutonomyGoal3D.Kind.INVESTIGATE_DISTURBANCE:
+			return false
 		SoldierAutonomyGoal3D.Kind.RESTORE_WEAPON:
-			return uses_ammunition() and magazine_ammo <= 0 and reserve_ammo > 0 \
+			return not has_active_directive() and uses_ammunition() and magazine_ammo <= 0 and reserve_ammo > 0 \
 				and (_immediate_threat_timer <= 0.0 or _is_protected_from_threat())
 		SoldierAutonomyGoal3D.Kind.MAINTAIN_SECURITY:
-			return not has_active_directive() and _threat_memory_timer <= 0.0 \
-				and _security_cycle_timer <= 0.0 \
+			return not has_active_directive() and _security_cycle_timer <= 0.0 \
 				and not bool(_goap_agent.get_world_state().get_state(&"security_cycle_complete", false))
 	return false
 
@@ -797,8 +1190,14 @@ func get_autonomy_goal_priority(kind: SoldierAutonomyGoal3D.Kind) -> int:
 	match kind:
 		SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT:
 			return 300
+		SoldierAutonomyGoal3D.Kind.REACT_TO_THREAT:
+			return 270
+		SoldierAutonomyGoal3D.Kind.SUPPRESS_THREAT:
+			return 205
 		SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT:
 			return 180
+		SoldierAutonomyGoal3D.Kind.INVESTIGATE_DISTURBANCE:
+			return 155
 		SoldierAutonomyGoal3D.Kind.RESTORE_WEAPON:
 			return 130
 		SoldierAutonomyGoal3D.Kind.MAINTAIN_SECURITY:
@@ -806,15 +1205,21 @@ func get_autonomy_goal_priority(kind: SoldierAutonomyGoal3D.Kind) -> int:
 	return 0
 
 func prepare_autonomy_goal(kind: SoldierAutonomyGoal3D.Kind) -> void:
-	if kind in [SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT, SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT] \
+	if kind in [SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT, SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT, SoldierAutonomyGoal3D.Kind.SUPPRESS_THREAT] \
 		and _immediate_threat_timer > 0.0 and not _is_protected_from_threat():
+		_autonomy_cover_candidate = _find_emergency_cover()
+	else:
+		_autonomy_cover_candidate = null
+
+func prepare_directive_goal() -> void:
+	if _immediate_threat_timer > 0.0 and not _is_order_movement_safe():
 		_autonomy_cover_candidate = _find_emergency_cover()
 	else:
 		_autonomy_cover_candidate = null
 
 func on_autonomy_goal_achieved(kind: SoldierAutonomyGoal3D.Kind) -> void:
 	match kind:
-		SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT:
+		SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT, SoldierAutonomyGoal3D.Kind.SUPPRESS_THREAT, SoldierAutonomyGoal3D.Kind.INVESTIGATE_DISTURBANCE:
 			_contact_response_complete = true
 			is_aimed = false
 		SoldierAutonomyGoal3D.Kind.MAINTAIN_SECURITY:
@@ -822,21 +1227,47 @@ func on_autonomy_goal_achieved(kind: SoldierAutonomyGoal3D.Kind) -> void:
 	_update_status()
 
 func is_autonomy_action_valid(operation: SoldierAutonomyAction3D.Operation) -> bool:
-	if _goap_agent == null or not _goap_agent.get_current_goal() is SoldierAutonomyGoal3D:
+	if _goap_agent == null:
 		return false
-	var goal := _goap_agent.get_current_goal() as SoldierAutonomyGoal3D
+	var context_goal := _goap_agent.get_context_goal()
+	var directive_context := context_goal is SoldierDirectiveGoal3D
+	var autonomy_context := context_goal is SoldierAutonomyGoal3D
+	if not directive_context and not autonomy_context:
+		return false
+	if directive_context and operation not in [
+		SoldierAutonomyAction3D.Operation.SEEK_COVER,
+		SoldierAutonomyAction3D.Operation.DROP_PRONE,
+		SoldierAutonomyAction3D.Operation.TAKE_KNEE,
+		SoldierAutonomyAction3D.Operation.RECOVER_MOVEMENT_POSTURE,
+		SoldierAutonomyAction3D.Operation.WAIT_FOR_OPENING,
+	]:
+		return false
+	var goal := context_goal as SoldierAutonomyGoal3D if autonomy_context else null
 	match operation:
 		SoldierAutonomyAction3D.Operation.SEEK_COVER:
-			return goal.kind in [SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT, SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT] \
+			return (directive_context or goal.kind in [SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT, SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT]) \
 				and _immediate_threat_timer > 0.0 and not _is_protected_from_threat() \
 				and is_instance_valid(_autonomy_cover_candidate)
 		SoldierAutonomyAction3D.Operation.DROP_PRONE:
-			return goal.kind in [SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT, SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT] \
-				and _immediate_threat_timer > 0.0 and not _is_protected_from_threat()
+			return (directive_context or goal.kind == SoldierAutonomyGoal3D.Kind.SURVIVE_THREAT) \
+				and _immediate_threat_timer > 0.0 and not _is_protected_from_threat() \
+				and not is_instance_valid(active_cover) and not is_instance_valid(_autonomy_cover_candidate) \
+				and (_emergency_prone_timer > 0.0 or is_pinned())
+		SoldierAutonomyAction3D.Operation.TAKE_KNEE:
+			return directive_context and _immediate_threat_timer > 0.0 and not _is_protected_from_threat() \
+				and not is_instance_valid(active_cover) and not is_instance_valid(_autonomy_cover_candidate) \
+				and _emergency_prone_timer <= 0.0 and not is_pinned()
+		SoldierAutonomyAction3D.Operation.RECOVER_MOVEMENT_POSTURE:
+			return directive_context and not is_instance_valid(active_cover)
+		SoldierAutonomyAction3D.Operation.FLINCH_AND_ASSESS:
+			return goal.kind == SoldierAutonomyGoal3D.Kind.REACT_TO_THREAT
 		SoldierAutonomyAction3D.Operation.ORIENT_TO_THREAT:
 			return _threat_memory_timer > 0.0
+		SoldierAutonomyAction3D.Operation.COMMUNICATE_CONTACT:
+			return goal.kind in [SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT, SoldierAutonomyGoal3D.Kind.SUPPRESS_THREAT, SoldierAutonomyGoal3D.Kind.INVESTIGATE_DISTURBANCE] \
+				and _threat_memory_timer > 0.0
 		SoldierAutonomyAction3D.Operation.ACQUIRE_VISIBLE_TARGET, SoldierAutonomyAction3D.Operation.AIM:
-			return goal.kind == SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT and _has_confirmed_visible_threat()
+			return goal.kind in [SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT, SoldierAutonomyGoal3D.Kind.SUPPRESS_THREAT] and _has_confirmed_visible_threat()
 		SoldierAutonomyAction3D.Operation.RELOAD_COVERED:
 			return goal.kind == SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT and uses_ammunition() \
 				and magazine_ammo <= 0 and reserve_ammo > 0
@@ -844,9 +1275,19 @@ func is_autonomy_action_valid(operation: SoldierAutonomyAction3D.Operation) -> b
 			return goal.kind == SoldierAutonomyGoal3D.Kind.RESTORE_WEAPON and can_reload_weapon()
 		SoldierAutonomyAction3D.Operation.RETURN_FIRE:
 			return goal.kind == SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT \
+				and not is_pinned() and _has_confirmed_visible_threat() and _is_target_in_weapon_range(_threat_actor)
+		SoldierAutonomyAction3D.Operation.BLIND_FIRE_FROM_COVER:
+			return false
+		SoldierAutonomyAction3D.Operation.SUPPRESSION_FIRE:
+			return goal.kind == SoldierAutonomyGoal3D.Kind.SUPPRESS_THREAT and not is_pinned() \
 				and _has_confirmed_visible_threat() and _is_target_in_weapon_range(_threat_actor)
+		SoldierAutonomyAction3D.Operation.WAIT_FOR_OPENING:
+			return (directive_context and _immediate_threat_timer > 0.0 and not _is_order_movement_safe()) \
+				or (autonomy_context and goal.kind == SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT and _is_protected_from_threat() \
+				and (is_pinned() or _is_target_aiming_at_me()))
 		SoldierAutonomyAction3D.Operation.SCAN_THREAT_SECTOR:
-			return goal.kind == SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT and _threat_memory_timer > 0.0
+			return goal.kind in [SoldierAutonomyGoal3D.Kind.RESPOND_TO_CONTACT, SoldierAutonomyGoal3D.Kind.INVESTIGATE_DISTURBANCE] \
+				and _threat_memory_timer > 0.0
 		SoldierAutonomyAction3D.Operation.GUARD_SECTOR:
 			return goal.kind == SoldierAutonomyGoal3D.Kind.MAINTAIN_SECURITY
 	return false
@@ -858,7 +1299,15 @@ func get_autonomy_action_cost(operation: SoldierAutonomyAction3D.Operation) -> i
 				if is_instance_valid(_autonomy_cover_candidate) else 100
 		SoldierAutonomyAction3D.Operation.DROP_PRONE:
 			return 18 if is_instance_valid(_autonomy_cover_candidate) else 3
+		SoldierAutonomyAction3D.Operation.TAKE_KNEE:
+			return 5
+		SoldierAutonomyAction3D.Operation.RECOVER_MOVEMENT_POSTURE:
+			return 1
+		SoldierAutonomyAction3D.Operation.FLINCH_AND_ASSESS:
+			return 1
 		SoldierAutonomyAction3D.Operation.ORIENT_TO_THREAT, SoldierAutonomyAction3D.Operation.ACQUIRE_VISIBLE_TARGET:
+			return 1
+		SoldierAutonomyAction3D.Operation.COMMUNICATE_CONTACT:
 			return 1
 		SoldierAutonomyAction3D.Operation.AIM:
 			return 2
@@ -866,6 +1315,12 @@ func get_autonomy_action_cost(operation: SoldierAutonomyAction3D.Operation) -> i
 			return 5
 		SoldierAutonomyAction3D.Operation.RETURN_FIRE:
 			return 3
+		SoldierAutonomyAction3D.Operation.BLIND_FIRE_FROM_COVER:
+			return 5
+		SoldierAutonomyAction3D.Operation.SUPPRESSION_FIRE:
+			return 4
+		SoldierAutonomyAction3D.Operation.WAIT_FOR_OPENING:
+			return 2
 		SoldierAutonomyAction3D.Operation.SCAN_THREAT_SECTOR:
 			return 24 if _has_confirmed_visible_threat() and _is_target_in_weapon_range(_threat_actor) else 3
 		SoldierAutonomyAction3D.Operation.GUARD_SECTOR:
@@ -879,9 +1334,7 @@ func begin_autonomy_operation(operation: SoldierAutonomyAction3D.Operation) -> v
 	if operation == SoldierAutonomyAction3D.Operation.SEEK_COVER:
 		is_aimed = false
 		if is_instance_valid(active_cover) and not _is_protected_from_threat():
-			active_cover.release_slot(self)
-			active_cover = null
-			active_cover_slot = null
+			_clear_cover_state()
 		if is_instance_valid(_autonomy_cover_candidate):
 			_autonomy_cover_slot = _autonomy_cover_candidate.reserve_reachable_slot(self, _threat_position)
 	else:
@@ -893,18 +1346,21 @@ func perform_autonomy_operation(operation: SoldierAutonomyAction3D.Operation, de
 	match operation:
 		SoldierAutonomyAction3D.Operation.SEEK_COVER:
 			if not is_instance_valid(_autonomy_cover_candidate) or not is_instance_valid(_autonomy_cover_slot):
-				set_stance(Stance.PRONE)
-				_autonomy_operation_completed = true
-				return true
+				_autonomy_cover_candidate = null
+				_autonomy_cover_slot = null
+				if _goap_agent != null:
+					_goap_agent.request_replan()
+				return false
 			set_stance(Stance.STAND)
 			set_movement_mode(MoveMode.RUN if stamina_component.can_run() else MoveMode.WALK)
 			if _flat_distance_to(_autonomy_cover_slot.global_position) > 0.45:
 				_move_toward(_autonomy_cover_slot.global_position)
 				return false
 			global_position = _autonomy_cover_slot.global_position
+			set_stance(Stance.STAND)
 			active_cover = _autonomy_cover_candidate
 			active_cover_slot = _autonomy_cover_slot
-			set_stance(Stance.CROUCH if active_cover.cover_height <= 1.45 else Stance.STAND)
+			set_cover_exposed(false)
 			set_movement_mode(MoveMode.WALK)
 			_desired_velocity = Vector3.ZERO
 			_autonomy_operation_completed = true
@@ -914,10 +1370,35 @@ func perform_autonomy_operation(operation: SoldierAutonomyAction3D.Operation, de
 			set_stance(Stance.PRONE)
 			_autonomy_operation_completed = true
 			return true
+		SoldierAutonomyAction3D.Operation.TAKE_KNEE:
+			_desired_velocity = Vector3.ZERO
+			set_stance(Stance.CROUCH)
+			_autonomy_operation_completed = _operation_elapsed >= 0.22
+			return _autonomy_operation_completed
+		SoldierAutonomyAction3D.Operation.RECOVER_MOVEMENT_POSTURE:
+			_desired_velocity = Vector3.ZERO
+			set_stance(Stance.STAND)
+			_autonomy_operation_completed = _operation_elapsed >= 0.18
+			return _autonomy_operation_completed
+		SoldierAutonomyAction3D.Operation.FLINCH_AND_ASSESS:
+			_desired_velocity = Vector3.ZERO
+			_face_position(_threat_position)
+			if is_instance_valid(active_cover):
+				set_cover_exposed(false)
+			_autonomy_operation_completed = _operation_elapsed >= maxf(0.25, reaction_delay * 0.7)
+			return _autonomy_operation_completed
 		SoldierAutonomyAction3D.Operation.ORIENT_TO_THREAT:
 			_desired_velocity = Vector3.ZERO
 			_face_position(_threat_position)
 			_autonomy_operation_completed = _operation_elapsed >= 0.2
+			return _autonomy_operation_completed
+		SoldierAutonomyAction3D.Operation.COMMUNICATE_CONTACT:
+			_desired_velocity = Vector3.ZERO
+			_face_position(_threat_position)
+			if _operation_elapsed >= 0.18 and not _autonomy_operation_completed:
+				if _has_confirmed_visible_threat():
+					perception_report_ready.emit(self, _threat_actor, _threat_position, _threat_confidence, &"visual")
+				_autonomy_operation_completed = true
 			return _autonomy_operation_completed
 		SoldierAutonomyAction3D.Operation.ACQUIRE_VISIBLE_TARGET:
 			if _has_confirmed_visible_threat():
@@ -942,11 +1423,58 @@ func perform_autonomy_operation(operation: SoldierAutonomyAction3D.Operation, de
 				_autonomy_operation_completed = true
 				return true
 			current_target = _threat_actor
+			if is_instance_valid(active_cover):
+				_begin_cover_exposure()
 			_face_position(current_target.global_position)
+			var return_fire_shot := false
 			if _reaction_timer <= 0.0:
-				_try_attack_target(current_target)
+				return_fire_shot = _try_attack_target(current_target)
+			if _update_cover_exposure_after_shot(return_fire_shot):
+				_set_goap_state(&"aimed", false, true)
+				_autonomy_operation_completed = true
+				return true
 			_autonomy_operation_completed = _operation_elapsed >= autonomy_return_fire_seconds \
 				or not is_combat_target_alive(current_target)
+			return _autonomy_operation_completed
+		SoldierAutonomyAction3D.Operation.BLIND_FIRE_FROM_COVER:
+			_desired_velocity = Vector3.ZERO
+			is_aimed = false
+			if not is_instance_valid(_threat_actor) or not is_combat_target_alive(_threat_actor):
+				return true
+			current_target = _threat_actor
+			_face_position(_threat_position)
+			if _reaction_timer <= 0.0:
+				_try_attack_target(current_target)
+			_autonomy_operation_completed = _operation_elapsed >= 0.75
+			return _autonomy_operation_completed
+		SoldierAutonomyAction3D.Operation.SUPPRESSION_FIRE:
+			_desired_velocity = Vector3.ZERO
+			if not _has_confirmed_visible_threat():
+				return true
+			current_target = _threat_actor
+			if is_instance_valid(active_cover):
+				_begin_cover_exposure()
+			_face_position(current_target.global_position)
+			var suppression_shot := false
+			if _reaction_timer <= 0.0:
+				suppression_shot = _try_attack_target(current_target)
+			if _update_cover_exposure_after_shot(suppression_shot):
+				_set_goap_state(&"aimed", false, true)
+				_autonomy_operation_completed = true
+				return true
+			_autonomy_operation_completed = _operation_elapsed >= 1.35 or not is_combat_target_alive(current_target)
+			return _autonomy_operation_completed
+		SoldierAutonomyAction3D.Operation.WAIT_FOR_OPENING:
+			_desired_velocity = Vector3.ZERO
+			is_aimed = false
+			if is_instance_valid(active_cover):
+				set_cover_exposed(false)
+			if active_directive != null:
+				_autonomy_operation_completed = _operation_elapsed >= 0.35 and _is_order_movement_safe()
+				if _autonomy_operation_completed and not is_instance_valid(active_cover):
+					set_stance(Stance.STAND)
+			else:
+				_autonomy_operation_completed = _operation_elapsed >= 0.65
 			return _autonomy_operation_completed
 		SoldierAutonomyAction3D.Operation.SCAN_THREAT_SECTOR:
 			_desired_velocity = Vector3.ZERO
@@ -961,6 +1489,13 @@ func perform_autonomy_operation(operation: SoldierAutonomyAction3D.Operation, de
 
 func end_autonomy_operation(operation: SoldierAutonomyAction3D.Operation) -> void:
 	_desired_velocity = Vector3.ZERO
+	if operation in [
+		SoldierAutonomyAction3D.Operation.RETURN_FIRE,
+		SoldierAutonomyAction3D.Operation.SUPPRESSION_FIRE,
+		SoldierAutonomyAction3D.Operation.BLIND_FIRE_FROM_COVER,
+	] and is_instance_valid(active_cover):
+		is_aimed = false
+		set_cover_exposed(false)
 	if operation == SoldierAutonomyAction3D.Operation.SEEK_COVER \
 		and not _autonomy_operation_completed and is_instance_valid(_autonomy_cover_candidate):
 		_autonomy_cover_candidate.release_slot(self)
@@ -970,7 +1505,7 @@ func _find_emergency_cover() -> TacticalCover3D:
 	var registry := BattlefieldRegistry3D.find(get_tree())
 	var candidates: Array = registry.get_covers() if registry != null else get_tree().get_nodes_in_group("cover3d")
 	var best: TacticalCover3D
-	var best_distance := INF
+	var best_score := -INF
 	for candidate in candidates:
 		if not candidate is TacticalCover3D:
 			continue
@@ -981,15 +1516,19 @@ func _find_emergency_cover() -> TacticalCover3D:
 			if constraint_offset.length() > _movement_constraint_radius:
 				continue
 		var distance := global_position.distance_to(cover.global_position)
-		if distance > emergency_cover_max_distance or distance >= best_distance:
+		if distance > emergency_cover_max_distance:
 			continue
 		var reserved := cover.get_reserved_slot(self)
 		if reserved != null and reserved not in cover.get_slots_against(_threat_position):
 			continue
 		if reserved == null and not _cover_has_reachable_slot(cover):
 			continue
+		var score := local_threat_field.score_cover(cover, _threat_position, weapon_component.effective_range * 0.72) \
+			if local_threat_field != null else cover.score_for_actor(self, _threat_position, weapon_component.effective_range * 0.72)
+		if score <= best_score:
+			continue
 		best = cover
-		best_distance = distance
+		best_score = score
 	return best
 
 func set_movement_constraint(enabled: bool, center: Vector3, radius: float) -> void:
@@ -1012,6 +1551,12 @@ func _has_confirmed_visible_threat() -> bool:
 	return is_instance_valid(_threat_actor) and is_hostile_target(_threat_actor) \
 		and is_combat_target_alive(_threat_actor) and perception_component.can_see(_threat_actor)
 
+func _is_target_aiming_at_me() -> bool:
+	if not is_instance_valid(_threat_actor) or not _threat_actor is Soldier3D:
+		return false
+	var hostile := _threat_actor as Soldier3D
+	return hostile.current_target == self and (hostile.is_aimed or Time.get_ticks_msec() - hostile.last_weapon_fired_msec < 850)
+
 func _abort_contact_response() -> void:
 	_contact_response_complete = true
 	_set_goap_state(&"contact_response_complete", true)
@@ -1024,8 +1569,14 @@ func _autonomy_operation_label(operation: SoldierAutonomyAction3D.Operation) -> 
 			return "GOAP: emergency cover"
 		SoldierAutonomyAction3D.Operation.DROP_PRONE:
 			return "GOAP: take cover"
+		SoldierAutonomyAction3D.Operation.RECOVER_MOVEMENT_POSTURE:
+			return "GOAP: resume movement posture"
+		SoldierAutonomyAction3D.Operation.FLINCH_AND_ASSESS:
+			return "GOAP: react and assess"
 		SoldierAutonomyAction3D.Operation.ORIENT_TO_THREAT:
 			return "GOAP: orient to threat"
+		SoldierAutonomyAction3D.Operation.COMMUNICATE_CONTACT:
+			return "GOAP: report contact"
 		SoldierAutonomyAction3D.Operation.ACQUIRE_VISIBLE_TARGET:
 			return "GOAP: confirm target"
 		SoldierAutonomyAction3D.Operation.AIM:
@@ -1034,6 +1585,12 @@ func _autonomy_operation_label(operation: SoldierAutonomyAction3D.Operation) -> 
 			return "GOAP: reload"
 		SoldierAutonomyAction3D.Operation.RETURN_FIRE:
 			return "GOAP: return fire"
+		SoldierAutonomyAction3D.Operation.BLIND_FIRE_FROM_COVER:
+			return "GOAP: blind fire"
+		SoldierAutonomyAction3D.Operation.SUPPRESSION_FIRE:
+			return "GOAP: suppress"
+		SoldierAutonomyAction3D.Operation.WAIT_FOR_OPENING:
+			return "GOAP: wait under fire"
 		SoldierAutonomyAction3D.Operation.SCAN_THREAT_SECTOR:
 			return "GOAP: scan sector"
 		SoldierAutonomyAction3D.Operation.GUARD_SECTOR:
@@ -1067,7 +1624,8 @@ func _select_tactical_stance() -> void:
 	if active_directive == null:
 		return
 	if active_cover != null:
-		set_stance(Stance.CROUCH if active_cover.cover_height <= 1.45 else Stance.STAND)
+		set_stance(Stance.STAND)
+		set_cover_exposed(false)
 		return
 	if active_directive.type in [SquadDirective3D.Type.FLANK, SquadDirective3D.Type.MOVE, SquadDirective3D.Type.TAKE_COVER]:
 		set_stance(Stance.STAND)
@@ -1100,7 +1658,7 @@ func _apply_stance_geometry() -> void:
 	var visual_height := 1.0
 	var visual_scale_y := 1.0
 	var weapon_offset_y := 0.0
-	match stance:
+	match _get_effective_pose_stance():
 		Stance.CROUCH:
 			actor_height = 1.22
 			body_height = 0.82
@@ -1131,12 +1689,17 @@ func _apply_stance_geometry() -> void:
 	weapon_pivot.position.y = weapon_offset_y
 
 func _get_aim_height() -> float:
-	match stance:
+	match _get_effective_pose_stance():
 		Stance.CROUCH:
 			return 0.98
 		Stance.PRONE:
 			return 0.5
 	return 1.25
+
+func _get_effective_pose_stance() -> Stance:
+	if is_instance_valid(active_cover) and not cover_exposed:
+		return Stance.CROUCH
+	return stance
 
 func _apply_team_visual() -> void:
 	match combat_team:
@@ -1163,6 +1726,11 @@ func _flat_distance_to(position_value: Vector3) -> float:
 	delta.y = 0.0
 	return delta.length()
 
+func _flat_distance(first: Vector3, second: Vector3) -> float:
+	var delta := first - second
+	delta.y = 0.0
+	return delta.length()
+
 func _update_visual_animation(delta: float) -> void:
 	var moving := Vector2(velocity.x, velocity.z).length_squared() > 0.04
 	if moving:
@@ -1172,7 +1740,7 @@ func _update_visual_animation(delta: float) -> void:
 		_animation_time = 0.0
 		visual.frame = 0
 	if voxel_visual != null:
-		voxel_visual.update_pose(delta, velocity, int(movement_mode), int(stance), is_aimed, Time.get_ticks_msec() - last_weapon_fired_msec < 110, dead)
+		voxel_visual.update_pose(delta, velocity, int(movement_mode), int(_get_effective_pose_stance()), is_aimed, Time.get_ticks_msec() - last_weapon_fired_msec < 110, dead)
 
 func _flash_hit() -> void:
 	visual.modulate = Color(1.0, 0.25, 0.18)

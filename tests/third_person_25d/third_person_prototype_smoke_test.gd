@@ -176,16 +176,34 @@ func _run() -> void:
 	prototype.add_child(tactical_cover)
 	await get_tree().physics_frame
 	_expect(player.try_enter_nearest_cover(), "玩家无法用 C 逻辑进入附近3D掩体")
-	_expect(player.is_in_cover() and not player.is_cover_peeking(), "进入掩体后没有默认保持蹲伏盲射")
-	_expect(player.stance == ThirdPersonPlayer3D.Stance.CROUCH, "进入掩体后没有下蹲")
-	player.blind_fire_spread_degrees = 0.0
+	_expect(player.is_in_cover() and not player.is_cover_peeking(), "进入掩体后没有默认保持隐藏")
+	_expect(player.stance == ThirdPersonPlayer3D.Stance.STAND, "掩体隐藏错误复用了普通下蹲姿态")
+	_expect((player.get_node("Collision") as CollisionShape3D).position.y < standing_collision_height,
+		"玩家掩体隐藏姿态没有降低碰撞体")
 	player.fire_cooldown = 0.0
-	var blind_result := player.fire_at_world_point((open_target.get_node("HeadHitbox") as Area3D).global_position)
-	_expect(bool(blind_result.get("fired", false)) and bool(blind_result.get("blind_fire", false)), "掩体内直接开火没有标记为盲射")
+	var hidden_result := player.fire_at_world_point((open_target.get_node("HeadHitbox") as Area3D).global_position)
+	_expect(not bool(hidden_result.get("fired", false)) and String(hidden_result.get("reason", "")) == "hidden_in_cover",
+		"玩家隐藏在掩体后仍能开火")
+	player.set_aiming(true)
+	_expect(not player.is_aiming(), "玩家隐藏在掩体后仍能进入瞄准状态")
 	_expect(player.toggle_cover() and player.is_cover_peeking() and player.stance == ThirdPersonPlayer3D.Stance.STAND, "掩体内按 C 没有站起探身")
-	_expect(player.toggle_cover() and not player.is_cover_peeking() and player.stance == ThirdPersonPlayer3D.Stance.CROUCH, "再次按 C 没有缩回掩体")
+	_expect(is_equal_approx((player.get_node("Collision") as CollisionShape3D).position.y, standing_collision_height),
+		"玩家在掩体内站立时没有恢复站立碰撞体")
+	player.fire_cooldown = 0.0
+	var exposed_result := player.fire_at_world_point((open_target.get_node("HeadHitbox") as Area3D).global_position)
+	_expect(bool(exposed_result.get("fired", false)) and not bool(exposed_result.get("blind_fire", true)),
+		"玩家在掩体内站立后无法正常射击")
+	player.set_stance(ThirdPersonPlayer3D.Stance.CROUCH)
+	player.set_stance(ThirdPersonPlayer3D.Stance.PRONE)
+	_expect(player.stance == ThirdPersonPlayer3D.Stance.STAND, "玩家在掩体内仍能切换普通下蹲或卧倒")
+	_expect(player.toggle_cover() and not player.is_cover_peeking() and player.stance == ThirdPersonPlayer3D.Stance.STAND, "再次按 C 没有缩回掩体")
 	player.exit_cover()
 	_expect(not player.is_in_cover() and player.stance == ThirdPersonPlayer3D.Stance.STAND, "移动离开掩体所需的退出状态失效")
+	player.set_stance(ThirdPersonPlayer3D.Stance.CROUCH)
+	_expect(player.stance == ThirdPersonPlayer3D.Stance.CROUCH, "离开掩体后玩家无法使用普通下蹲")
+	player.set_stance(ThirdPersonPlayer3D.Stance.PRONE)
+	_expect(player.stance == ThirdPersonPlayer3D.Stance.PRONE, "离开掩体后玩家无法使用普通卧倒")
+	player.set_stance(ThirdPersonPlayer3D.Stance.STAND)
 	tactical_cover.queue_free()
 
 	if failures.is_empty():

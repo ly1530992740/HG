@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://ai3d/soldier_3d.gd" id="1_soldier"]
 [ext_resource type="Script" path="res://combat3d/combat_hitbox_3d.gd" id="2_hitbox"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://combat3d/voxel_soldier_visual_3d.gd" id="8_voxel"]
 [ext_resource type="Script" path="res://combat3d/components/limb_damage_component_3d.gd" id="9_limb"]
 [ext_resource type="Script" path="res://ai3d/components/suppression_component_3d.gd" id="10_suppression"]
+[ext_resource type="Script" path="res://ai3d/components/weapon_fire_cycle_3d.gd" id="11_fire_cycle"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_actor"]
 radius = 0.34
@@ -62,6 +63,9 @@ script = ExtResource("9_limb")
 
 [node name="Suppression" type="Node" parent="Components"]
 script = ExtResource("10_suppression")
+
+[node name="FireCycle" type="Node" parent="Components"]
+script = ExtResource("11_fire_cycle")
 
 [node name="Collision" type="CollisionShape3D" parent="."]
 position = Vector3(0, 0.9, 0)

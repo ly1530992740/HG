@@ -26,6 +26,18 @@ var default_valid_state: bool = true
 ## Selection priority — the agent always picks the highest-priority valid goal.
 @export var priority: int = 0
 
+## A higher interrupt priority may pre-empt a locked action plan.
+@export var interrupt_priority: int = 0
+
+## Chance that this goal activates after it wins arbitration and has a plan.
+@export_range(0.0, 1.0, 0.01) var activation_chance := 1.0
+
+## Minimum delay before the active goal enters ordinary arbitration again.
+@export_range(0.0, 10.0, 0.05) var reevaluation_interval := 0.2
+
+## Non-interruptible goals retain control unless a higher interrupt priority wins.
+@export var plan_interruptible := true
+
 ## If [code]false[/code], this goal is never considered by the agent.
 @export var enabled: bool = true
 
@@ -62,6 +74,26 @@ func is_valid() -> bool:
 ## Returns the selection [member priority] of this goal.
 func get_priority() -> int:
 	return priority
+
+
+func get_relevance() -> float:
+	return float(get_priority())
+
+
+func get_interrupt_priority() -> int:
+	return interrupt_priority
+
+
+func get_activation_chance() -> float:
+	return activation_chance
+
+
+func get_reevaluation_interval() -> float:
+	return reevaluation_interval
+
+
+func is_plan_interruptible() -> bool:
+	return plan_interruptible
 
 
 ## Returns the [member desired_state] dictionary.

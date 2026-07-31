@@ -25,10 +25,24 @@ static func contact_cover(plan_id: StringName, member_ids: PackedStringArray, co
 	task.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
 	return plan.add_task(task)
 
+static func recover_in_cover(plan_id: StringName, member_ids: PackedStringArray, contact: CombatContact3D, belief_version: int) -> SquadCommandPlan3D:
+	var plan := SquadCommandPlan3D.new().configure(plan_id, &"RECOVER_IN_COVER", "FAST_RULE", "Break exposure and recover from incoming fire", belief_version)
+	var cover := SquadTask3D.new().configure(&"recover_cover", SquadTask3D.Type.TAKE_COVER, member_ids)
+	cover.contact_id = contact.contact_id
+	cover.target_position = contact.last_known_position
+	cover.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
+	var recover := SquadTask3D.new().configure(&"recover_pause", SquadTask3D.Type.RECOVER_IN_COVER, member_ids)
+	recover.depends_on = [&"recover_cover"]
+	recover.duration = 2.4
+	recover.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
+	plan.add_task(cover)
+	return plan.add_task(recover)
+
 static func defensive_fire(plan_id: StringName, member_ids: PackedStringArray, contacts: Array[CombatContact3D], belief_version: int) -> SquadCommandPlan3D:
 	var plan := SquadCommandPlan3D.new().configure(plan_id, &"DEFEND_CONTACT", "UTILITY", "Defend the mission area from cover", belief_version)
 	var task := SquadTask3D.new().configure(&"defensive_fire", SquadTask3D.Type.ATTACK_CONTACT, member_ids)
 	task.persistent = true
+	task.minimum_success_count = 1
 	if contacts.is_empty():
 		return plan
 	task.contact_id = contacts[0].contact_id
@@ -49,7 +63,7 @@ static func recon_split(
 		var suppress := SquadTask3D.new().configure(&"recon_base_fire", SquadTask3D.Type.SUPPRESS_CONTACT, suppressor_ids)
 		suppress.contact_id = contact.contact_id
 		suppress.target_position = contact.last_known_position
-		suppress.duration = 30.0
+		suppress.duration = 6.0
 		plan.add_task(suppress)
 	for index in recon_assignments.size():
 		var assignment: Dictionary = recon_assignments[index]
@@ -75,16 +89,21 @@ static func suppress_and_flank(
 ) -> SquadCommandPlan3D:
 	var plan := SquadCommandPlan3D.new().configure(plan_id, &"SUPPRESS_AND_FLANK", "UTILITY", "Use the best observed route for a synchronized flank", belief_version)
 	var suppress := SquadTask3D.new().configure(&"base_of_fire", SquadTask3D.Type.SUPPRESS_CONTACT, suppressor_ids)
+	suppress.minimum_success_count = 1
 	suppress.contact_id = contact.contact_id
 	suppress.target_position = contact.last_known_position
-	suppress.duration = 30.0
+	suppress.duration = 8.0
 	var flank := SquadTask3D.new().configure(&"flank_move", SquadTask3D.Type.FLANK_ZONE, flanker_ids)
+	flank.minimum_success_count = 1
 	flank.zone_id = zone.zone_id
 	flank.target_position = zone.get_observation_point(contact.last_known_position)
 	flank.route = zone.get_recon_route(contact.last_known_position)
 	flank.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
 	var attack := SquadTask3D.new().configure(&"synchronized_attack", SquadTask3D.Type.ATTACK_CONTACT, flanker_ids)
+	attack.persistent = true
+	attack.minimum_success_count = 1
 	attack.depends_on = [&"base_of_fire", &"flank_move"]
+	attack.successful_members_from = &"flank_move"
 	attack.contact_id = contact.contact_id
 	attack.target_position = contact.last_known_position
 	plan.add_task(suppress)
