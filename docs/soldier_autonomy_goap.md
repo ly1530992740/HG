@@ -64,5 +64,5 @@ Run the focused test with:
 & 'C:\Users\15309\Desktop\Godot_v4.7-stable_win64.exe' `
   --headless --path 'D:\project\HG' `
   --log-file 'D:\project\HG\.codex-soldier-autonomy-test.log' `
-  'res://tests/3d_battles/soldier_autonomy_goap_test.tscn'
+  'res://tests/3d_battles/automated/soldier_autonomy_goap_test.tscn'
 ```

@@ -1,0 +1,1005 @@
+extends Node3D
+class_name TacticalDecisionSandbox3D
+
+const SOLDIER_SCENE := preload("res://ai3d/soldier_3d.tscn")
+const COVER_SCENE := preload("res://ai3d/tactical_cover_3d.tscn")
+
+enum EditTool {
+	INSPECT,
+	ADD_COVER,
+	ADD_GRASS,
+	MOVE,
+	DELETE,
+	SET_BLUE_OBJECTIVE,
+	SET_RED_OBJECTIVE,
+}
+
+enum Intent {
+	CAPTURE_AND_HOLD,
+	DEFEND_AREA,
+	ELIMINATE_AND_RETURN,
+}
+
+@export var start_paused := true
+@export var build_user_interface := true
+
+var _world: Node3D
+var _terrain_root: Node3D
+var _actors_root: Node3D
+var _camera: Camera3D
+var _heatmap: TacticalSandboxHeatmap3D
+var _ui_layer: CanvasLayer
+var _blue_squad: SquadCoordinator3D
+var _red_squad: SquadCoordinator3D
+var _selected_edit_node: Node3D
+var _dragged_soldier: Soldier3D
+var _drag_offset := Vector3.ZERO
+var _simulation_started := false
+var _simulation_frame := 0
+var _analysis_dirty := true
+var _analysis_timer := 0.0
+var _editable_sequence := 0
+var _last_analysis: Dictionary = {}
+var _last_inspected_position := Vector3.ZERO
+
+var _tool_select: OptionButton
+var _source_select: OptionButton
+var _layer_select: OptionButton
+var _blue_intent: OptionButton
+var _red_intent: OptionButton
+var _analysis_text: RichTextLabel
+var _selection_label: Label
+var _role_spins: Dictionary = {}
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_build_scene_shell()
+	if build_user_interface:
+		_build_ui()
+	_reset_scenario()
+	_set_simulation_paused(start_paused)
+	call_deferred("_finish_initialization")
+
+func _exit_tree() -> void:
+	if get_tree() != null:
+		get_tree().paused = false
+
+func _process(delta: float) -> void:
+	_analysis_timer -= delta
+	if _analysis_dirty and _analysis_timer <= 0.0:
+		_analysis_dirty = false
+		_analysis_timer = 0.12
+		_refresh_analysis(true)
+	elif not get_tree().paused and _analysis_timer <= 0.0:
+		_analysis_timer = 0.45
+		_refresh_analysis(false)
+
+func _physics_process(_delta: float) -> void:
+	if get_tree() != null and not get_tree().paused:
+		_simulation_frame += 1
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_F1:
+			set_debug_ui_visible(_ui_layer == null or not _ui_layer.visible)
+			get_viewport().set_input_as_handled()
+			return
+	if event is InputEventMouseMotion and is_instance_valid(_dragged_soldier):
+		var drag_point: Variant = _ground_point((event as InputEventMouseMotion).position)
+		if drag_point != null:
+			_move_soldier_initial(_dragged_soldier, (drag_point as Vector3) + _drag_offset)
+			_update_selection_label()
+			get_viewport().set_input_as_handled()
+		return
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP and mouse_event.pressed:
+			_zoom_camera(-2.0)
+			get_viewport().set_input_as_handled()
+			return
+		if mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN and mouse_event.pressed:
+			_zoom_camera(2.0)
+			get_viewport().set_input_as_handled()
+			return
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and not mouse_event.pressed \
+				and is_instance_valid(_dragged_soldier):
+			_dragged_soldier = null
+			_mark_analysis_dirty()
+			get_viewport().set_input_as_handled()
+			return
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			var point: Variant = _ground_point(mouse_event.position)
+			if point != null:
+				if not _try_begin_soldier_drag(point as Vector3):
+					_edit_at(point as Vector3)
+				get_viewport().set_input_as_handled()
+
+func set_simulation_paused(value: bool) -> void:
+	_set_simulation_paused(value)
+
+func reset_scenario() -> void:
+	_reset_scenario()
+
+func force_debug_analysis() -> void:
+	if get_tree() != null and get_tree().paused:
+		_refresh_analysis(true)
+	else:
+		_mark_analysis_dirty()
+
+func set_debug_ui_visible(value: bool) -> void:
+	if _ui_layer == null:
+		return
+	_ui_layer.visible = value
+
+func get_sandbox_debug_snapshot() -> Dictionary:
+	return {
+		"paused": get_tree().paused if get_tree() != null else true,
+		"ui_visible": _ui_layer.visible if _ui_layer != null else false,
+		"blue_members": _blue_squad.get_configured_member_actors().size() if is_instance_valid(_blue_squad) else 0,
+		"red_members": _red_squad.get_configured_member_actors().size() if is_instance_valid(_red_squad) else 0,
+		"editable_covers": _count_editables("cover"),
+		"editable_grass": _count_editables("grass"),
+		"heat_cells": _heatmap.get_visible_cell_count() if _heatmap != null else 0,
+		"analysis": _last_analysis.duplicate(true),
+	}
+
+func debug_select_source(key: String) -> bool:
+	if _source_select == null:
+		return false
+	for index in _source_select.item_count:
+		var metadata := _source_select.get_item_metadata(index) as Dictionary
+		if String(metadata.get("key", "")) == key:
+			_source_select.select(index)
+			_mark_analysis_dirty()
+			return true
+	return false
+
+func debug_add_cover(position_value: Vector3) -> TacticalCover3D:
+	var cover := _add_cover(position_value, 5.0, 0.0)
+	_mark_analysis_dirty()
+	return cover
+
+func debug_add_grass(position_value: Vector3) -> TacticalZone3D:
+	var grass := _add_grass(position_value)
+	_mark_analysis_dirty()
+	return grass
+
+func debug_move_soldier_initial(member_name: String, position_value: Vector3) -> bool:
+	for squad in [_blue_squad, _red_squad]:
+		if not is_instance_valid(squad):
+			continue
+		var coordinator := squad as SquadCoordinator3D
+		var soldier: Soldier3D = coordinator.get_member_by_id(member_name)
+		if soldier != null:
+			return _move_soldier_initial(soldier, position_value)
+	return false
+
+func _build_scene_shell() -> void:
+	var registry := BattlefieldRegistry3D.new()
+	registry.name = "BattlefieldRegistry3D"
+	add_child(registry)
+
+	var environment_node := WorldEnvironment.new()
+	environment_node.name = "WorldEnvironment"
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color(0.42, 0.55, 0.62)
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color(0.88, 0.92, 1.0)
+	environment.ambient_light_energy = 0.72
+	environment_node.environment = environment
+	add_child(environment_node)
+
+	var sun := DirectionalLight3D.new()
+	sun.name = "Sun"
+	sun.rotation_degrees = Vector3(-58.0, -32.0, 0.0)
+	sun.shadow_enabled = true
+	add_child(sun)
+
+	_camera = Camera3D.new()
+	_camera.name = "Camera3D"
+	_camera.position = Vector3(0.0, 31.0, 25.0)
+	_camera.fov = 48.0
+	_camera.current = true
+	add_child(_camera)
+	_camera.look_at(Vector3.ZERO, Vector3.UP)
+
+	_world = Node3D.new()
+	_world.name = "SandboxWorld"
+	_world.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(_world)
+	_terrain_root = Node3D.new()
+	_terrain_root.name = "Terrain"
+	_world.add_child(_terrain_root)
+	_actors_root = Node3D.new()
+	_actors_root.name = "Actors"
+	_world.add_child(_actors_root)
+
+	_heatmap = TacticalSandboxHeatmap3D.new()
+	_heatmap.name = "Heatmap"
+	_heatmap.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(_heatmap)
+	_build_floor()
+
+func _build_floor() -> void:
+	var floor := StaticBody3D.new()
+	floor.name = "Floor"
+	floor.collision_layer = 1
+	floor.collision_mask = 0
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(52.0, 0.2, 44.0)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.22, 0.31, 0.23)
+	material.roughness = 1.0
+	mesh.material = material
+	mesh_instance.mesh = mesh
+	mesh_instance.position.y = -0.1
+	floor.add_child(mesh_instance)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(52.0, 0.2, 44.0)
+	collision.shape = shape
+	collision.position.y = -0.1
+	floor.add_child(collision)
+	_world.add_child(floor)
+
+func _build_ui() -> void:
+	_ui_layer = CanvasLayer.new()
+	_ui_layer.name = "SandboxUI"
+	_ui_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_ui_layer)
+	var ui_theme := Theme.new()
+	ui_theme.default_font_size = 12
+
+	var toolbar := PanelContainer.new()
+	toolbar.offset_left = 12.0
+	toolbar.offset_top = 12.0
+	toolbar.offset_right = 620.0
+	toolbar.offset_bottom = 58.0
+	toolbar.theme = ui_theme
+	toolbar.clip_contents = true
+	toolbar.add_theme_stylebox_override("panel", _panel_style(Color(0.025, 0.035, 0.04, 0.94)))
+	_ui_layer.add_child(toolbar)
+	var toolbar_row := HBoxContainer.new()
+	toolbar_row.add_theme_constant_override("separation", 7)
+	toolbar.add_child(toolbar_row)
+	toolbar_row.add_child(_button("启动", _on_run_pressed, "启动或继续战斗模拟"))
+	toolbar_row.add_child(_button("暂停", _on_pause_pressed, "冻结战斗，保持沙盒编辑功能"))
+	toolbar_row.add_child(_button("重新分析", _on_analyze_pressed, "重新计算当前感知热力图、Utility 和 HTN 预演"))
+	toolbar_row.add_child(_button("重置", _on_reset_pressed, "恢复默认地图与双方兵力"))
+	toolbar_row.add_child(_button("旋转", _on_rotate_pressed, "将选中的掩体或草丛区域旋转 90 度"))
+	toolbar_row.add_child(_button("隐藏界面 F1", func(): set_debug_ui_visible(false), "按 F1 可重新显示调试界面"))
+
+	var side := PanelContainer.new()
+	side.anchor_left = 1.0
+	side.anchor_right = 1.0
+	side.anchor_bottom = 1.0
+	side.offset_left = -304.0
+	side.offset_top = 12.0
+	side.offset_right = -12.0
+	side.offset_bottom = -12.0
+	side.theme = ui_theme
+	side.add_theme_stylebox_override("panel", _panel_style(Color(0.025, 0.035, 0.04, 0.94)))
+	_ui_layer.add_child(side)
+	var tabs := TabContainer.new()
+	side.add_child(tabs)
+
+	var setup_scroll := ScrollContainer.new()
+	setup_scroll.name = "场景配置"
+	tabs.add_child(setup_scroll)
+	var setup := VBoxContainer.new()
+	setup.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	setup.add_theme_constant_override("separation", 7)
+	setup_scroll.add_child(setup)
+	setup.add_child(_section_label("地图编辑"))
+	_tool_select = OptionButton.new()
+	for tool_name in ["查看", "添加掩体", "添加草丛", "拖动/移动", "删除", "设置蓝方目标点", "设置红方目标点"]:
+		_tool_select.add_item(tool_name)
+	_tool_select.item_selected.connect(func(_index: int): _selected_edit_node = null; _update_selection_label())
+	setup.add_child(_tool_select)
+	_selection_label = Label.new()
+	_selection_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_selection_label.text = "未选择对象"
+	setup.add_child(_selection_label)
+
+	setup.add_child(_section_label("蓝方作战意图"))
+	_blue_intent = _intent_select(Intent.CAPTURE_AND_HOLD)
+	setup.add_child(_blue_intent)
+	_add_force_controls(setup, "blue", {0: 3, 1: 1, 2: 0, 3: 0, 4: 0})
+	setup.add_child(_section_label("红方作战意图"))
+	_red_intent = _intent_select(Intent.DEFEND_AREA)
+	setup.add_child(_red_intent)
+	_add_force_controls(setup, "red", {0: 3, 1: 0, 2: 1, 3: 0, 4: 0})
+	setup.add_child(_button("应用兵力与任务配置", _on_apply_configuration, "保留当前地形并重新生成双方小队"))
+
+	var analysis := VBoxContainer.new()
+	analysis.name = "决策分析"
+	analysis.add_theme_constant_override("separation", 7)
+	tabs.add_child(analysis)
+	analysis.add_child(_section_label("感知视图来源"))
+	_source_select = OptionButton.new()
+	_source_select.item_selected.connect(func(_index: int): _mark_analysis_dirty())
+	analysis.add_child(_source_select)
+	analysis.add_child(_section_label("热力图图层"))
+	_layer_select = OptionButton.new()
+	for layer_name in ["综合风险", "敌军威胁", "火力压制", "掩体价值", "隐蔽价值", "情报价值"]:
+		_layer_select.add_item(layer_name)
+	_layer_select.item_selected.connect(func(_index: int): _mark_analysis_dirty())
+	analysis.add_child(_layer_select)
+	var analysis_hint := Label.new()
+	analysis_hint.text = "综合风险：绿色较安全，红色较危险；地形价值使用青色深浅显示。"
+	analysis_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	analysis_hint.modulate = Color(0.72, 0.8, 0.8)
+	analysis.add_child(analysis_hint)
+
+	var decision_panel := PanelContainer.new()
+	decision_panel.anchor_top = 1.0
+	decision_panel.anchor_bottom = 1.0
+	decision_panel.offset_left = 12.0
+	decision_panel.offset_top = -238.0
+	decision_panel.offset_right = 380.0
+	decision_panel.offset_bottom = -12.0
+	decision_panel.theme = ui_theme
+	decision_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.025, 0.035, 0.04, 0.92)))
+	_ui_layer.add_child(decision_panel)
+	_analysis_text = RichTextLabel.new()
+	_analysis_text.bbcode_enabled = true
+	_analysis_text.fit_content = false
+	_analysis_text.scroll_active = true
+	_analysis_text.add_theme_font_size_override("normal_font_size", 11)
+	_analysis_text.add_theme_font_size_override("bold_font_size", 11)
+	_analysis_text.add_theme_font_size_override("italics_font_size", 11)
+	_analysis_text.add_theme_font_size_override("bold_italics_font_size", 11)
+	_analysis_text.add_theme_font_size_override("mono_font_size", 11)
+	_analysis_text.text = "正在等待战术分析……"
+	decision_panel.add_child(_analysis_text)
+
+func _add_force_controls(parent: VBoxContainer, team_key: String, defaults: Dictionary) -> void:
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(grid)
+	var role_names := ["步枪兵", "冲锋枪兵", "机枪兵", "狙击手", "霰弹枪兵"]
+	for role in role_names.size():
+		var label := Label.new()
+		label.text = role_names[role]
+		grid.add_child(label)
+		var spin := SpinBox.new()
+		spin.min_value = 0
+		spin.max_value = 8
+		spin.step = 1
+		spin.value = int(defaults.get(role, 0))
+		spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(spin)
+		_role_spins["%s_%d" % [team_key, role]] = spin
+
+func _intent_select(selected: Intent) -> OptionButton:
+	var select := OptionButton.new()
+	select.add_item("攻占后固守", Intent.CAPTURE_AND_HOLD)
+	select.add_item("原地防守", Intent.DEFEND_AREA)
+	select.add_item("消灭敌人后返回", Intent.ELIMINATE_AND_RETURN)
+	select.select(int(selected))
+	return select
+
+func _button(label: String, callback: Callable, tooltip: String) -> Button:
+	var button := Button.new()
+	button.text = label
+	button.tooltip_text = tooltip
+	button.pressed.connect(callback)
+	return button
+
+func _section_label(text_value: String) -> Label:
+	var label := Label.new()
+	label.text = text_value
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", Color(0.94, 0.78, 0.28))
+	return label
+
+func _panel_style(color: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.38, 0.48, 0.48, 0.8)
+	style.content_margin_left = 10.0
+	style.content_margin_top = 8.0
+	style.content_margin_right = 10.0
+	style.content_margin_bottom = 8.0
+	return style
+
+func _reset_scenario() -> void:
+	_set_simulation_paused(true)
+	_simulation_frame = 0
+	if _tool_select != null:
+		_tool_select.select(EditTool.INSPECT)
+	_clear_editable_terrain()
+	_add_cover(Vector3(-7.5, 0.0, 4.5), 5.0, 0.0)
+	_add_cover(Vector3(1.0, 0.0, 5.0), 5.5, 0.0)
+	_add_cover(Vector3(7.5, 0.0, -4.5), 5.0, 0.0)
+	_add_cover(Vector3(-1.0, 0.0, -5.0), 5.5, 0.0)
+	_add_cover(Vector3(-11.0, 0.0, 0.0), 6.5, PI * 0.5)
+	_add_grass(Vector3(10.5, 0.0, 3.0), Vector2(6.0, 9.0))
+	_add_grass(Vector3(-10.0, 0.0, -3.0), Vector2(6.0, 9.0))
+	_restore_default_configuration_values()
+	_rebuild_actors()
+
+func _restore_default_configuration_values() -> void:
+	if not build_user_interface or _role_spins.is_empty():
+		return
+	var defaults := {"blue_0": 3, "blue_1": 1, "blue_2": 0, "blue_3": 0, "blue_4": 0,
+		"red_0": 3, "red_1": 0, "red_2": 1, "red_3": 0, "red_4": 0}
+	for key in defaults:
+		(_role_spins[key] as SpinBox).value = defaults[key]
+	_blue_intent.select(Intent.CAPTURE_AND_HOLD)
+	_red_intent.select(Intent.DEFEND_AREA)
+
+func _clear_editable_terrain() -> void:
+	if _terrain_root == null:
+		return
+	for child in _terrain_root.get_children():
+		child.free()
+	_selected_edit_node = null
+
+func _rebuild_actors() -> void:
+	_set_simulation_paused(true)
+	_simulation_started = false
+	_dragged_soldier = null
+	for child in _actors_root.get_children():
+		child.free()
+	_blue_squad = _create_squad("BlueSquad", Soldier3D.Team.BLUE, _get_intent("blue"), Vector3(0.0, 0.0, 13.0), Vector3(0.0, 0.0, -10.0))
+	_red_squad = _create_squad("RedSquad", Soldier3D.Team.RED, _get_intent("red"), Vector3(0.0, 0.0, -13.0), Vector3(0.0, 0.0, 10.0))
+	_actors_root.add_child(_blue_squad)
+	_actors_root.add_child(_red_squad)
+	_selected_edit_node = null
+	_last_inspected_position = Vector3.ZERO
+	_update_selection_label()
+	call_deferred("_finish_actor_rebuild")
+
+func _create_squad(node_name: String, team: Soldier3D.Team, intent: Intent, spawn_center: Vector3, enemy_position: Vector3) -> SquadCoordinator3D:
+	var squad := SquadCoordinator3D.new()
+	squad.name = node_name
+	squad.squad_id = StringName(node_name.to_lower())
+	squad.squad_display_name = "蓝方测试小队" if team == Soldier3D.Team.BLUE else "红方测试小队"
+	squad.combat_team = team
+	squad.can_target_players = false
+	squad.use_advanced_tactics = true
+	squad.use_qwen = false
+	squad.evaluation_interval = 1.2
+	squad.contact_report_delay_min = 0.25
+	squad.contact_report_delay_max = 0.7
+	squad.mission_radius = 8.0
+	squad.mission_clear_confirmation_seconds = 0.6
+	squad.mission_type = SquadMissionController3D.MissionType.ELIMINATE_AND_RETURN \
+		if intent == Intent.ELIMINATE_AND_RETURN else SquadMissionController3D.MissionType.CAPTURE_AND_HOLD
+	var target := Marker3D.new()
+	target.name = "MissionTarget"
+	target.position = spawn_center if intent == Intent.DEFEND_AREA else enemy_position
+	target.set_meta("editable_kind", "objective")
+	target.set_meta("team", int(team))
+	_add_objective_visual(target, team)
+	squad.add_child(target)
+	squad.mission_target_path = NodePath("MissionTarget")
+	var members := Node3D.new()
+	members.name = "Members"
+	squad.add_child(members)
+	var roles := _configured_roles("blue" if team == Soldier3D.Team.BLUE else "red")
+	if roles.is_empty():
+		roles.append(Soldier3D.CombatRole.RIFLEMAN)
+	for index in roles.size():
+		var soldier := SOLDIER_SCENE.instantiate() as Soldier3D
+		var role := int(roles[index])
+		soldier.name = "%s_%s_%02d" % ["Blue" if team == Soldier3D.Team.BLUE else "Red", _role_short_name(role), index + 1]
+		soldier.combat_team = team
+		soldier.combat_role = role
+		soldier.can_target_players = false
+		soldier.awards_player_score = false
+		soldier.drops_ammo_on_death = false
+		soldier.show_status_label = true
+		var column := index % 4
+		var row := index / 4
+		soldier.position = spawn_center + Vector3((float(column) - 1.5) * 1.45, 0.0, float(row) * (1.5 if team == Soldier3D.Team.BLUE else -1.5))
+		soldier.rotation.y = 0.0 if team == Soldier3D.Team.BLUE else PI
+		members.add_child(soldier)
+	return squad
+
+func _configured_roles(team_key: String) -> Array[int]:
+	var result: Array[int] = []
+	for role in 5:
+		var spin := _role_spins.get("%s_%d" % [team_key, role]) as SpinBox
+		var count := int(spin.value) if spin != null else (3 if role == 0 else 0)
+		for _index in count:
+			result.append(role)
+	return result
+
+func _get_intent(team_key: String) -> Intent:
+	var select := _blue_intent if team_key == "blue" else _red_intent
+	return select.get_selected_id() as Intent if select != null else (Intent.CAPTURE_AND_HOLD if team_key == "blue" else Intent.DEFEND_AREA)
+
+func _add_cover(position_value: Vector3, length: float, rotation_y: float) -> TacticalCover3D:
+	_editable_sequence += 1
+	var cover := COVER_SCENE.instantiate() as TacticalCover3D
+	cover.name = "SandboxCover%02d" % _editable_sequence
+	cover.position = position_value
+	cover.rotation.y = rotation_y
+	cover.cover_length = length
+	cover.material_color = Color(0.36, 0.39, 0.36)
+	cover.set_meta("editable_kind", "cover")
+	_terrain_root.add_child(cover)
+	return cover
+
+func _add_grass(position_value: Vector3, size_value := Vector2(5.0, 6.0)) -> TacticalZone3D:
+	_editable_sequence += 1
+	var zone := TacticalZone3D.new()
+	zone.name = "SandboxGrass%02d" % _editable_sequence
+	zone.zone_id = StringName("sandbox_grass_%02d" % _editable_sequence)
+	zone.display_name = "Sandbox grass %02d" % _editable_sequence
+	zone.position = position_value
+	zone.size = size_value
+	zone.concealment = 0.9
+	zone.cover_value = 0.0
+	zone.route_exposure = 0.12
+	zone.information_value = 1.3
+	zone.zone_color = Color(0.12, 0.62, 0.2, 0.14)
+	zone.set_meta("editable_kind", "grass")
+	var observation := Marker3D.new()
+	observation.name = "ObservationPoint"
+	observation.position = Vector3(0.0, 0.0, -size_value.y * 0.28)
+	zone.add_child(observation)
+	zone.observation_point_path = NodePath("ObservationPoint")
+	zone.recon_waypoints.append(Vector3(0.0, 0.0, size_value.y * 0.35))
+	zone.recon_waypoints.append(Vector3(0.0, 0.0, -size_value.y * 0.25))
+	_add_grass_visuals(zone, size_value)
+	_terrain_root.add_child(zone)
+	return zone
+
+func _add_grass_visuals(zone: TacticalZone3D, size_value: Vector2) -> void:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.12, 0.46, 0.16)
+	material.roughness = 1.0
+	for x in 3:
+		for z in 4:
+			var blade := MeshInstance3D.new()
+			var mesh := BoxMesh.new()
+			mesh.size = Vector3(0.22, 0.85 + 0.12 * float((x + z) % 2), 0.22)
+			mesh.material = material
+			blade.mesh = mesh
+			blade.position = Vector3(
+				lerpf(-size_value.x * 0.34, size_value.x * 0.34, float(x) / 2.0),
+				0.46,
+				lerpf(-size_value.y * 0.36, size_value.y * 0.36, float(z) / 3.0)
+			)
+			zone.add_child(blade)
+
+func _add_objective_visual(marker: Marker3D, team: Soldier3D.Team) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "ObjectiveVisual"
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 1.0
+	mesh.bottom_radius = 1.0
+	mesh.height = 0.035
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = Color(0.12, 0.48, 1.0, 0.62) if team == Soldier3D.Team.BLUE else Color(0.94, 0.16, 0.12, 0.62)
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh.material = material
+	mesh_instance.mesh = mesh
+	mesh_instance.position.y = 0.04
+	marker.add_child(mesh_instance)
+
+func _finish_initialization() -> void:
+	await get_tree().process_frame
+	_finish_actor_rebuild()
+
+func _finish_actor_rebuild() -> void:
+	await get_tree().process_frame
+	_refresh_source_options()
+	_mark_analysis_dirty()
+
+func _edit_at(point: Vector3) -> void:
+	if not get_tree().paused:
+		return
+	var tool := _tool_select.get_selected_id() if _tool_select != null else EditTool.INSPECT
+	match tool:
+		EditTool.ADD_COVER:
+			_selected_edit_node = _add_cover(point, 5.0, 0.0)
+		EditTool.ADD_GRASS:
+			_selected_edit_node = _add_grass(point)
+		EditTool.MOVE:
+			if is_instance_valid(_selected_edit_node):
+				_selected_edit_node.global_position = point
+				_selected_edit_node = null
+			else:
+				_selected_edit_node = _nearest_editable(point, true)
+		EditTool.DELETE:
+			var target := _nearest_editable(point, false)
+			if target != null:
+				target.queue_free()
+		EditTool.SET_BLUE_OBJECTIVE:
+			_move_objective(_blue_squad, point)
+		EditTool.SET_RED_OBJECTIVE:
+			_move_objective(_red_squad, point)
+		_:
+			_selected_edit_node = _nearest_editable(point, true)
+	_last_inspected_position = point
+	_update_selection_label()
+	_mark_analysis_dirty()
+
+func _try_begin_soldier_drag(point: Vector3) -> bool:
+	if not get_tree().paused or _tool_select == null or _tool_select.get_selected_id() != EditTool.MOVE:
+		return false
+	var soldier := _nearest_soldier(point)
+	if soldier == null:
+		return false
+	if _simulation_started:
+		_selected_edit_node = soldier
+		if _selection_label != null:
+			_selection_label.text = "战斗已经启动；请先重置场景再调整士兵出生位置"
+		return true
+	_dragged_soldier = soldier
+	_selected_edit_node = soldier
+	_drag_offset = soldier.global_position - point
+	_update_selection_label()
+	return true
+
+func _nearest_soldier(point: Vector3) -> Soldier3D:
+	var nearest: Soldier3D
+	var nearest_distance := 1.8
+	for squad in [_blue_squad, _red_squad]:
+		if not is_instance_valid(squad):
+			continue
+		for member in squad.get_living_members():
+			var distance := Vector2(member.global_position.x - point.x, member.global_position.z - point.z).length()
+			if distance < nearest_distance:
+				nearest = member
+				nearest_distance = distance
+	return nearest
+
+func _move_soldier_initial(soldier: Soldier3D, position_value: Vector3) -> bool:
+	if soldier == null or not get_tree().paused or _simulation_started:
+		return false
+	soldier.global_position = position_value
+	soldier.global_position.y = 0.0
+	soldier.velocity = Vector3.ZERO
+	_mark_analysis_dirty()
+	return true
+
+func _nearest_editable(point: Vector3, include_actors: bool) -> Node3D:
+	var candidates: Array[Node3D] = []
+	for child in _terrain_root.get_children():
+		if child is Node3D and child.has_meta("editable_kind"):
+			candidates.append(child as Node3D)
+	if include_actors:
+		for squad in [_blue_squad, _red_squad]:
+			if not is_instance_valid(squad):
+				continue
+			var target := squad.get_node_or_null("MissionTarget") as Node3D
+			if target != null:
+				candidates.append(target)
+			for member in squad.get_configured_member_actors():
+				if member.is_combat_alive():
+					candidates.append(member)
+	var best: Node3D
+	var best_distance := 2.3
+	for candidate in candidates:
+		var distance := Vector2(candidate.global_position.x - point.x, candidate.global_position.z - point.z).length()
+		if distance < best_distance:
+			best = candidate
+			best_distance = distance
+	return best
+
+func _move_objective(squad: SquadCoordinator3D, point: Vector3) -> void:
+	if not is_instance_valid(squad):
+		return
+	var marker := squad.get_node_or_null("MissionTarget") as Node3D
+	if marker != null:
+		marker.global_position = point
+		var advanced := squad.get_advanced_tactics()
+		if advanced != null:
+			advanced.refresh_mission_configuration()
+
+func _ground_point(screen_position: Vector2) -> Variant:
+	if _camera == null:
+		return null
+	var origin := _camera.project_ray_origin(screen_position)
+	var direction := _camera.project_ray_normal(screen_position)
+	if absf(direction.y) < 0.0001:
+		return null
+	var distance := -origin.y / direction.y
+	if distance <= 0.0:
+		return null
+	var point := origin + direction * distance
+	point.x = clampf(point.x, -25.0, 25.0)
+	point.z = clampf(point.z, -21.0, 21.0)
+	point.y = 0.0
+	return point
+
+func _zoom_camera(amount: float) -> void:
+	var direction := (_camera.position - Vector3.ZERO).normalized()
+	var next_distance := clampf(_camera.position.length() + amount, 22.0, 54.0)
+	_camera.position = direction * next_distance
+	_camera.look_at(Vector3.ZERO, Vector3.UP)
+
+func _refresh_source_options() -> void:
+	if _source_select == null:
+		return
+	var previous := ""
+	if _source_select.item_count > 0:
+		var old_meta := _source_select.get_item_metadata(_source_select.selected) as Dictionary
+		previous = String(old_meta.get("key", ""))
+	_source_select.clear()
+	_add_source_item("蓝方小队共享认知", "blue_squad", "squad", _blue_squad)
+	_add_source_item("红方小队共享认知", "red_squad", "squad", _red_squad)
+	for squad in [_blue_squad, _red_squad]:
+		if not is_instance_valid(squad):
+			continue
+		for member in squad.get_living_members():
+			_add_source_item("%s 的单兵威胁场" % member.name, String(member.name), "soldier", member)
+	for index in _source_select.item_count:
+		var metadata := _source_select.get_item_metadata(index) as Dictionary
+		if String(metadata.get("key", "")) == previous:
+			_source_select.select(index)
+			break
+
+func _add_source_item(label: String, key: String, kind: String, node: Node) -> void:
+	_source_select.add_item(label)
+	_source_select.set_item_metadata(_source_select.item_count - 1, {"key": key, "kind": kind, "node": node})
+
+func _refresh_analysis(force_preview: bool) -> void:
+	var source := _selected_source()
+	var squad := _source_squad(source)
+	if not is_instance_valid(squad) or squad.get_advanced_tactics() == null:
+		_heatmap.clear_map()
+		_last_analysis = {}
+		_update_analysis_text(squad, source)
+		return
+	var advanced := squad.get_advanced_tactics()
+	_last_analysis = advanced.build_debug_analysis_preview() if force_preview or get_tree().paused else advanced.get_debug_snapshot()
+	_last_analysis["simulation_frame"] = _simulation_frame
+	if String(source.get("kind", "")) == "soldier":
+		var soldier := source.get("node") as Soldier3D
+		_heatmap.show_soldier_map(soldier)
+		if _layer_select != null:
+			_layer_select.disabled = true
+	else:
+		var layer := _layer_select.get_selected_id() if _layer_select != null else TacticalSandboxHeatmap3D.Layer.COMPOSITE_RISK
+		_heatmap.show_squad_map(advanced.influence, layer as TacticalSandboxHeatmap3D.Layer)
+		if _layer_select != null:
+			_layer_select.disabled = false
+	_update_analysis_text(squad, source)
+
+func _selected_source() -> Dictionary:
+	if _source_select == null or _source_select.item_count == 0:
+		return {"kind": "squad", "node": _blue_squad}
+	return _source_select.get_item_metadata(_source_select.selected) as Dictionary
+
+func _source_squad(source: Dictionary) -> SquadCoordinator3D:
+	var node := source.get("node") as Node
+	if node is SquadCoordinator3D:
+		return node as SquadCoordinator3D
+	if node is Soldier3D:
+		var soldier := node as Soldier3D
+		if is_instance_valid(_blue_squad) and _blue_squad.is_member(soldier):
+			return _blue_squad
+		if is_instance_valid(_red_squad) and _red_squad.is_member(soldier):
+			return _red_squad
+	return null
+
+func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> void:
+	if _analysis_text == null:
+		return
+	if not is_instance_valid(squad) or _last_analysis.is_empty():
+		_analysis_text.text = "[b]当前没有可用的战术分析[/b]"
+		return
+	var belief := _last_analysis.get("belief", {}) as Dictionary
+	var fire := _last_analysis.get("fire_superiority", {}) as Dictionary
+	var lines := PackedStringArray()
+	lines.append("[b]%s[/b]  |  %s" % [squad.squad_display_name, "暂停预演" if get_tree().paused else "实时运行"])
+	lines.append("视图来源：%s" % _source_display_name(source))
+	lines.append("采样战斗帧：%d" % int(_last_analysis.get("simulation_frame", 0)))
+	lines.append("任务：%s  |  已知敌军：%d  |  认知版本 v%d" % [
+		_mission_state_name(String(_last_analysis.get("mission_state", "UNKNOWN"))),
+		int(belief.get("estimated_enemy_count", 0)),
+		int(belief.get("belief_version", 0)),
+	])
+	lines.append("火力态势：%s  压力比 %.2f  压制率 %.2f" % [
+		_fire_state_name(String(fire.get("state_name", "UNKNOWN"))),
+		float(fire.get("pressure_ratio", 0.0)),
+		float(fire.get("suppression_ratio", 0.0)),
+	])
+	lines.append("")
+	lines.append("[color=#f1c94a][b]Utility 候选战术[/b][/color]")
+	var selected := String(_last_analysis.get("selected_candidate", ""))
+	for candidate_value in _last_analysis.get("candidates", []):
+		var candidate := candidate_value as Dictionary
+		var candidate_id := String(candidate.get("id", ""))
+		lines.append("%s %6.1f  %s [%s]" % [">" if candidate_id == selected else " ", float(candidate.get("utility", 0.0)), _candidate_name(candidate_id), candidate_id])
+		lines.append("    %s" % _candidate_reason(candidate_id, String(candidate.get("reason", ""))))
+	lines.append("")
+	var selected_method := String(_last_analysis.get("htn_method", "NONE"))
+	lines.append("[color=#68d6e8][b]HTN 分解方法[/b][/color] %s [%s]" % [_htn_method_name(selected_method), selected_method])
+	for method_value in _last_analysis.get("htn_methods", []):
+		var method := method_value as Dictionary
+		var method_id := String(method.get("id", ""))
+		lines.append("  %6.1f  %s [%s]" % [float(method.get("score", 0.0)), _htn_method_name(method_id), method_id])
+	lines.append("")
+	lines.append("[color=#8ddf82][b]HTN 任务分解[/b][/color]")
+	var tasks: Array = _last_analysis.get("preview_tasks", _last_analysis.get("active_tasks", []))
+	if tasks.is_empty():
+		lines.append("  当前没有任务图")
+	for task_value in tasks:
+		var task := task_value as Dictionary
+		lines.append("  %s [%s] -> %s" % [_task_type_name(String(task.get("type", ""))), _task_state_name(String(task.get("state", ""))), "、".join(task.get("members", []))])
+		if not String(task.get("zone", "")).is_empty():
+			lines.append("    区域：%s" % String(task.get("zone", "")))
+	_analysis_text.text = "\n".join(lines)
+
+func _update_selection_label() -> void:
+	if _selection_label == null:
+		return
+	if is_instance_valid(_selected_edit_node):
+		_selection_label.text = "已选择：%s，坐标 (%.1f, %.1f)" % [_selected_edit_node.name, _selected_edit_node.global_position.x, _selected_edit_node.global_position.z]
+	else:
+		_selection_label.text = "查看坐标：(%.1f, %.1f)" % [_last_inspected_position.x, _last_inspected_position.z]
+
+func _set_simulation_paused(value: bool) -> void:
+	if get_tree() == null:
+		return
+	get_tree().paused = value
+	if not value:
+		_simulation_started = true
+		_mark_analysis_dirty()
+	else:
+		_analysis_dirty = false
+		_analysis_timer = 0.12
+		_refresh_analysis(true)
+
+func _mark_analysis_dirty() -> void:
+	_analysis_dirty = true
+	_analysis_timer = 0.0
+
+func _on_run_pressed() -> void:
+	_set_simulation_paused(false)
+
+func _on_pause_pressed() -> void:
+	_set_simulation_paused(true)
+
+func _on_analyze_pressed() -> void:
+	force_debug_analysis()
+
+func _on_reset_pressed() -> void:
+	_reset_scenario()
+
+func _on_apply_configuration() -> void:
+	_rebuild_actors()
+
+func _on_rotate_pressed() -> void:
+	if get_tree().paused and is_instance_valid(_selected_edit_node) and _selected_edit_node.has_meta("editable_kind"):
+		_selected_edit_node.rotation.y = snappedf(_selected_edit_node.rotation.y + PI * 0.5, PI * 0.5)
+		_mark_analysis_dirty()
+
+func _source_display_name(source: Dictionary) -> String:
+	var node := source.get("node") as Node
+	if node is SquadCoordinator3D:
+		return "%s共享认知" % (node as SquadCoordinator3D).squad_display_name
+	if node is Soldier3D:
+		return "%s单兵威胁场" % node.name
+	return "未知来源"
+
+func _mission_state_name(value: String) -> String:
+	return {
+		"APPROACHING": "向任务区推进",
+		"CLEARING": "清剿任务区",
+		"HOLDING": "固守任务区",
+		"RETURNING": "返回出发点",
+		"COMPLETE": "任务完成",
+	}.get(value, value)
+
+func _fire_state_name(value: String) -> String:
+	return {
+		"WINNING": "占据火力优势",
+		"CONTESTED": "火力相持",
+		"LOSING": "火力劣势",
+		"PINNED": "遭到压制",
+	}.get(value, value)
+
+func _candidate_name(candidate_id: String) -> String:
+	if candidate_id.begins_with("FLANK_"):
+		return "压制并从侧翼突击"
+	return {
+		"MISSION_MOVE": "继续执行任务",
+		"HOLD_OBJECTIVE": "固守目标区域",
+		"CONTACT_COVER": "接敌后立即寻找掩体",
+		"DEFEND_CONTACT": "对已知敌情展开防御",
+		"RECON_SPLIT": "分兵侦察未知路线",
+		"SUPPRESS_AND_FLANK": "压制并侧翼机动",
+		"ESTABLISH_BASE_OF_FIRE": "建立火力支撑点",
+		"FIX_AND_SUPPRESS": "牵制并压制敌军",
+		"BOUNDING_ADVANCE": "交替掩护推进",
+		"DIRECT_ASSAULT": "正面强攻",
+		"AMBUSH": "组织伏击",
+		"COUNTER_FLANK": "应对侧翼威胁",
+		"REPOSITION": "重新部署",
+		"RECOVER_IN_COVER": "进入掩体恢复战斗力",
+		"BREAK_CONTACT": "脱离接触",
+		"FALLBACK_DEFENSE": "收缩防线",
+		"SEARCH_LAST_CONTACT": "搜索最后接触位置",
+		"CONSOLIDATE": "整队巩固",
+	}.get(candidate_id, candidate_id)
+
+func _candidate_reason(candidate_id: String, fallback: String) -> String:
+	if candidate_id.begins_with("FLANK_"):
+		return "使用已确认且风险较低的路线实施同步侧翼进攻"
+	return {
+		"MISSION_MOVE": "尚无确认敌情，继续完成当前任务",
+		"HOLD_OBJECTIVE": "目标区内没有确认威胁，保持防守",
+		"CONTACT_COVER": "刚刚接敌，所有成员优先建立防护",
+		"DEFEND_CONTACT": "保持当前掩体并持续监视已知敌军",
+		"RECON_SPLIT": "保留正面火力，同时侦察尚未确认的路线",
+		"ESTABLISH_BASE_OF_FIRE": "利用支援武器取得火力优势",
+		"FIX_AND_SUPPRESS": "压制已知敌军，为后续机动创造条件",
+		"BOUNDING_ADVANCE": "由火力组和机动组交替掩护推进",
+		"DIRECT_ASSAULT": "没有更安全的可用路线，只能正面突破",
+		"AMBUSH": "保持隐蔽，等待同步射击条件",
+		"COUNTER_FLANK": "多个方向出现敌情，需要重新分配防守力量",
+		"REPOSITION": "当前位置战术价值不足，需要重新部署",
+		"RECOVER_IN_COVER": "小队压制程度过高，先恢复再继续行动",
+		"BREAK_CONTACT": "当前交战条件不利，组织掩护撤离",
+		"FALLBACK_DEFENSE": "收缩到更小且更安全的防御范围",
+		"SEARCH_LAST_CONTACT": "敌军脱离视野，搜索最后确认位置",
+		"CONSOLIDATE": "战斗间隙重新集结并恢复队形",
+	}.get(candidate_id, fallback if not fallback.is_empty() else "根据当前战场信息生成的合法候选战术")
+
+func _htn_method_name(method_id: String) -> String:
+	return {
+		"STANDARD": "标准任务分解",
+		"MG_BASE_OF_FIRE": "机枪火力支撑",
+		"DISTRIBUTED_RIFLE_FIRE": "步枪组交替压制",
+		"MINIMAL_TEAM_FLANK": "小规模侧翼机动",
+		"DIRECT_ASSAULT_FALLBACK": "强攻备用方案",
+		"SYNCHRONIZED_VOLLEY": "同步齐射",
+		"COMPROMISED_CONTACT_DRILL": "伏击暴露后的接敌处置",
+		"SINGLE_AXIS_DEFENSE": "单方向防御",
+		"MULTI_AXIS_DEFENSE": "多方向防御",
+		"TWO_ELEMENT_BOUNDS": "双组交替跃进",
+		"HASTY_ASSAULT": "快速突击",
+		"NONE": "无",
+	}.get(method_id, method_id)
+
+func _task_type_name(value: String) -> String:
+	return {
+		"MOVE_TO_OBJECTIVE": "移动到任务目标",
+		"TAKE_COVER": "进入掩体",
+		"RECON_ZONE": "侦察区域",
+		"SUPPRESS_CONTACT": "压制已知敌军",
+		"FLANK_ZONE": "侧翼机动",
+		"ATTACK_CONTACT": "攻击已知敌军",
+		"HOLD_OBJECTIVE": "固守目标",
+		"RETURN_TO_ORIGIN": "返回出发点",
+		"RECOVER_IN_COVER": "在掩体内恢复",
+		"AIM_CONTACT": "瞄准已知敌军",
+	}.get(value, value)
+
+func _task_state_name(value: String) -> String:
+	return {
+		"PENDING": "等待前置任务",
+		"ACTIVE": "执行中",
+		"READY": "已就位",
+		"SUCCEEDED": "已完成",
+		"FAILED": "失败",
+		"CANCELLED": "已取消",
+	}.get(value, value)
+
+func _role_short_name(role: int) -> String:
+	return ["Rifle", "SMG", "MG", "Marksman", "Shotgun", "Melee"][clampi(role, 0, 5)]
+
+func _count_editables(kind: String) -> int:
+	var count := 0
+	if _terrain_root == null:
+		return count
+	for child in _terrain_root.get_children():
+		count += 1 if String(child.get_meta("editable_kind", "")) == kind else 0
+	return count

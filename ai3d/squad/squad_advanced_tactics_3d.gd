@@ -37,6 +37,8 @@ var _qwen_context_version := 1
 var _qwen_context_signature := ""
 var _rng := RandomNumberGenerator.new()
 var _last_fire_assessment: Dictionary = {}
+var _last_candidates: Array[Dictionary] = []
+var _last_selected_candidate_id := ""
 var _influence_timer := 0.0
 var _pending_replan_level: SquadReplanPolicy3D.Level = SquadReplanPolicy3D.Level.FULL_TACTIC
 var _last_decision_snapshot: SquadDecisionSnapshot3D
@@ -65,12 +67,17 @@ func configure(owner_coordinator: SquadCoordinator3D) -> void:
 	call_deferred("_finish_configuration")
 
 func _finish_configuration() -> void:
+	refresh_tactical_environment()
+	refresh_mission_configuration()
+	_force_evaluation = true
+
+func refresh_tactical_environment() -> void:
 	zones.clear()
 	for node in get_tree().get_nodes_in_group("tactical_zone3d"):
 		if node is TacticalZone3D:
 			zones.append(node as TacticalZone3D)
-	refresh_mission_configuration()
-	_force_evaluation = true
+	for member in coordinator.get_configured_member_actors():
+		member.set_squad_influence_map(influence)
 
 func refresh_mission_configuration() -> void:
 	if coordinator == null:
@@ -133,6 +140,8 @@ func queue_perception_report(observer: Soldier3D, hostile: Node3D, position: Vec
 
 func get_debug_snapshot() -> Dictionary:
 	return {
+		"physics_frame": Engine.get_physics_frames(),
+		"captured_msec": Time.get_ticks_msec(),
 		"mission_state": mission.get_state_name(),
 		"active_intent": String(_active_intent),
 		"candidate_id": _active_candidate_id,
@@ -142,8 +151,82 @@ func get_debug_snapshot() -> Dictionary:
 		"influence_version": influence.version,
 		"htn_method": htn.last_selected_method,
 		"htn_methods": htn.last_method_scores.duplicate(true),
+		"candidates": _make_candidate_debug(_last_candidates),
+		"selected_candidate": _last_selected_candidate_id,
+		"active_tasks": _make_task_debug(),
 		"replan_level": SquadReplanPolicy3D.Level.keys()[_pending_replan_level],
 	}
+
+func build_debug_analysis_preview() -> Dictionary:
+	if coordinator == null:
+		return {}
+	refresh_tactical_environment()
+	_rebuild_influence()
+	var assessment := fire_superiority.assess(coordinator.get_living_members(), belief.get_estimated_enemy_count())
+	var snapshot := SquadDecisionSnapshot3D.capture(belief, mission, coordinator.get_living_members(), assessment)
+	var contact_elapsed := 0.0 if _contact_started_msec <= 0 else float(Time.get_ticks_msec() - _contact_started_msec) / 1000.0
+	var candidates := utility.build_candidates(
+		snapshot,
+		belief,
+		zones,
+		influence,
+		_contact_cover_complete,
+		_recon_complete,
+		contact_elapsed
+	)
+	var selected: Dictionary = candidates[0] if not candidates.is_empty() else {}
+	var preview_plan: SquadCommandPlan3D
+	if not selected.is_empty():
+		preview_plan = htn.compile(selected, snapshot, belief, zones, influence, mission, _plan_sequence + 1)
+	return {
+		"physics_frame": Engine.get_physics_frames(),
+		"captured_msec": Time.get_ticks_msec(),
+		"mission_state": mission.get_state_name(),
+		"belief": belief.make_tactical_snapshot(zones),
+		"fire_superiority": assessment.duplicate(true),
+		"candidates": _make_candidate_debug(candidates),
+		"selected_candidate": String(selected.get("id", "")),
+		"htn_method": htn.last_selected_method,
+		"htn_methods": htn.last_method_scores.duplicate(true),
+		"preview_tasks": _make_plan_task_debug(preview_plan),
+		"active_tasks": _make_task_debug(),
+		"influence_version": influence.version,
+	}
+
+func _make_candidate_debug(candidates: Array[Dictionary]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for candidate in candidates:
+		var zone := candidate.get("zone") as TacticalZone3D
+		result.append({
+			"id": String(candidate.get("id", "")),
+			"kind": String(candidate.get("kind", "")),
+			"utility": float(candidate.get("utility", 0.0)),
+			"reason": String(candidate.get("reason", "")),
+			"zone": String(zone.zone_id) if zone != null else "",
+		})
+	return result
+
+func _make_task_debug() -> Array[Dictionary]:
+	return _make_plan_task_debug(scheduler.active_plan if scheduler != null else null)
+
+func _make_plan_task_debug(plan: SquadCommandPlan3D) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if plan == null:
+		return result
+	for task_value in plan.tasks:
+		var task := task_value as SquadTask3D
+		if task == null:
+			continue
+		result.append({
+			"id": String(task.task_id),
+			"type": task.get_type_name(),
+			"state": task.get_state_name(),
+			"members": Array(task.recipient_ids),
+			"zone": String(task.zone_id),
+			"depends_on": task.depends_on.map(func(value: StringName): return String(value)),
+			"reason": task.reason,
+		})
+	return result
 
 func get_qwen_context_version() -> int:
 	return _qwen_context_version
@@ -234,10 +317,13 @@ func _evaluate() -> void:
 		_recon_complete,
 		contact_elapsed
 	)
+	_last_candidates = candidates.duplicate(true)
 	if candidates.is_empty():
+		_last_selected_candidate_id = ""
 		return
 	_update_qwen_context(candidates)
 	var selected: Dictionary = candidates[0]
+	_last_selected_candidate_id = String(selected.get("id", ""))
 	tactical_candidates_evaluated.emit(candidates, String(selected.get("id", "")))
 	var level := _pending_replan_level
 	_pending_replan_level = SquadReplanPolicy3D.Level.NONE
