@@ -59,6 +59,9 @@ var _blue_intent: OptionButton
 var _red_intent: OptionButton
 var _analysis_text: RichTextLabel
 var _selection_label: Label
+var _cover_length_spin: SpinBox
+var _cover_width_spin: SpinBox
+var _syncing_cover_controls := false
 var _role_spins: Dictionary = {}
 
 func _ready() -> void:
@@ -372,6 +375,36 @@ func _build_ui() -> void:
 	_selection_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_selection_label.text = "未选择对象"
 	setup.add_child(_selection_label)
+	setup.add_child(_section_label("选中掩体尺寸"))
+	var cover_size_grid := GridContainer.new()
+	cover_size_grid.columns = 2
+	cover_size_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	setup.add_child(cover_size_grid)
+	var cover_length_label := Label.new()
+	cover_length_label.text = "长度"
+	cover_size_grid.add_child(cover_length_label)
+	_cover_length_spin = SpinBox.new()
+	_cover_length_spin.min_value = 0.5
+	_cover_length_spin.max_value = 30.0
+	_cover_length_spin.step = 0.5
+	_cover_length_spin.allow_greater = false
+	_cover_length_spin.allow_lesser = false
+	_cover_length_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_cover_length_spin.value_changed.connect(_on_cover_length_changed)
+	cover_size_grid.add_child(_cover_length_spin)
+	var cover_width_label := Label.new()
+	cover_width_label.text = "厚度"
+	cover_size_grid.add_child(cover_width_label)
+	_cover_width_spin = SpinBox.new()
+	_cover_width_spin.min_value = 0.15
+	_cover_width_spin.max_value = 3.0
+	_cover_width_spin.step = 0.1
+	_cover_width_spin.allow_greater = false
+	_cover_width_spin.allow_lesser = false
+	_cover_width_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_cover_width_spin.value_changed.connect(_on_cover_width_changed)
+	cover_size_grid.add_child(_cover_width_spin)
+	_update_cover_controls()
 
 	setup.add_child(_section_label("蓝方作战意图"))
 	_blue_intent = _intent_select(Intent.CAPTURE_AND_HOLD)
@@ -683,6 +716,8 @@ func _edit_at(point: Vector3) -> void:
 			_selected_edit_node = _add_grass(point)
 		EditTool.MOVE:
 			if is_instance_valid(_selected_edit_node):
+				if _selected_edit_node is TacticalCover3D:
+					_prepare_cover_for_layout_edit(_selected_edit_node as TacticalCover3D)
 				_selected_edit_node.global_position = point
 				_selected_edit_node = null
 			else:
@@ -690,6 +725,8 @@ func _edit_at(point: Vector3) -> void:
 		EditTool.DELETE:
 			var target := _nearest_editable(point, false)
 			if target != null:
+				if target is TacticalCover3D:
+					_prepare_cover_for_layout_edit(target as TacticalCover3D)
 				target.queue_free()
 		EditTool.SET_BLUE_OBJECTIVE:
 			_move_objective(_blue_squad, point)
@@ -822,16 +859,22 @@ func _apply_camera_pan(input_direction: Vector2, delta: float, speed_multiplier 
 	if _camera == null or input_direction.length_squared() <= 0.0:
 		return
 	input_direction = input_direction.normalized()
-	var forward := -_camera.global_transform.basis.z
-	forward.y = 0.0
-	forward = forward.normalized() if forward.length_squared() > 0.001 else Vector3.FORWARD
-	var right := _camera.global_transform.basis.x
-	right.y = 0.0
-	right = right.normalized() if right.length_squared() > 0.001 else Vector3.RIGHT
+	var forward := _camera_ground_forward()
+	var right := forward.cross(Vector3.UP).normalized()
 	var speed := camera_move_speed * maxf(0.0, speed_multiplier)
 	_camera.position += (right * input_direction.x + forward * input_direction.y) * speed * delta
 	_camera.position.x = clampf(_camera.position.x, -60.0, 60.0)
 	_camera.position.z = clampf(_camera.position.z, -60.0, 60.0)
+
+func _camera_ground_forward() -> Vector3:
+	if _camera == null or get_viewport() == null:
+		return Vector3.FORWARD
+	var screen_center := get_viewport().get_visible_rect().size * 0.5
+	var sight_direction := _camera.project_ray_normal(screen_center)
+	var ground_forward := Vector3(sight_direction.x, 0.0, sight_direction.z)
+	if ground_forward.length_squared() <= 0.0001:
+		return Vector3.FORWARD
+	return ground_forward.normalized()
 
 func _apply_camera_vertical(direction: float, delta: float, speed_multiplier := 1.0) -> void:
 	if _camera == null or is_zero_approx(direction):
@@ -1035,9 +1078,65 @@ func _update_selection_label() -> void:
 	if _selection_label == null:
 		return
 	if is_instance_valid(_selected_edit_node):
-		_selection_label.text = "已选择：%s，坐标 (%.1f, %.1f)" % [_selected_edit_node.name, _selected_edit_node.global_position.x, _selected_edit_node.global_position.z]
+		if _selected_edit_node is TacticalCover3D:
+			var cover := _selected_edit_node as TacticalCover3D
+			_selection_label.text = "已选择：%s，坐标 (%.1f, %.1f)\n槽位：每侧 %d 个" % [
+				cover.name,
+				cover.global_position.x,
+				cover.global_position.z,
+				cover.get_cover_capacity_per_side(),
+			]
+		else:
+			_selection_label.text = "已选择：%s，坐标 (%.1f, %.1f)" % [_selected_edit_node.name, _selected_edit_node.global_position.x, _selected_edit_node.global_position.z]
 	else:
 		_selection_label.text = "查看坐标：(%.1f, %.1f)" % [_last_inspected_position.x, _last_inspected_position.z]
+	_update_cover_controls()
+
+func _update_cover_controls() -> void:
+	if _cover_length_spin == null or _cover_width_spin == null:
+		return
+	var cover := _selected_edit_node as TacticalCover3D
+	var enabled := is_instance_valid(cover) and get_tree() != null and get_tree().paused
+	_cover_length_spin.editable = enabled
+	_cover_width_spin.editable = enabled
+	if not enabled:
+		return
+	_syncing_cover_controls = true
+	_cover_length_spin.value = cover.cover_length
+	_cover_width_spin.value = cover.cover_width
+	_syncing_cover_controls = false
+
+func _on_cover_length_changed(value: float) -> void:
+	if _syncing_cover_controls or get_tree() == null or not get_tree().paused:
+		return
+	var cover := _selected_edit_node as TacticalCover3D
+	if not is_instance_valid(cover):
+		return
+	_prepare_cover_for_layout_edit(cover)
+	cover.cover_length = value
+	_update_selection_label()
+	_mark_analysis_dirty()
+
+func _on_cover_width_changed(value: float) -> void:
+	if _syncing_cover_controls or get_tree() == null or not get_tree().paused:
+		return
+	var cover := _selected_edit_node as TacticalCover3D
+	if not is_instance_valid(cover):
+		return
+	_prepare_cover_for_layout_edit(cover)
+	cover.cover_width = value
+	_update_selection_label()
+	_mark_analysis_dirty()
+
+func _prepare_cover_for_layout_edit(cover: TacticalCover3D) -> void:
+	if cover == null:
+		return
+	for squad in [_blue_squad, _red_squad]:
+		if not is_instance_valid(squad):
+			continue
+		for member in squad.get_living_members():
+			if member.active_cover == cover:
+				member.relocate_for_scenario_setup(member.global_position)
 
 func _set_simulation_paused(value: bool) -> void:
 	if get_tree() == null:
@@ -1072,7 +1171,10 @@ func _on_apply_configuration() -> void:
 
 func _on_rotate_pressed() -> void:
 	if get_tree().paused and is_instance_valid(_selected_edit_node) and _selected_edit_node.has_meta("editable_kind"):
+		if _selected_edit_node is TacticalCover3D:
+			_prepare_cover_for_layout_edit(_selected_edit_node as TacticalCover3D)
 		_selected_edit_node.rotation.y = snappedf(_selected_edit_node.rotation.y + PI * 0.5, PI * 0.5)
+		_update_selection_label()
 		_mark_analysis_dirty()
 
 func _directive_name(value: String) -> String:
