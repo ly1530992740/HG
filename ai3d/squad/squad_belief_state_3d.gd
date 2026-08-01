@@ -9,6 +9,16 @@ var zone_observations: Dictionary = {}
 var threat_events: Array[Dictionary] = []
 var version := 1
 
+func begin_current_frame_observation() -> void:
+	var changed := false
+	for value in contacts.values():
+		var contact := value as CombatContact3D
+		if contact != null and contact.currently_visible:
+			contact.currently_visible = false
+			changed = true
+	if changed:
+		_touch(&"observation_refresh")
+
 func merge_report(report: SquadContactReport3D) -> void:
 	if report == null:
 		return

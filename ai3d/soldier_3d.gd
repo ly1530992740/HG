@@ -297,6 +297,29 @@ func get_local_navigation_debug() -> Dictionary:
 		"selected_risk": snappedf(_local_selected_risk, 0.1),
 	}
 
+func relocate_for_scenario_setup(position_value: Vector3) -> void:
+	_clear_cover_state()
+	global_position = Vector3(position_value.x, 0.0, position_value.z)
+	velocity = Vector3.ZERO
+	_desired_velocity = Vector3.ZERO
+	set_stance(Stance.STAND)
+	set_movement_mode(MoveMode.WALK)
+	is_aimed = false
+	_route_index = 0
+	_reset_local_waypoint()
+	_movement_requested_last_frame = false
+	_last_movement_destination = global_position
+	_movement_best_distance = INF
+	_movement_stall_timer = 0.0
+	_movement_detour_timer = 0.0
+	_movement_detour_direction = Vector3.ZERO
+	_movement_detour_target = Vector3.ZERO
+	_last_collision_normal = Vector3.ZERO
+	_last_collision_cover = null
+	if _goap_agent != null:
+		_goap_agent.request_replan()
+	_update_status()
+
 func get_directive_version() -> int:
 	return active_directive.version if active_directive != null else 0
 
@@ -1773,4 +1796,10 @@ func _update_status(action := "") -> void:
 		return
 	var directive_label := active_directive.get_label() if active_directive != null else "自主警戒"
 	var action_label := action if not action.is_empty() else ("完成" if active_directive != null and last_completed_directive_version == active_directive.version else "等待规划")
-	status_label.text = "%s%s｜%s\n%s" % [team_display_name, "[队长]" if is_squad_leader else "", directive_label, action_label]
+	status_label.text = "ID:%s\n%s%s｜%s\n%s" % [
+		name,
+		team_display_name,
+		"[队长]" if is_squad_leader else "",
+		directive_label,
+		action_label,
+	]

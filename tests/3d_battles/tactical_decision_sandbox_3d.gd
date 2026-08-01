@@ -3,6 +3,7 @@ class_name TacticalDecisionSandbox3D
 
 const SOLDIER_SCENE := preload("res://ai3d/soldier_3d.tscn")
 const COVER_SCENE := preload("res://ai3d/tactical_cover_3d.tscn")
+const SIGHT_VISUALIZER_SCRIPT := preload("res://tests/3d_battles/tactical_sandbox_sight_visualizer_3d.gd")
 
 enum EditTool {
 	INSPECT,
@@ -22,12 +23,15 @@ enum Intent {
 
 @export var start_paused := true
 @export var build_user_interface := true
+@export var camera_move_speed := 14.0
+@export var camera_look_sensitivity := 0.003
 
 var _world: Node3D
 var _terrain_root: Node3D
 var _actors_root: Node3D
 var _camera: Camera3D
 var _heatmap: TacticalSandboxHeatmap3D
+var _sight_visualizer
 var _ui_layer: CanvasLayer
 var _blue_squad: SquadCoordinator3D
 var _red_squad: SquadCoordinator3D
@@ -40,7 +44,13 @@ var _analysis_dirty := true
 var _analysis_timer := 0.0
 var _editable_sequence := 0
 var _last_analysis: Dictionary = {}
+var _analysis_by_squad: Dictionary = {}
+var _perception_refresh_by_squad: Dictionary = {}
 var _last_inspected_position := Vector3.ZERO
+var _camera_look_active := false
+var _camera_yaw := 0.0
+var _camera_pitch := 0.0
+var _ui_input_blockers: Array[Control] = []
 
 var _tool_select: OptionButton
 var _source_select: OptionButton
@@ -61,10 +71,18 @@ func _ready() -> void:
 	call_deferred("_finish_initialization")
 
 func _exit_tree() -> void:
+	_camera_look_active = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if get_tree() != null:
 		get_tree().paused = false
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _camera_look_active:
+		_camera_look_active = false
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 func _process(delta: float) -> void:
+	_update_camera_movement(delta)
 	_analysis_timer -= delta
 	if _analysis_dirty and _analysis_timer <= 0.0:
 		_analysis_dirty = false
@@ -78,6 +96,19 @@ func _physics_process(_delta: float) -> void:
 	if get_tree() != null and not get_tree().paused:
 		_simulation_frame += 1
 
+func _input(event: InputEvent) -> void:
+	if not _camera_look_active:
+		return
+	if event is InputEventMouseMotion:
+		_apply_camera_look((event as InputEventMouseMotion).relative)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_RIGHT and not mouse_event.pressed:
+			_camera_look_active = false
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			get_viewport().set_input_as_handled()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
@@ -86,26 +117,43 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	if event is InputEventMouseMotion and is_instance_valid(_dragged_soldier):
+		if _camera_look_active:
+			_apply_camera_look((event as InputEventMouseMotion).relative)
+			get_viewport().set_input_as_handled()
+			return
 		var drag_point: Variant = _ground_point((event as InputEventMouseMotion).position)
 		if drag_point != null:
 			_move_soldier_initial(_dragged_soldier, (drag_point as Vector3) + _drag_offset)
 			_update_selection_label()
 			get_viewport().set_input_as_handled()
 		return
+	if event is InputEventMouseMotion and _camera_look_active:
+		_apply_camera_look((event as InputEventMouseMotion).relative)
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
-		if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP and mouse_event.pressed:
-			_zoom_camera(-2.0)
-			get_viewport().set_input_as_handled()
-			return
-		if mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN and mouse_event.pressed:
-			_zoom_camera(2.0)
+		if mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+			if mouse_event.pressed and _is_screen_point_over_debug_ui(mouse_event.position):
+				return
+			_camera_look_active = mouse_event.pressed
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if mouse_event.pressed else Input.MOUSE_MODE_VISIBLE
 			get_viewport().set_input_as_handled()
 			return
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and not mouse_event.pressed \
 				and is_instance_valid(_dragged_soldier):
 			_dragged_soldier = null
 			_mark_analysis_dirty()
+			get_viewport().set_input_as_handled()
+			return
+		if _is_screen_point_over_debug_ui(mouse_event.position):
+			return
+		if mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP and mouse_event.pressed:
+			_zoom_camera(-2.0)
+			get_viewport().set_input_as_handled()
+			return
+		if mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN and mouse_event.pressed:
+			_zoom_camera(2.0)
 			get_viewport().set_input_as_handled()
 			return
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
@@ -123,7 +171,7 @@ func reset_scenario() -> void:
 
 func force_debug_analysis() -> void:
 	if get_tree() != null and get_tree().paused:
-		_refresh_analysis(true)
+		_refresh_analysis(true, true)
 	else:
 		_mark_analysis_dirty()
 
@@ -141,6 +189,18 @@ func get_sandbox_debug_snapshot() -> Dictionary:
 		"editable_covers": _count_editables("cover"),
 		"editable_grass": _count_editables("grass"),
 		"heat_cells": _heatmap.get_visible_cell_count() if _heatmap != null else 0,
+		"heatmap_version": _heatmap.get_render_version() if _heatmap != null else 0,
+		"sight_rays": _sight_visualizer.get_visible_ray_count() if _sight_visualizer != null else 0,
+		"sight_version": _sight_visualizer.render_version if _sight_visualizer != null else 0,
+		"simulation_frame": _simulation_frame,
+		"camera_position": _camera.position if _camera != null else Vector3.ZERO,
+		"camera_rotation": _camera.rotation if _camera != null else Vector3.ZERO,
+		"viewport_size": get_viewport().get_visible_rect().size,
+		"ui_blocker_rects": _ui_input_blockers.map(func(control: Control): return control.get_global_rect()),
+		"selected_source": String((_selected_source()).get("key", "")),
+		"analysis_squad_count": _analysis_by_squad.size(),
+		"analysis_by_squad": _analysis_by_squad.duplicate(true),
+		"perception_refresh": _perception_refresh_by_squad.duplicate(true),
 		"analysis": _last_analysis.duplicate(true),
 	}
 
@@ -204,6 +264,8 @@ func _build_scene_shell() -> void:
 	_camera.current = true
 	add_child(_camera)
 	_camera.look_at(Vector3.ZERO, Vector3.UP)
+	_camera_pitch = _camera.rotation.x
+	_camera_yaw = _camera.rotation.y
 
 	_world = Node3D.new()
 	_world.name = "SandboxWorld"
@@ -220,6 +282,11 @@ func _build_scene_shell() -> void:
 	_heatmap.name = "Heatmap"
 	_heatmap.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(_heatmap)
+	_sight_visualizer = SIGHT_VISUALIZER_SCRIPT.new()
+	_sight_visualizer.name = "SightVisualizer"
+	_sight_visualizer.process_mode = Node.PROCESS_MODE_DISABLED
+	_sight_visualizer.clear_view()
+	add_child(_sight_visualizer)
 	_build_floor()
 
 func _build_floor() -> void:
@@ -262,12 +329,13 @@ func _build_ui() -> void:
 	toolbar.clip_contents = true
 	toolbar.add_theme_stylebox_override("panel", _panel_style(Color(0.025, 0.035, 0.04, 0.94)))
 	_ui_layer.add_child(toolbar)
+	_ui_input_blockers.append(toolbar)
 	var toolbar_row := HBoxContainer.new()
 	toolbar_row.add_theme_constant_override("separation", 7)
 	toolbar.add_child(toolbar_row)
 	toolbar_row.add_child(_button("启动", _on_run_pressed, "启动或继续战斗模拟"))
 	toolbar_row.add_child(_button("暂停", _on_pause_pressed, "冻结战斗，保持沙盒编辑功能"))
-	toolbar_row.add_child(_button("重新分析", _on_analyze_pressed, "重新计算当前感知热力图、Utility 和 HTN 预演"))
+	toolbar_row.add_child(_button("重新分析", _on_analyze_pressed, "按当前暂停帧刷新双方有限情报、热力图、Utility、HTN 与单兵指令"))
 	toolbar_row.add_child(_button("重置", _on_reset_pressed, "恢复默认地图与双方兵力"))
 	toolbar_row.add_child(_button("旋转", _on_rotate_pressed, "将选中的掩体或草丛区域旋转 90 度"))
 	toolbar_row.add_child(_button("隐藏界面 F1", func(): set_debug_ui_visible(false), "按 F1 可重新显示调试界面"))
@@ -283,6 +351,7 @@ func _build_ui() -> void:
 	side.theme = ui_theme
 	side.add_theme_stylebox_override("panel", _panel_style(Color(0.025, 0.035, 0.04, 0.94)))
 	_ui_layer.add_child(side)
+	_ui_input_blockers.append(side)
 	var tabs := TabContainer.new()
 	side.add_child(tabs)
 
@@ -344,6 +413,7 @@ func _build_ui() -> void:
 	decision_panel.theme = ui_theme
 	decision_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.025, 0.035, 0.04, 0.92)))
 	_ui_layer.add_child(decision_panel)
+	_ui_input_blockers.append(decision_panel)
 	_analysis_text = RichTextLabel.new()
 	_analysis_text.bbcode_enabled = true
 	_analysis_text.fit_content = false
@@ -387,6 +457,7 @@ func _button(label: String, callback: Callable, tooltip: String) -> Button:
 	var button := Button.new()
 	button.text = label
 	button.tooltip_text = tooltip
+	button.focus_mode = Control.FOCUS_NONE
 	button.pressed.connect(callback)
 	return button
 
@@ -448,6 +519,8 @@ func _rebuild_actors() -> void:
 	_set_simulation_paused(true)
 	_simulation_started = false
 	_dragged_soldier = null
+	_analysis_by_squad.clear()
+	_perception_refresh_by_squad.clear()
 	for child in _actors_root.get_children():
 		child.free()
 	_blue_squad = _create_squad("BlueSquad", Soldier3D.Team.BLUE, _get_intent("blue"), Vector3(0.0, 0.0, 13.0), Vector3(0.0, 0.0, -10.0))
@@ -623,7 +696,10 @@ func _edit_at(point: Vector3) -> void:
 		EditTool.SET_RED_OBJECTIVE:
 			_move_objective(_red_squad, point)
 		_:
-			_selected_edit_node = _nearest_editable(point, true)
+			var inspected_soldier := _nearest_soldier(point)
+			_selected_edit_node = inspected_soldier if inspected_soldier != null else _nearest_editable(point, true)
+			if inspected_soldier != null:
+				_select_source_for_soldier(inspected_soldier)
 	_last_inspected_position = point
 	_update_selection_label()
 	_mark_analysis_dirty()
@@ -634,13 +710,9 @@ func _try_begin_soldier_drag(point: Vector3) -> bool:
 	var soldier := _nearest_soldier(point)
 	if soldier == null:
 		return false
-	if _simulation_started:
-		_selected_edit_node = soldier
-		if _selection_label != null:
-			_selection_label.text = "战斗已经启动；请先重置场景再调整士兵出生位置"
-		return true
 	_dragged_soldier = soldier
 	_selected_edit_node = soldier
+	_select_source_for_soldier(soldier)
 	_drag_offset = soldier.global_position - point
 	_update_selection_label()
 	return true
@@ -659,11 +731,9 @@ func _nearest_soldier(point: Vector3) -> Soldier3D:
 	return nearest
 
 func _move_soldier_initial(soldier: Soldier3D, position_value: Vector3) -> bool:
-	if soldier == null or not get_tree().paused or _simulation_started:
+	if soldier == null or not get_tree().paused:
 		return false
-	soldier.global_position = position_value
-	soldier.global_position.y = 0.0
-	soldier.velocity = Vector3.ZERO
+	soldier.relocate_for_scenario_setup(position_value)
 	_mark_analysis_dirty()
 	return true
 
@@ -717,11 +787,72 @@ func _ground_point(screen_position: Vector2) -> Variant:
 	point.y = 0.0
 	return point
 
+func _is_screen_point_over_debug_ui(screen_position: Vector2) -> bool:
+	if _ui_layer == null or not _ui_layer.visible:
+		return false
+	for control in _ui_input_blockers:
+		if is_instance_valid(control) and control.is_visible_in_tree() \
+				and control.get_global_rect().has_point(screen_position):
+			return true
+	return false
+
 func _zoom_camera(amount: float) -> void:
-	var direction := (_camera.position - Vector3.ZERO).normalized()
-	var next_distance := clampf(_camera.position.length() + amount, 22.0, 54.0)
-	_camera.position = direction * next_distance
-	_camera.look_at(Vector3.ZERO, Vector3.UP)
+	if _camera == null:
+		return
+	var forward := -_camera.global_transform.basis.z.normalized()
+	var next_position := _camera.position + forward * -amount
+	next_position.y = clampf(next_position.y, 3.0, 60.0)
+	_camera.position = next_position
+
+func _update_camera_movement(delta: float) -> void:
+	if _camera == null:
+		return
+	var input_direction := Vector2(
+		float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A)),
+		float(Input.is_key_pressed(KEY_W)) - float(Input.is_key_pressed(KEY_S))
+	)
+	var vertical_input := float(Input.is_key_pressed(KEY_SPACE)) - float(Input.is_key_pressed(KEY_CTRL))
+	if input_direction.length_squared() <= 0.0 and is_zero_approx(vertical_input):
+		return
+	var speed_multiplier := 2.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0
+	_apply_camera_pan(input_direction, delta, speed_multiplier)
+	_apply_camera_vertical(vertical_input, delta, speed_multiplier)
+
+func _apply_camera_pan(input_direction: Vector2, delta: float, speed_multiplier := 1.0) -> void:
+	if _camera == null or input_direction.length_squared() <= 0.0:
+		return
+	input_direction = input_direction.normalized()
+	var forward := -_camera.global_transform.basis.z
+	forward.y = 0.0
+	forward = forward.normalized() if forward.length_squared() > 0.001 else Vector3.FORWARD
+	var right := _camera.global_transform.basis.x
+	right.y = 0.0
+	right = right.normalized() if right.length_squared() > 0.001 else Vector3.RIGHT
+	var speed := camera_move_speed * maxf(0.0, speed_multiplier)
+	_camera.position += (right * input_direction.x + forward * input_direction.y) * speed * delta
+	_camera.position.x = clampf(_camera.position.x, -60.0, 60.0)
+	_camera.position.z = clampf(_camera.position.z, -60.0, 60.0)
+
+func _apply_camera_vertical(direction: float, delta: float, speed_multiplier := 1.0) -> void:
+	if _camera == null or is_zero_approx(direction):
+		return
+	var speed := camera_move_speed * maxf(0.0, speed_multiplier)
+	_camera.position.y = clampf(
+		_camera.position.y + clampf(direction, -1.0, 1.0) * speed * delta,
+		3.0,
+		60.0
+	)
+
+func _apply_camera_look(relative: Vector2) -> void:
+	if _camera == null:
+		return
+	_camera_yaw -= relative.x * camera_look_sensitivity
+	_camera_pitch = clampf(
+		_camera_pitch - relative.y * camera_look_sensitivity,
+		deg_to_rad(-88.0),
+		deg_to_rad(35.0)
+	)
+	_camera.rotation = Vector3(_camera_pitch, _camera_yaw, 0.0)
 
 func _refresh_source_options() -> void:
 	if _source_select == null:
@@ -748,28 +879,67 @@ func _add_source_item(label: String, key: String, kind: String, node: Node) -> v
 	_source_select.add_item(label)
 	_source_select.set_item_metadata(_source_select.item_count - 1, {"key": key, "kind": kind, "node": node})
 
-func _refresh_analysis(force_preview: bool) -> void:
+func _select_source_for_soldier(soldier: Soldier3D) -> void:
+	if soldier == null or _source_select == null:
+		return
+	for index in _source_select.item_count:
+		var metadata := _source_select.get_item_metadata(index) as Dictionary
+		if metadata.get("node") == soldier:
+			_source_select.select(index)
+			return
+
+func _refresh_analysis(force_preview: bool, apply_current_frame_plan := false) -> void:
 	var source := _selected_source()
 	var squad := _source_squad(source)
 	if not is_instance_valid(squad) or squad.get_advanced_tactics() == null:
 		_heatmap.clear_map()
+		_sight_visualizer.clear_view()
 		_last_analysis = {}
 		_update_analysis_text(squad, source)
 		return
+	if get_tree().paused and apply_current_frame_plan:
+		_perception_refresh_by_squad.clear()
+		for candidate_squad in [_blue_squad, _red_squad]:
+			if not is_instance_valid(candidate_squad) or candidate_squad.get_advanced_tactics() == null:
+				continue
+			_perception_refresh_by_squad[_squad_cache_key(candidate_squad)] = \
+				candidate_squad.get_advanced_tactics().debug_refresh_current_frame_perception()
+		for candidate_squad in [_blue_squad, _red_squad]:
+			if not is_instance_valid(candidate_squad) or candidate_squad.get_advanced_tactics() == null:
+				continue
+			var refreshed: Dictionary = candidate_squad.get_advanced_tactics().debug_force_reanalyze_current_frame()
+			refreshed["simulation_frame"] = _simulation_frame
+			_analysis_by_squad[_squad_cache_key(candidate_squad)] = refreshed
+	elif force_preview or get_tree().paused:
+		for candidate_squad in [_blue_squad, _red_squad]:
+			if not is_instance_valid(candidate_squad) or candidate_squad.get_advanced_tactics() == null:
+				continue
+			var preview: Dictionary = candidate_squad.get_advanced_tactics().build_debug_analysis_preview()
+			preview["simulation_frame"] = _simulation_frame
+			_analysis_by_squad[_squad_cache_key(candidate_squad)] = preview
+	else:
+		var live := squad.get_advanced_tactics().get_debug_snapshot()
+		live["simulation_frame"] = _simulation_frame
+		_analysis_by_squad[_squad_cache_key(squad)] = live
 	var advanced := squad.get_advanced_tactics()
-	_last_analysis = advanced.build_debug_analysis_preview() if force_preview or get_tree().paused else advanced.get_debug_snapshot()
+	_last_analysis = (_analysis_by_squad.get(_squad_cache_key(squad), {}) as Dictionary).duplicate(true)
 	_last_analysis["simulation_frame"] = _simulation_frame
 	if String(source.get("kind", "")) == "soldier":
 		var soldier := source.get("node") as Soldier3D
 		_heatmap.show_soldier_map(soldier)
+		_sight_visualizer.show_soldier(soldier)
 		if _layer_select != null:
 			_layer_select.disabled = true
 	else:
 		var layer := _layer_select.get_selected_id() if _layer_select != null else TacticalSandboxHeatmap3D.Layer.COMPOSITE_RISK
 		_heatmap.show_squad_map(advanced.influence, layer as TacticalSandboxHeatmap3D.Layer)
+		_sight_visualizer.clear_view()
 		if _layer_select != null:
 			_layer_select.disabled = false
 	_update_analysis_text(squad, source)
+
+func _squad_cache_key(squad: SquadCoordinator3D) -> String:
+	return String(squad.squad_id) if is_instance_valid(squad) else ""
 
 func _selected_source() -> Dictionary:
 	if _source_select == null or _source_select.item_count == 0:
@@ -797,7 +967,7 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 	var belief := _last_analysis.get("belief", {}) as Dictionary
 	var fire := _last_analysis.get("fire_superiority", {}) as Dictionary
 	var lines := PackedStringArray()
-	lines.append("[b]%s[/b]  |  %s" % [squad.squad_display_name, "暂停预演" if get_tree().paused else "实时运行"])
+	lines.append("[b]%s[/b]  |  %s" % [squad.squad_display_name, "暂停帧分析" if get_tree().paused else "实时运行"])
 	lines.append("视图来源：%s" % _source_display_name(source))
 	lines.append("采样战斗帧：%d" % int(_last_analysis.get("simulation_frame", 0)))
 	lines.append("任务：%s  |  已知敌军：%d  |  认知版本 v%d" % [
@@ -805,6 +975,8 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 		int(belief.get("estimated_enemy_count", 0)),
 		int(belief.get("belief_version", 0)),
 	])
+	var selected_candidate := String(_last_analysis.get("selected_candidate", ""))
+	lines.append("作战意图：%s [%s]" % [_candidate_name(selected_candidate), selected_candidate])
 	lines.append("火力态势：%s  压力比 %.2f  压制率 %.2f" % [
 		_fire_state_name(String(fire.get("state_name", "UNKNOWN"))),
 		float(fire.get("pressure_ratio", 0.0)),
@@ -812,7 +984,7 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 	])
 	lines.append("")
 	lines.append("[color=#f1c94a][b]Utility 候选战术[/b][/color]")
-	var selected := String(_last_analysis.get("selected_candidate", ""))
+	var selected := selected_candidate
 	for candidate_value in _last_analysis.get("candidates", []):
 		var candidate := candidate_value as Dictionary
 		var candidate_id := String(candidate.get("id", ""))
@@ -835,6 +1007,28 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 		lines.append("  %s [%s] -> %s" % [_task_type_name(String(task.get("type", ""))), _task_state_name(String(task.get("state", ""))), "、".join(task.get("members", []))])
 		if not String(task.get("zone", "")).is_empty():
 			lines.append("    区域：%s" % String(task.get("zone", "")))
+	lines.append("")
+	lines.append("[color=#f0a6ff][b]单兵指令分配[/b][/color]")
+	var selected_node := source.get("node") as Node
+	var directives: Array = _last_analysis.get("member_directives", [])
+	if directives.is_empty():
+		lines.append("  当前没有已下发指令")
+	for directive_value in directives:
+		var directive := directive_value as Dictionary
+		var member_id := String(directive.get("id", ""))
+		var target_position := directive.get("target_position", Vector3.ZERO) as Vector3
+		var selected_marker := ">" if selected_node is Soldier3D and String(selected_node.name) == member_id else " "
+		lines.append("%s %s（%s） v%d：%s -> (%.1f, %.1f)" % [
+			selected_marker,
+			member_id,
+			_role_name(String(directive.get("role", ""))),
+			int(directive.get("directive_version", 0)),
+			_directive_name(String(directive.get("directive", "NONE"))),
+			target_position.x,
+			target_position.z,
+		])
+		if not String(directive.get("reason", "")).is_empty():
+			lines.append("    %s" % String(directive.get("reason", "")))
 	_analysis_text.text = "\n".join(lines)
 
 func _update_selection_label() -> void:
@@ -880,6 +1074,31 @@ func _on_rotate_pressed() -> void:
 	if get_tree().paused and is_instance_valid(_selected_edit_node) and _selected_edit_node.has_meta("editable_kind"):
 		_selected_edit_node.rotation.y = snappedf(_selected_edit_node.rotation.y + PI * 0.5, PI * 0.5)
 		_mark_analysis_dirty()
+
+func _directive_name(value: String) -> String:
+	return {
+		"NONE": "待命",
+		"GUARD": "警戒",
+		"MOVE": "移动",
+		"TAKE_COVER": "进入掩体",
+		"AIM": "瞄准",
+		"ATTACK": "攻击",
+		"SUPPRESS": "压制",
+		"FLANK": "侧翼机动",
+		"RECON": "侦察",
+		"HOLD_SECTOR": "固守扇区",
+		"WITHDRAW": "撤离",
+	}.get(value, value)
+
+func _role_name(value: String) -> String:
+	return {
+		"RIFLEMAN": "步枪兵",
+		"SMG": "冲锋枪兵",
+		"MACHINE_GUNNER": "机枪兵",
+		"MARKSMAN": "狙击手",
+		"SHOTGUNNER": "霰弹枪兵",
+		"MELEE": "近战兵",
+	}.get(value, value)
 
 func _source_display_name(source: Dictionary) -> String:
 	var node := source.get("node") as Node

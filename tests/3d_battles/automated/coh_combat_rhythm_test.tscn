@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://tests/3d_battles/coh_combat_rhythm_test.gd" id="1"]
-
-[node name="CohCombatRhythmTest" type="Node"]
-script = ExtResource("1")

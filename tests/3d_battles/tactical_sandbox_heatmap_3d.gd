@@ -13,6 +13,7 @@ enum Layer {
 const BENEFIT_LAYERS := [Layer.COVER, Layer.CONCEALMENT, Layer.INFORMATION]
 
 var opacity := 0.58
+var render_version := 0
 
 func show_squad_map(influence: SquadInfluenceMap3D, layer: Layer) -> void:
 	if influence == null:
@@ -45,9 +46,13 @@ func show_soldier_map(soldier: Soldier3D, radius := 36.0, cell_size := 3.0) -> v
 
 func clear_map() -> void:
 	multimesh = null
+	render_version += 1
 
 func get_visible_cell_count() -> int:
 	return multimesh.instance_count if multimesh != null else 0
+
+func get_render_version() -> int:
+	return render_version
 
 func _render(samples: Array[Dictionary], cell_size: float, beneficial: bool) -> void:
 	if samples.is_empty():
@@ -73,6 +78,7 @@ func _render(samples: Array[Dictionary], cell_size: float, beneficial: bool) -> 
 		data.set_instance_transform(index, Transform3D(Basis.IDENTITY, position))
 		data.set_instance_color(index, _heat_color(float(sample.get("value", 0.0)), beneficial))
 	multimesh = data
+	render_version += 1
 
 func _squad_value(cell: Dictionary, layer: Layer) -> float:
 	match layer:

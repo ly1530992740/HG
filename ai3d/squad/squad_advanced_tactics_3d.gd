@@ -154,10 +154,72 @@ func get_debug_snapshot() -> Dictionary:
 		"candidates": _make_candidate_debug(_last_candidates),
 		"selected_candidate": _last_selected_candidate_id,
 		"active_tasks": _make_task_debug(),
+		"member_directives": _make_member_directive_debug(),
 		"replan_level": SquadReplanPolicy3D.Level.keys()[_pending_replan_level],
 	}
 
 func build_debug_analysis_preview() -> Dictionary:
+	return _build_debug_analysis(false)
+
+func debug_force_reanalyze_current_frame() -> Dictionary:
+	return _build_debug_analysis(true)
+
+func debug_refresh_current_frame_perception() -> Dictionary:
+	if coordinator == null:
+		return {}
+	refresh_tactical_environment()
+	_pending_reports.clear()
+	_last_queued_report.clear()
+	belief.begin_current_frame_observation()
+	var previous_contact_count := belief.get_estimated_enemy_count()
+	var visual_reports := 0
+	var observers_with_contact := 0
+	for observer in coordinator.get_living_members():
+		var visible_hostiles := observer.perception_component.find_visible_hostiles()
+		if not visible_hostiles.is_empty():
+			observers_with_contact += 1
+		for hostile in visible_hostiles:
+			var report := SquadContactReport3D.new().configure_contact(
+				observer,
+				hostile,
+				hostile.global_position,
+				1.0,
+				SquadContactReport3D.Stimulus.VISUAL
+			)
+			belief.merge_report(report)
+			belief_report_accepted.emit(report)
+			if observer.working_memory != null:
+				observer.working_memory.remember_threat(
+					hostile,
+					hostile.global_position,
+					1.0,
+					observer.threat_memory_seconds,
+					true,
+					false,
+					&"visual"
+				)
+			coordinator.share_contact_report(observer, hostile, hostile.global_position, 1.0)
+			visual_reports += 1
+	var best := belief.get_best_contact()
+	coordinator.known_target = best.get_target() if best != null else null
+	var next_contact_count := belief.get_estimated_enemy_count()
+	var now := Time.get_ticks_msec()
+	if previous_contact_count == 0 and next_contact_count > 0:
+		_contact_started_msec = now
+		_contact_cover_complete = false
+		_recon_complete = false
+	if visual_reports > 0:
+		_last_contact_report_msec = now
+	_rebuild_influence()
+	return {
+		"observers": coordinator.get_living_members().size(),
+		"observers_with_contact": observers_with_contact,
+		"visual_reports": visual_reports,
+		"known_contacts": next_contact_count,
+		"belief_version": belief.version,
+	}
+
+func _build_debug_analysis(apply_plan: bool) -> Dictionary:
 	if coordinator == null:
 		return {}
 	refresh_tactical_environment()
@@ -177,11 +239,25 @@ func build_debug_analysis_preview() -> Dictionary:
 	var selected: Dictionary = candidates[0] if not candidates.is_empty() else {}
 	var preview_plan: SquadCommandPlan3D
 	if not selected.is_empty():
-		preview_plan = htn.compile(selected, snapshot, belief, zones, influence, mission, _plan_sequence + 1)
+		_last_fire_assessment = assessment.duplicate(true)
+		_last_decision_snapshot = snapshot
+		_last_candidates = candidates.duplicate(true)
+		_last_selected_candidate_id = String(selected.get("id", ""))
+		if apply_plan:
+			if scheduler != null:
+				scheduler.cancel_active_plan("paused sandbox current-frame reanalysis")
+			_active_candidate_id = ""
+			_pending_replan_level = SquadReplanPolicy3D.Level.NONE
+			_apply_candidate(selected, "DEBUG_SANDBOX", "Paused sandbox current-frame reanalysis")
+			preview_plan = scheduler.active_plan if scheduler != null else null
+		else:
+			preview_plan = htn.compile(selected, snapshot, belief, zones, influence, mission, _plan_sequence + 1)
 	return {
 		"physics_frame": Engine.get_physics_frames(),
 		"captured_msec": Time.get_ticks_msec(),
 		"mission_state": mission.get_state_name(),
+		"active_intent": String(_active_intent),
+		"candidate_id": _active_candidate_id,
 		"belief": belief.make_tactical_snapshot(zones),
 		"fire_superiority": assessment.duplicate(true),
 		"candidates": _make_candidate_debug(candidates),
@@ -190,6 +266,7 @@ func build_debug_analysis_preview() -> Dictionary:
 		"htn_methods": htn.last_method_scores.duplicate(true),
 		"preview_tasks": _make_plan_task_debug(preview_plan),
 		"active_tasks": _make_task_debug(),
+		"member_directives": _make_member_directive_debug(),
 		"influence_version": influence.version,
 	}
 
@@ -225,6 +302,23 @@ func _make_plan_task_debug(plan: SquadCommandPlan3D) -> Array[Dictionary]:
 			"zone": String(task.zone_id),
 			"depends_on": task.depends_on.map(func(value: StringName): return String(value)),
 			"reason": task.reason,
+		})
+	return result
+
+func _make_member_directive_debug() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if coordinator == null:
+		return result
+	for member in coordinator.get_living_members():
+		var directive := member.active_directive
+		result.append({
+			"id": String(member.name),
+			"role": Soldier3D.CombatRole.keys()[member.combat_role],
+			"directive": SquadDirective3D.Type.keys()[directive.type] if directive != null else "NONE",
+			"directive_version": directive.version if directive != null else 0,
+			"target_position": directive.target_position if directive != null else member.global_position,
+			"zone": String(directive.zone_id) if directive != null else "",
+			"reason": directive.reason if directive != null else "",
 		})
 	return result
 
