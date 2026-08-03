@@ -17,6 +17,7 @@ signal leader_changed(previous: Soldier3D, current: Soldier3D)
 @export_category("Mission Configuration")
 @export var use_advanced_tactics := false
 @export_enum("Capture and hold", "Eliminate and return") var mission_type: int = int(SquadMissionController3D.MissionType.CAPTURE_AND_HOLD)
+@export var defensive_posture := false
 @export_node_path("Node3D") var mission_target_path: NodePath
 @export_range(1.0, 80.0, 0.5) var mission_radius := 10.0
 @export_range(0.0, 10.0, 0.1) var mission_clear_confirmation_seconds := 1.0
@@ -26,7 +27,7 @@ signal leader_changed(previous: Soldier3D, current: Soldier3D)
 
 @export_category("小队长决策")
 @export var use_qwen := false
-@export var autonomous_goap := false
+@export var use_direct_state_chart_orders := false
 @export var knows_primary_target_at_start := false
 @export var primary_target_path: NodePath
 @export_range(0.2, 5.0, 0.1) var evaluation_interval := 2.5
@@ -53,6 +54,7 @@ var last_qwen_latency_ms := 0
 var last_route_candidates: Array[Dictionary] = []
 
 var _route_analyzer: SquadRouteAnalyzer3D
+var _heatmap_route_planner: SquadHeatmapRoutePlanner3D
 var _situation_analyzer: SquadSituationAnalyzer3D
 var _rule_decision: SquadRuleDecision3D
 var _battlefield_snapshot: SquadBattlefieldSnapshot3D
@@ -78,6 +80,7 @@ func _ready() -> void:
 	_route_analyzer = SquadRouteAnalyzer3D.new()
 	_route_analyzer.name = "RouteAnalyzer3D"
 	add_child(_route_analyzer)
+	_heatmap_route_planner = SquadHeatmapRoutePlanner3D.new()
 	_situation_analyzer = SquadSituationAnalyzer3D.new()
 	_situation_analyzer.name = "SituationAnalyzer3D"
 	add_child(_situation_analyzer)
@@ -122,6 +125,10 @@ func get_squad_center() -> Vector3:
 func get_registered_covers() -> Array:
 	return _get_registered_covers()
 
+func get_registered_structures() -> Array:
+	var registry := BattlefieldRegistry3D.find(get_tree())
+	return registry.get_structures() if registry != null else get_tree().get_nodes_in_group("tactical_structure3d")
+
 func get_situation_version() -> int:
 	return _situation_version
 
@@ -136,6 +143,9 @@ func is_member(actor: Soldier3D) -> bool:
 
 func get_advanced_tactics() -> SquadAdvancedTactics3D:
 	return _advanced_tactics
+
+func is_defense_locked() -> bool:
+	return use_advanced_tactics and _advanced_tactics != null and _advanced_tactics.mission.is_defense_locked()
 
 func share_contact_report(observer: Soldier3D, target: Node3D, position: Vector3, confidence: float) -> void:
 	for member in _living_members():
@@ -174,14 +184,14 @@ func set_runtime_mission_target(position: Vector3, radius := -1.0) -> void:
 		_advanced_tactics.refresh_mission_configuration()
 
 func is_position_allowed_by_mission(position: Vector3) -> bool:
-	if not use_advanced_tactics or _advanced_tactics == null or not _advanced_tactics.mission.is_defense_locked():
+	if not is_defense_locked():
 		return true
 	var delta := position - get_mission_target_position()
 	delta.y = 0.0
 	return delta.length() <= mission_radius
 
 func refresh_member_mission_constraints() -> void:
-	var enabled := use_advanced_tactics and _advanced_tactics != null and _advanced_tactics.mission.is_defense_locked()
+	var enabled := is_defense_locked()
 	for member in _living_members():
 		member.set_movement_constraint(enabled, get_mission_target_position(), mission_radius)
 
@@ -195,9 +205,10 @@ func issue_tactical_directive(
 		duration: float,
 		reason: String,
 		zone_id: StringName = &"",
-		rules_of_engagement: int = SquadDirective3D.RulesOfEngagement.WEAPONS_FREE
+		rules_of_engagement: int = SquadDirective3D.RulesOfEngagement.WEAPONS_FREE,
+		structure: TacticalStructure3D = null
 ) -> SquadDirective3D:
-	return _issue_to_member(member, type, target, position, route, cover, duration, reason, zone_id, rules_of_engagement)
+	return _issue_to_member(member, type, target, position, route, cover, duration, reason, zone_id, rules_of_engagement, structure)
 
 func set_known_combat_objective(target: Node3D) -> void:
 	if target == null:
@@ -216,7 +227,7 @@ func set_known_combat_objective(target: Node3D) -> void:
 
 func issue_defense_order(position: Vector3, radius: float = 8.0) -> void:
 	use_qwen = false
-	autonomous_goap = false
+	use_direct_state_chart_orders = false
 	known_target = null
 	current_plan = "PLAYER_DEFEND"
 	current_stage = 1
@@ -258,6 +269,10 @@ func _register_configured_members() -> void:
 		soldier.combat_team = combat_team
 		soldier.can_target_players = can_target_players
 		soldier.team_display_name = squad_display_name
+		soldier.set_autonomy_defensive_posture(
+			defensive_posture and not use_advanced_tactics,
+			get_mission_target_position()
+		)
 		if use_advanced_tactics:
 			if not soldier.perception_report_ready.is_connected(_on_member_perception_report):
 				soldier.perception_report_ready.connect(_on_member_perception_report)
@@ -329,12 +344,12 @@ func _evaluate_situation(force: bool) -> void:
 	if not is_instance_valid(known_target) and knows_primary_target_at_start:
 		known_target = _find_primary_target()
 	var target := known_target
-	if autonomous_goap:
+	if use_direct_state_chart_orders:
 		if is_instance_valid(target) and (force or current_plan != "AUTONOMOUS_ATTACK"):
 			current_plan = "AUTONOMOUS_ATTACK"
 			current_stage = 1
-			last_command_source = "AUTONOMOUS_GOAP"
-			last_command_summary = "单兵GOAP：自行规划并消灭已知敌人"
+			last_command_source = "DIRECT_STATE_CHART"
+			last_command_summary = "Single-soldier State Chart: direct attack order without squad tactical planning"
 			_issue_to_members(living, SquadDirective3D.Type.ATTACK, target, Vector3.ZERO, [], null, 0.0, "单兵自主消灭目标")
 			command_changed.emit(current_plan, last_command_summary, last_command_source)
 		return
@@ -707,10 +722,28 @@ func _issue_to_member(
 		duration: float,
 		reason: String,
 		zone_id: StringName = &"",
-		rules_of_engagement: int = SquadDirective3D.RulesOfEngagement.WEAPONS_FREE
+		rules_of_engagement: int = SquadDirective3D.RulesOfEngagement.WEAPONS_FREE,
+		structure: TacticalStructure3D = null
 ) -> SquadDirective3D:
 	_directive_version += 1
-	var directive := SquadDirective3D.new().configure(type, _directive_version, target, position, route, cover, duration, reason, zone_id, rules_of_engagement)
+	var directive := SquadDirective3D.new().configure(type, _directive_version, target, position, route, cover, duration, reason, zone_id, rules_of_engagement, structure)
+	if directive.requires_movement() and _heatmap_route_planner != null:
+		var route_plan := _heatmap_route_planner.build_route(
+			member.global_position,
+			position,
+			member.get_squad_influence_map(),
+			directive.route_constraints,
+			Callable(member, "is_route_segment_clear"),
+			directive.max_route_length_ratio,
+			directive.max_route_extra_distance
+		)
+		directive.apply_route_plan(route_plan)
+		if not directive.route.is_empty():
+			print("[SQUAD3D_MIN_COST_ROUTE] squad=%s member=%s directive=%s points=%d cost=%.1f peak=%.1f length=%.1f/%.1f reason=%s influence=%d" % [
+				squad_display_name, member.name, SquadDirective3D.Type.keys()[type], directive.route.size(),
+				directive.route_total_cost, directive.route_peak_threat, directive.route_length,
+				directive.route_baseline_length, directive.route_selection_reason, directive.route_influence_version,
+			])
 	member.receive_directive(directive)
 	_stage_versions[member] = directive.version
 	return directive

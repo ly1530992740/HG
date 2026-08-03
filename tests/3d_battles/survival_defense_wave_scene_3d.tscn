@@ -1,5 +1,17 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://ceq4flhcp3b3v"]
 
 [ext_resource type="PackedScene" path="res://survival3d/scenes/survival_defense_wave_scene_3d.tscn" id="1_scene"]
 
-[node name="SurvivalDefenseWaveScene3D" instance=ExtResource("1_scene")]
+[node name="SurvivalDefenseWaveScene3D" unique_id=455383335 instance=ExtResource("1_scene")]
+
+[node name="NorthCover" parent="." index="2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -6)
+
+[node name="SouthCover" parent="." index="3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
+
+[node name="WestCover" parent="." index="4"]
+transform = Transform3D(7.54979e-08, 0, 1, 0, 1, 0, -1, 0, 7.54979e-08, -7, 0, 0)
+
+[node name="EastCover" parent="." index="5"]
+transform = Transform3D(7.54979e-08, 0, 1, 0, 1, 0, -1, 0, 7.54979e-08, 7, 0, 0)

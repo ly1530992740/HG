@@ -29,9 +29,6 @@ func classify_report(report: SquadContactReport3D, previous_contact_count: int, 
 		return Level.LOCAL_ACTION
 	return Level.NONE
 
-func classify_task_failure(critical_role_lost := false) -> Level:
-	return Level.FULL_TACTIC if critical_role_lost else Level.PLAN_REPAIR
-
 func should_apply(
 		selected: Dictionary,
 		candidates: Array[Dictionary],
@@ -46,8 +43,8 @@ func should_apply(
 	if not active_plan or current_candidate_id.is_empty():
 		return true
 	if selected_id == current_candidate_id:
-		return level >= Level.FULL_TACTIC
-	# Local danger changes the maneuver element's GOAP Actions, not its squad Goal.
+		return level >= Level.PLAN_REPAIR
+	# Local danger interrupts a soldier's State Chart, not the squad's tactical option.
 	# A failed reconnaissance/flank or genuinely new tactical situation arrives as FULL_TACTIC.
 	if (current_candidate_id == SquadUtilityEvaluator3D.RECON_SPLIT \
 			or current_candidate_id.begins_with("FLANK_")) and level < Level.FULL_TACTIC:

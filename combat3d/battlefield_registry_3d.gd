@@ -5,12 +5,13 @@ var _combatants: Array[Node3D] = []
 var _soldiers: Array[Soldier3D] = []
 var _squads: Array[SquadCoordinator3D] = []
 var _covers: Array[TacticalCover3D] = []
+var _structures: Array[TacticalStructure3D] = []
 
 func _ready() -> void:
 	add_to_group("battlefield_registry3d")
 	get_tree().node_added.connect(_on_node_added)
 	get_tree().node_removed.connect(_on_node_removed)
-	for group_name in [&"combatant3d", &"soldier3d", &"squad3d", &"cover3d"]:
+	for group_name in [&"combatant3d", &"soldier3d", &"squad3d", &"cover3d", &"tactical_structure3d"]:
 		for node in get_tree().get_nodes_in_group(group_name):
 			register_node(node)
 
@@ -29,6 +30,8 @@ func register_node(node: Node) -> void:
 		_squads.append(node)
 	if node is TacticalCover3D and not _covers.has(node):
 		_covers.append(node)
+	if node is TacticalStructure3D and not _structures.has(node):
+		_structures.append(node)
 	if node is Node3D and node.is_in_group("combatant3d") and not _combatants.has(node):
 		_combatants.append(node)
 
@@ -48,6 +51,10 @@ func get_covers() -> Array[TacticalCover3D]:
 	_prune()
 	return _covers.duplicate()
 
+func get_structures() -> Array[TacticalStructure3D]:
+	_prune()
+	return _structures.duplicate()
+
 static func find(tree: SceneTree) -> BattlefieldRegistry3D:
 	return tree.get_first_node_in_group("battlefield_registry3d") as BattlefieldRegistry3D
 
@@ -63,6 +70,8 @@ func _on_node_removed(node: Node) -> void:
 		_squads.erase(node)
 	if node is TacticalCover3D:
 		_covers.erase(node)
+	if node is TacticalStructure3D:
+		_structures.erase(node)
 
 func _prune() -> void:
 	for index in range(_combatants.size() - 1, -1, -1):
@@ -77,3 +86,6 @@ func _prune() -> void:
 	for index in range(_covers.size() - 1, -1, -1):
 		if not is_instance_valid(_covers[index]) or not _covers[index].is_in_group("cover3d"):
 			_covers.remove_at(index)
+	for index in range(_structures.size() - 1, -1, -1):
+		if not is_instance_valid(_structures[index]) or not _structures[index].is_in_group("tactical_structure3d"):
+			_structures.remove_at(index)

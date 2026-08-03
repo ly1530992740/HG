@@ -15,6 +15,15 @@ func compile(
 ) -> SquadCommandPlan3D:
 	var plan_id := StringName("plan_%d_%s" % [plan_sequence, String(candidate.get("id", "unknown"))])
 	var kind := String(candidate.get("kind", ""))
+	var tactical_option := candidate.get("tactical_option") as SquadTacticalOption3D
+	if tactical_option != null:
+		last_selected_method = tactical_option.method_id
+		last_method_scores = [{
+			"id": tactical_option.method_id,
+			"score": tactical_option.utility,
+			"reason": tactical_option.reason,
+		}]
+		return tactical_option.materialize(plan_id, belief.version)
 	var contact := belief.get_best_contact()
 	last_method_scores = build_methods(candidate, snapshot, zones, influence)
 	last_selected_method = String(last_method_scores[0].get("id", "")) if not last_method_scores.is_empty() else ""
@@ -22,16 +31,18 @@ func compile(
 	match kind:
 		"MISSION_MOVE":
 			plan = SquadPlanCompiler3D.mission_move(plan_id, snapshot.get_member_ids(), mission.get_destination(), belief.version, mission.state == SquadMissionController3D.State.RETURNING)
+		SquadUtilityEvaluator3D.MISSION_COVER_ADVANCE:
+			plan = SquadPlanCompiler3D.mission_cover_advance(plan_id, snapshot.get_member_ids(), mission.get_destination(), belief.version)
 		"HOLD_OBJECTIVE":
 			plan = SquadPlanCompiler3D.hold_objective(plan_id, snapshot.get_member_ids(), mission.get_destination(), belief.version)
 		"CONTACT_COVER":
-			plan = SquadPlanCompiler3D.contact_cover(plan_id, snapshot.get_member_ids(), contact, belief.version)
+			plan = SquadPlanCompiler3D.contact_cover(plan_id, snapshot.get_member_ids(), contact, belief.version, snapshot.defense_locked)
 		SquadUtilityEvaluator3D.RECOVER_IN_COVER, SquadUtilityEvaluator3D.CONSOLIDATE:
-			plan = SquadPlanCompiler3D.recover_in_cover(plan_id, snapshot.get_member_ids(), contact, belief.version)
+			plan = SquadPlanCompiler3D.recover_in_cover(plan_id, snapshot.get_member_ids(), contact, belief.version, snapshot.defense_locked)
 		SquadUtilityEvaluator3D.DEFEND_CONTACT, SquadUtilityEvaluator3D.COUNTER_FLANK:
 			plan = _compile_defense(plan_id, snapshot, belief, mission, kind)
 		SquadUtilityEvaluator3D.RECON_SPLIT:
-			plan = _compile_recon(plan_id, snapshot, candidate.get("zones", []) as Array, contact, belief.version)
+			plan = _compile_recon(plan_id, snapshot, candidate.get("zones", []) as Array, contact, belief.version, influence)
 		SquadUtilityEvaluator3D.SUPPRESS_AND_FLANK:
 			plan = _compile_flank(
 				plan_id, snapshot, candidate.get("zone") as TacticalZone3D, contact,
@@ -108,9 +119,10 @@ func _compile_defense(plan_id: StringName, snapshot: SquadDecisionSnapshot3D, be
 	defend.target_position = contacts[0].last_known_position
 	defend.member_contact_ids = assignments
 	defend.reason = "Cover all reported attack axes"
+	defend.prefer_defensive_structures = snapshot.defense_locked
 	return plan.add_task(defend)
 
-func _compile_recon(plan_id: StringName, snapshot: SquadDecisionSnapshot3D, zone_values: Array, contact: CombatContact3D, belief_version: int) -> SquadCommandPlan3D:
+func _compile_recon(plan_id: StringName, snapshot: SquadDecisionSnapshot3D, zone_values: Array, contact: CombatContact3D, belief_version: int, influence: SquadInfluenceMap3D) -> SquadCommandPlan3D:
 	var zones: Array[TacticalZone3D] = []
 	for value in zone_values:
 		if value is TacticalZone3D:
@@ -119,7 +131,7 @@ func _compile_recon(plan_id: StringName, snapshot: SquadDecisionSnapshot3D, zone
 	var assignments: Array[Dictionary] = []
 	var used: Dictionary = {}
 	for zone in zones:
-		var scout := _best_member_for_zone(scouts, used, zone)
+		var scout := _best_member_for_zone(scouts, used, zone, influence)
 		if scout.is_empty():
 			continue
 		used[String(scout.get("id", ""))] = true
@@ -283,6 +295,7 @@ func _compile_fallback_defense(plan_id: StringName, snapshot: SquadDecisionSnaps
 	cover.contact_id = contact.contact_id
 	cover.target_position = contact.last_known_position
 	cover.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
+	cover.prefer_defensive_structures = snapshot.defense_locked
 	var defend := SquadTask3D.new().configure(&"fallback_defense", SquadTask3D.Type.ATTACK_CONTACT, ids)
 	defend.depends_on = [&"fallback_cover"]
 	defend.persistent = true
@@ -290,6 +303,7 @@ func _compile_fallback_defense(plan_id: StringName, snapshot: SquadDecisionSnaps
 	defend.contact_id = contact.contact_id
 	defend.target_position = contact.last_known_position
 	defend.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_FREE
+	defend.prefer_defensive_structures = snapshot.defense_locked
 	plan.add_task(cover)
 	return plan.add_task(defend)
 
@@ -297,10 +311,13 @@ func _compile_search(plan_id: StringName, snapshot: SquadDecisionSnapshot3D, can
 	var destination := contact.last_known_position if contact != null else snapshot.mission_target
 	var plan := SquadCommandPlan3D.new().configure(plan_id, &"SEARCH_LAST_CONTACT", "HTN", "Search the last reliable contact sector", belief_version)
 	var move := SquadTask3D.new().configure(&"search_move", SquadTask3D.Type.MOVE_TO_OBJECTIVE, snapshot.get_member_ids())
+	move.minimum_success_count = 1
 	move.target_position = destination
 	move.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
 	var observe := SquadTask3D.new().configure(&"search_observe", SquadTask3D.Type.HOLD_OBJECTIVE, snapshot.get_member_ids())
 	observe.depends_on = [&"search_move"]
+	observe.successful_members_from = &"search_move"
+	observe.minimum_success_count = 1
 	observe.target_position = destination
 	observe.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
 	observe.minimum_success_count = 1
@@ -366,7 +383,7 @@ func _members_for_role(members: Array[Dictionary], role: int) -> Array[Dictionar
 			result.append(member)
 	return result
 
-func _best_member_for_zone(members: Array[Dictionary], used: Dictionary, zone: TacticalZone3D) -> Dictionary:
+func _best_member_for_zone(members: Array[Dictionary], used: Dictionary, zone: TacticalZone3D, influence: SquadInfluenceMap3D) -> Dictionary:
 	var best: Dictionary = {}
 	var best_score := -INF
 	for member in members:
@@ -374,7 +391,7 @@ func _best_member_for_zone(members: Array[Dictionary], used: Dictionary, zone: T
 		if used.has(id):
 			continue
 		var position := member.get("position", Vector3.ZERO) as Vector3
-		var score := _maneuver_score(member) - position.distance_to(zone.get_observation_point(position)) * 2.5
+		var score := _flank_member_score(member, zone, influence)
 		if score > best_score:
 			best = member
 			best_score = score

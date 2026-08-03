@@ -1,4 +1,4 @@
-﻿[gd_scene format=4 uid="uid://cuhnxdq2wpvat"]
+[gd_scene format=4 uid="uid://cuhnxdq2wpvat"]
 
 [ext_resource type="Texture2D" uid="uid://b0pfsgoxnrjyn" path="res://Textures/Terrain/Tileset/Water Foam.png" id="1_cqtlx"]
 [ext_resource type="Texture2D" uid="uid://cc7hfx77lhmw5" path="res://Textures/Terrain/Tileset/Tilemap_color5.png" id="2_7s4xe"]

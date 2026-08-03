@@ -10,46 +10,104 @@ static func mission_move(plan_id: StringName, member_ids: PackedStringArray, des
 	task.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
 	return plan.add_task(task)
 
+static func mission_cover_advance(plan_id: StringName, member_ids: PackedStringArray, destination: Vector3, belief_version: int) -> SquadCommandPlan3D:
+	var plan := SquadCommandPlan3D.new().configure(
+		plan_id, &"MISSION_COVER_ADVANCE", "MISSION", "Approach the objective through protected observation positions", belief_version
+	)
+	var task := SquadTask3D.new().configure(&"mission_cover_advance", SquadTask3D.Type.TAKE_COVER, member_ids)
+	task.target_position = destination
+	task.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
+	task.advance_toward_objective = true
+	return plan.add_task(task)
+
 static func hold_objective(plan_id: StringName, member_ids: PackedStringArray, destination: Vector3, belief_version: int) -> SquadCommandPlan3D:
 	var plan := SquadCommandPlan3D.new().configure(plan_id, &"HOLD_OBJECTIVE", "MISSION", "Hold the configured mission area", belief_version)
 	var task := SquadTask3D.new().configure(&"hold_objective", SquadTask3D.Type.HOLD_OBJECTIVE, member_ids)
 	task.target_position = destination
 	task.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_FREE
+	task.prefer_defensive_structures = true
 	return plan.add_task(task)
 
-static func contact_cover(plan_id: StringName, member_ids: PackedStringArray, contact: CombatContact3D, belief_version: int) -> SquadCommandPlan3D:
+static func contact_cover(plan_id: StringName, member_ids: PackedStringArray, contact: CombatContact3D, belief_version: int, prefer_structures := false) -> SquadCommandPlan3D:
 	var plan := SquadCommandPlan3D.new().configure(plan_id, &"CONTACT_COVER", "FAST_RULE", "Immediate cover after confirmed contact", belief_version)
 	var task := SquadTask3D.new().configure(&"contact_cover", SquadTask3D.Type.TAKE_COVER, member_ids)
 	task.contact_id = contact.contact_id
 	task.target_position = contact.last_known_position
 	task.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
+	task.prefer_defensive_structures = prefer_structures
 	return plan.add_task(task)
 
-static func recover_in_cover(plan_id: StringName, member_ids: PackedStringArray, contact: CombatContact3D, belief_version: int) -> SquadCommandPlan3D:
+static func recover_in_cover(plan_id: StringName, member_ids: PackedStringArray, contact: CombatContact3D, belief_version: int, prefer_structures := false) -> SquadCommandPlan3D:
 	var plan := SquadCommandPlan3D.new().configure(plan_id, &"RECOVER_IN_COVER", "FAST_RULE", "Break exposure and recover from incoming fire", belief_version)
 	var cover := SquadTask3D.new().configure(&"recover_cover", SquadTask3D.Type.TAKE_COVER, member_ids)
 	cover.contact_id = contact.contact_id
 	cover.target_position = contact.last_known_position
 	cover.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
+	cover.prefer_defensive_structures = prefer_structures
 	var recover := SquadTask3D.new().configure(&"recover_pause", SquadTask3D.Type.RECOVER_IN_COVER, member_ids)
 	recover.depends_on = [&"recover_cover"]
 	recover.duration = 2.4
 	recover.rules_of_engagement = SquadDirective3D.RulesOfEngagement.WEAPONS_HOLD
+	recover.prefer_defensive_structures = prefer_structures
 	plan.add_task(cover)
 	return plan.add_task(recover)
 
-static func defensive_fire(plan_id: StringName, member_ids: PackedStringArray, contacts: Array[CombatContact3D], belief_version: int) -> SquadCommandPlan3D:
-	var plan := SquadCommandPlan3D.new().configure(plan_id, &"DEFEND_CONTACT", "UTILITY", "Defend the mission area from cover", belief_version)
-	var task := SquadTask3D.new().configure(&"defensive_fire", SquadTask3D.Type.ATTACK_CONTACT, member_ids)
-	task.persistent = true
-	task.minimum_success_count = 1
+static func defense_option(
+		plan_id: StringName,
+		member_ids: PackedStringArray,
+		contacts: Array[CombatContact3D],
+		belief_version: int,
+		prefer_structures := true
+) -> SquadCommandPlan3D:
 	if contacts.is_empty():
-		return plan
-	task.contact_id = contacts[0].contact_id
-	task.target_position = contacts[0].last_known_position
+		return null
+	var plan := SquadCommandPlan3D.new().configure(
+		plan_id, &"DEFEND_CONTACT", "TACTICAL_OPTION", "Occupy protected positions and defend assigned sectors", belief_version
+	)
+	var cover := SquadTask3D.new().configure(&"defense_positions", SquadTask3D.Type.TAKE_COVER, member_ids)
+	cover.minimum_success_count = 1
+	cover.contact_id = contacts[0].contact_id
+	cover.target_position = contacts[0].last_known_position
+	cover.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
+	cover.prefer_defensive_structures = prefer_structures
+	var fire := SquadTask3D.new().configure(&"defensive_fire", SquadTask3D.Type.ATTACK_CONTACT, member_ids)
+	fire.depends_on = [&"defense_positions"]
+	fire.successful_members_from = &"defense_positions"
+	fire.persistent = true
+	fire.minimum_success_count = 1
+	fire.contact_id = contacts[0].contact_id
+	fire.target_position = contacts[0].last_known_position
+	fire.prefer_defensive_structures = prefer_structures
 	for index in member_ids.size():
-		task.member_contact_ids[StringName(member_ids[index])] = contacts[index % contacts.size()].contact_id
-	return plan.add_task(task)
+		fire.member_contact_ids[StringName(member_ids[index])] = contacts[index % contacts.size()].contact_id
+	plan.add_task(cover)
+	return plan.add_task(fire)
+
+static func direct_assault_option(
+		plan_id: StringName,
+		member_ids: PackedStringArray,
+		contact: CombatContact3D,
+		belief_version: int
+) -> SquadCommandPlan3D:
+	if contact == null:
+		return null
+	var plan := SquadCommandPlan3D.new().configure(
+		plan_id, &"DIRECT_ASSAULT", "TACTICAL_OPTION", "Advance through the least exposed approach and assault", belief_version
+	)
+	var approach := SquadTask3D.new().configure(&"assault_approach", SquadTask3D.Type.TAKE_COVER, member_ids)
+	approach.minimum_success_count = 1
+	approach.contact_id = contact.contact_id
+	approach.target_position = contact.last_known_position
+	approach.advance_toward_objective = true
+	approach.rules_of_engagement = SquadDirective3D.RulesOfEngagement.RETURN_FIRE
+	var attack := SquadTask3D.new().configure(&"direct_assault", SquadTask3D.Type.ATTACK_CONTACT, member_ids)
+	attack.depends_on = [&"assault_approach"]
+	attack.successful_members_from = &"assault_approach"
+	attack.minimum_success_count = 1
+	attack.contact_id = contact.contact_id
+	attack.target_position = contact.last_known_position
+	plan.add_task(approach)
+	return plan.add_task(attack)
 
 static func recon_split(
 		plan_id: StringName,

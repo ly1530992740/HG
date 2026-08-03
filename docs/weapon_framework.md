@@ -251,7 +251,7 @@ Current behavior:
 Current limitation:
 
 - Targeting and movement still use the simple shooter state machine.
-- Squad orders are available, but GOAP goals/actions do not consume them yet.
+- The active 3D soldier path consumes squad directives through `SoldierStateChart3D`.
 
 ### Projectile Hitbox Rule
 

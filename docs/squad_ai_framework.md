@@ -15,7 +15,7 @@ SoldierPerceptionComponent3D
   -> SquadHtnPlanner3D
   -> SquadTaskScheduler3D
   -> SquadDirectiveDispatcher3D
-  -> Soldier GOAP
+  -> Soldier State Chart
   -> movement, cover, weapon fire cycle, and damage
 ```
 
@@ -27,7 +27,7 @@ SoldierPerceptionComponent3D
 - The scheduler owns task lifecycle; the dispatcher translates tasks into soldier directives.
 - Qwen remains an optional experiment only. Formal combat prefabs and defense waves keep it disabled.
 - The task graph expresses parallel suppression, reconnaissance, movement, and synchronized attack.
-- Individual GOAP handles immediate survival, contact response, weapon recovery, and assigned directives.
+- The individual State Chart handles immediate survival, contact response, weapon recovery, and assigned directives.
 - Weapon and suppression components own shot-to-shot combat timing and effects.
 
 ## Mission Configuration
@@ -134,25 +134,26 @@ flank routes block bounding advance until reconnaissance is complete. A bound
 is limited to five meters rather than sending its maneuver element directly to
 the final objective.
 
-## Individual GOAP
+## Individual State Chart
 
-Autonomous goals:
+Root states:
 
-- `SURVIVE_THREAT`
-- `RESPOND_TO_CONTACT`
-- `RESTORE_WEAPON`
-- `MAINTAIN_SECURITY`
+- `DEAD`
+- `SURVIVAL_OVERRIDE`
+- `EXECUTE_ORDER`
+- `IDLE_SECURITY`
 
-Directive GOAP composes movement, cover entry, target acquisition, approach,
-aim, reload, engagement, guard, and observation. A pinned soldier cannot bypass
-the suppression rules through either autonomous or directive actions.
+The order branch deterministically composes movement, cover entry, target
+acquisition, approach, aim, reload, engagement, guard, observation, and
+structure operation. Survival temporarily interrupts this branch and resumes
+the same directive version afterward. A pinned soldier cannot bypass suppression.
 
 Cover posture is a runtime invariant:
 
 - occupied cover uses hidden and exposed-standing poses instead of ordinary crouch/prone
 - ordinary `CROUCH` and `PRONE` requests are rejected while cover is occupied
 - hidden covered soldiers cannot aim or fire; weapon-specific randomized firing windows may contain one shot, several shots, or rarely a low-pressure magazine dump
-- suppression shortens the current exposure budget; an exhausted budget, empty magazine, or pinned state retracts the soldier and clears aim for the next GOAP cycle
+- suppression shortens the current exposure budget; an exhausted budget, empty magazine, or pinned state retracts the soldier and clears aim for the next State Chart cycle
 - blind-fire implementation remains reserved and is not currently selectable
 
 ## Formal 3D Enemy Configuration
@@ -174,14 +175,16 @@ damage fixtures and are not formal enemy squads.
 - destructible cover and negative-cover terrain
 - deployable machine-gun tripod visuals and setup animation
 - navigation-mesh pathfinding for arbitrary authored obstacle fields
-- blind-fire animation, muzzle origin, spread, and GOAP enablement
+- blind-fire animation, muzzle origin, spread, and State Chart enablement
 - suppression visualization and machine-gun arc debug rendering
 - per-limb movement and aim penalties in the 3D injury component
 - measured weapon-profile balancing from repeated battle simulations
 
 ## Verification
 
-- `SOLDIER_AUTONOMY_GOAP_PASS cases=14`
+- `STATE_CHART_SMOKE_PASS interruption_resume`
+- `TACTICAL_ROUTE_SMOKE_PASS`
+- `TACTICAL_STRUCTURE_SMOKE_PASS`
 - `SQUAD_TACTICAL_PIPELINE_PASS cases=30`
 - limited-intelligence case study: 10/10 runs completed both route observations and issued the right-grass `SUPPRESS_AND_FLANK`
 - COH combat rhythm, battle soak, survival wave, and full 3D migration tests pass

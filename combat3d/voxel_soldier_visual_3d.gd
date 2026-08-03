@@ -118,7 +118,7 @@ func rebuild() -> void:
 	_right_lower_leg = _right_leg.get_node("LowerLegPivot") as Node3D
 	_rig.scale = Vector3.ONE * model_scale
 
-func update_pose(delta: float, velocity: Vector3, movement_mode: int, stance: int, aimed: bool, firing: bool, dead: bool, weapon_family := "bolt_rifle", blind_fire := false) -> void:
+func update_pose(delta: float, velocity: Vector3, movement_mode: int, stance: int, aimed: bool, firing: bool, dead: bool, weapon_family := "bolt_rifle", blind_fire := false, structure_pose := 0, structure_entry_progress := 1.0) -> void:
 	if _rig == null:
 		return
 	_time += delta
@@ -182,6 +182,14 @@ func update_pose(delta: float, velocity: Vector3, movement_mode: int, stance: in
 		_torso.rotation.x = -0.08
 		if not blind_fire:
 			current_pose_name = "aim_fire" if aimed else "hip_fire"
+	if structure_pose > 0:
+		_apply_fixed_weapon_pose(structure_pose, structure_entry_progress, firing)
+		_rig.rotation.x = 0.0
+		_rig.scale = Vector3.ONE * model_scale
+		_rig.position.y = 0.0
+		if _hit_time <= 0.0:
+			_restore_material_colors()
+		return
 	var stance_scale_y := 1.0
 	var stance_offset_y := 0.0
 	if stance == 1:
@@ -204,6 +212,30 @@ func update_pose(delta: float, velocity: Vector3, movement_mode: int, stance: in
 	_rig.position.y = stance_offset_y
 	if _hit_time <= 0.0:
 		_restore_material_colors()
+
+func _apply_fixed_weapon_pose(structure_pose: int, entry_progress: float, firing: bool) -> void:
+	var grip := clampf(entry_progress, 0.0, 1.0) if structure_pose == 1 else 1.0
+	grip = smoothstep(0.0, 1.0, grip)
+	var handling_cycle := sin(_time * 3.2) * 0.018
+	_left_leg.rotation = Vector3(0.08, 0.0, -0.04)
+	_right_leg.rotation = Vector3(-0.08, 0.0, 0.04)
+	_left_lower_leg.rotation = Vector3(0.04, 0.0, 0.0)
+	_right_lower_leg.rotation = Vector3(0.04, 0.0, 0.0)
+	_left_arm.rotation = Vector3(lerpf(0.62, 1.48, grip), 0.0, lerpf(0.42, 0.68, grip))
+	_right_arm.rotation = Vector3(lerpf(0.72, 1.54, grip), 0.0, lerpf(-0.28, -0.68, grip))
+	_left_forearm.rotation = Vector3(lerpf(0.52, 0.86, grip), 0.08, 0.0)
+	_right_forearm.rotation = Vector3(lerpf(0.38, 0.82, grip), -0.08, 0.0)
+	_torso.position.y = 1.17 + handling_cycle
+	_torso.rotation = Vector3(lerpf(0.0, -0.16, grip), handling_cycle * 0.45, 0.0)
+	if firing:
+		_left_arm.rotation.x -= 0.12
+		_right_arm.rotation.x -= 0.16
+		_torso.rotation.x -= 0.09
+		current_pose_name = "machine_gun_fire"
+	elif structure_pose == 1:
+		current_pose_name = "machine_gun_enter"
+	else:
+		current_pose_name = "machine_gun_operate"
 
 func get_weapon_pivot_pose(weapon_family: String, stance: int, aimed: bool, blind_fire: bool) -> Transform3D:
 	var position := Vector3(-0.12, 0.16, -0.48)
@@ -558,6 +590,7 @@ func _ellipsoid(parent: Node3D, part_name: String, size: Vector3, position: Vect
 func _material(color: Color, metallic := 0.0, surface_style := "solid") -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 	material.metallic = metallic
 	material.roughness = 0.48 if surface_style == "metal" else (0.7 if surface_style == "leather" else 0.86)
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC

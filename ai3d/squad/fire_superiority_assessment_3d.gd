@@ -3,7 +3,7 @@ class_name FireSuperiorityAssessment3D
 
 enum State { WINNING, CONTESTED, LOSING, PINNED }
 
-func assess(members: Array[Soldier3D], known_enemy_count: int) -> Dictionary:
+func assess(members: Array[Soldier3D], known_enemy_power: float) -> Dictionary:
 	if members.is_empty():
 		return _result(State.PINNED, 0.0, 0.0, 0.0, 0)
 	var suppression_total := 0.0
@@ -24,7 +24,7 @@ func assess(members: Array[Soldier3D], known_enemy_count: int) -> Dictionary:
 	var suppression_ratio := suppression_total / count
 	var pinned_ratio := float(pinned_count) / count
 	var cover_ratio := float(covered_count) / count
-	var enemy_pressure := maxf(1.0, float(maxi(1, known_enemy_count)) * 1.8)
+	var enemy_pressure := maxf(0.1, known_enemy_power)
 	var friendly_pressure := effective_power
 	var pressure_ratio := friendly_pressure / enemy_pressure
 	var state := State.CONTESTED

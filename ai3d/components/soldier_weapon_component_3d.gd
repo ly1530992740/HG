@@ -74,7 +74,13 @@ func is_target_in_range(actor: Node3D, target: Node3D) -> bool:
 		return flat_delta.length() <= melee_range
 	return actor.global_position.distance_to(get_target_point(target)) <= effective_range
 
-func try_attack(actor: Node3D, target: Node3D, origin: Vector3, collision_mask: int = 9) -> bool:
+func try_attack(
+		actor: Node3D,
+		target: Node3D,
+		origin: Vector3,
+		collision_mask: int = 9,
+		ray_exclusions: Array[RID] = []
+) -> bool:
 	last_hit_result = {}
 	if not is_instance_valid(actor) or not is_instance_valid(target) or not is_target_in_range(actor, target):
 		return false
@@ -101,7 +107,10 @@ func try_attack(actor: Node3D, target: Node3D, origin: Vector3, collision_mask: 
 	direction = (direction + right * randf_range(-spread, spread) + up * randf_range(-spread, spread)).normalized()
 	var ballistic_range := float(definition.get("maximum_range", effective_range))
 	var endpoint := origin + direction * ballistic_range
-	var query := PhysicsRayQueryParameters3D.create(origin, endpoint, collision_mask, [actor.get_rid()])
+	var exclusions: Array[RID] = ray_exclusions.duplicate()
+	if actor.get_rid() not in exclusions:
+		exclusions.append(actor.get_rid())
+	var query := PhysicsRayQueryParameters3D.create(origin, endpoint, collision_mask, exclusions)
 	query.collide_with_areas = true
 	query.collide_with_bodies = true
 	var hit := actor.get_world_3d().direct_space_state.intersect_ray(query)

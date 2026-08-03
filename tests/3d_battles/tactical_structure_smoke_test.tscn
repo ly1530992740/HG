@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b76tm2dgxj5k3"]
+
+[ext_resource type="Script" path="res://tests/3d_battles/tactical_structure_smoke_test.gd" id="1_test"]
+
+[node name="TacticalStructureSmokeTest" type="Node" unique_id=380623041]
+script = ExtResource("1_test")

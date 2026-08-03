@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ai3d/structures/machine_gun_emplacement_3d.gd" id="1_emplacement"]
+[ext_resource type="Script" path="res://ai3d/structures/fixed_weapon_3d.gd" id="2_weapon"]
+
+[node name="MachineGunEmplacement3D" type="StaticBody3D"]
+script = ExtResource("1_emplacement")
+
+[node name="OperatorAnchor" type="Marker3D" parent="."]
+position = Vector3(0, 0.05, 0.9)
+
+[node name="Muzzle" type="Marker3D" parent="."]
+position = Vector3(0, 1.09, -1.72)
+
+[node name="FixedWeapon3D" type="Node3D" parent="."]
+script = ExtResource("2_weapon")

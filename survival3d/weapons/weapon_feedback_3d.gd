@@ -21,12 +21,14 @@ var _muzzle_flash: MeshInstance3D
 var _muzzle_light: OmniLight3D
 var _flash_time := 0.0
 var tracer_enabled := false
+var preserve_external_yaw := false
 
-func setup(owner_actor: Node3D, weapon_model_root: Node3D, muzzle_marker: Marker3D, enable_tracer := false) -> void:
+func setup(owner_actor: Node3D, weapon_model_root: Node3D, muzzle_marker: Marker3D, enable_tracer := false, keep_external_yaw := false) -> void:
 	actor = owner_actor
 	model_root = weapon_model_root
 	muzzle = muzzle_marker
 	tracer_enabled = enable_tracer
+	preserve_external_yaw = keep_external_yaw
 	if model_root != null:
 		_base_model_position = model_root.position
 		_base_model_rotation = model_root.rotation
@@ -34,17 +36,24 @@ func setup(owner_actor: Node3D, weapon_model_root: Node3D, muzzle_marker: Marker
 	_build_muzzle_flash()
 	set_process(true)
 
-func configure(new_definition: Dictionary) -> void:
+func configure(new_definition: Dictionary, rebuild_weapon_model := true) -> void:
 	definition = new_definition.duplicate(true)
-	if model_root != null:
+	if model_root != null and rebuild_weapon_model:
 		WeaponModelFactory3D.rebuild(model_root, definition)
-	if muzzle != null and model_root != null:
+	if muzzle != null and model_root != null and rebuild_weapon_model:
 		muzzle.position.z = WeaponModelFactory3D.get_muzzle_local_z(definition, model_root.position.z)
+
+func get_recoil_amount() -> float:
+	return _kick_distance
+
+func is_muzzle_flash_visible() -> bool:
+	return _muzzle_flash != null and _muzzle_flash.visible
 
 func play_fire(direction: Vector3, hit_result: Dictionary = {}) -> void:
 	var report := String(definition.get("report", "rifle"))
 	_play_stream(_get_shot_stream(report), -2.0 if report in ["rifle", "shotgun", "lmg"] else -4.0)
-	_kick_distance = maxf(_kick_distance, 0.13 if report in ["rifle", "shotgun"] else 0.075)
+	var recoil_distance := float(definition.get("recoil_distance", 0.13 if report in ["rifle", "shotgun"] else 0.075))
+	_kick_distance = maxf(_kick_distance, recoil_distance)
 	_kick_rotation += deg_to_rad(float(definition.get("camera_kick", 0.8)) * 0.9)
 	_flash_time = 0.055
 	if _muzzle_flash != null:
@@ -70,8 +79,12 @@ func _process(delta: float) -> void:
 	_kick_distance = move_toward(_kick_distance, 0.0, delta * 1.5)
 	_kick_rotation = move_toward(_kick_rotation, 0.0, delta * 9.0)
 	if model_root != null:
-		model_root.position = _base_model_position + Vector3(0.0, 0.0, _kick_distance)
-		model_root.rotation = _base_model_rotation + Vector3(_kick_rotation, 0.0, 0.0)
+		if preserve_external_yaw:
+			model_root.position = _base_model_position + Vector3(0.0, 0.0, _kick_distance).rotated(Vector3.UP, model_root.rotation.y)
+			model_root.rotation = Vector3(_base_model_rotation.x + _kick_rotation, model_root.rotation.y, _base_model_rotation.z)
+		else:
+			model_root.position = _base_model_position + Vector3(0.0, 0.0, _kick_distance)
+			model_root.rotation = _base_model_rotation + Vector3(_kick_rotation, 0.0, 0.0)
 	if _flash_time > 0.0:
 		_flash_time -= delta
 		if _flash_time <= 0.0:

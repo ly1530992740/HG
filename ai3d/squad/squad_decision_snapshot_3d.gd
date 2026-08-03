@@ -4,11 +4,14 @@ class_name SquadDecisionSnapshot3D
 var belief_version := 0
 var mission_type := 0
 var mission_state := 0
+var defense_locked := false
+var objective_clear_confirmed := false
 var mission_target := Vector3.ZERO
 var mission_radius := 0.0
 var squad_center := Vector3.ZERO
 var enemy_count := 0
 var enemy_power := 0.0
+var friendly_power := 0.0
 var members: Array[Dictionary] = []
 var contacts: Array[Dictionary] = []
 var fire_assessment: Dictionary = {}
@@ -23,6 +26,8 @@ static func capture(
 	result.belief_version = belief.version
 	result.mission_type = mission.mission_type
 	result.mission_state = mission.state
+	result.defense_locked = mission.is_defense_locked()
+	result.objective_clear_confirmed = mission.is_objective_clear_confirmed()
 	result.mission_target = mission.target_position
 	result.mission_radius = mission.target_radius
 	result.fire_assessment = assessment.duplicate(true)
@@ -37,6 +42,8 @@ static func capture(
 		center += member.global_position
 		result.members.append(_capture_member(member))
 	result.squad_center = center / float(result.members.size()) if not result.members.is_empty() else mission.target_position
+	for member in result.members:
+		result.friendly_power += float(member.get("combat_power", 0.0))
 	for contact in belief.get_living_contacts(0.05):
 		result.contacts.append({
 			"id": String(contact.contact_id),
@@ -55,6 +62,10 @@ static func from_facts(facts: Dictionary) -> SquadDecisionSnapshot3D:
 	result.belief_version = int(facts.get("belief_version", 1))
 	result.mission_type = int(facts.get("mission_type", SquadMissionController3D.MissionType.CAPTURE_AND_HOLD))
 	result.mission_state = int(facts.get("mission_state", SquadMissionController3D.State.CLEARING))
+	result.defense_locked = bool(facts.get("defense_locked", result.mission_state in [
+		SquadMissionController3D.State.HOLDING, SquadMissionController3D.State.COMPLETE,
+	]))
+	result.objective_clear_confirmed = bool(facts.get("objective_clear_confirmed", result.defense_locked))
 	result.mission_target = facts.get("mission_target", Vector3.ZERO) as Vector3
 	result.mission_radius = float(facts.get("mission_radius", 12.0))
 	result.squad_center = facts.get("squad_center", Vector3.ZERO) as Vector3
@@ -63,19 +74,20 @@ static func from_facts(facts: Dictionary) -> SquadDecisionSnapshot3D:
 	result.members.assign(facts.get("members", []))
 	result.contacts.assign(facts.get("contacts", []))
 	result.fire_assessment = (facts.get("fire_assessment", {}) as Dictionary).duplicate(true)
+	result.friendly_power = float(facts.get("friendly_power", 0.0))
+	if result.friendly_power <= 0.0:
+		for member in result.members:
+			result.friendly_power += float(member.get("combat_power", 1.0))
 	return result
+
+func get_power_ratio() -> float:
+	return friendly_power / maxf(0.1, enemy_power)
 
 func get_member_ids() -> PackedStringArray:
 	var result := PackedStringArray()
 	for member in members:
 		result.append(String(member.get("id", "")))
 	return result
-
-func get_member(member_id: String) -> Dictionary:
-	for member in members:
-		if String(member.get("id", "")) == member_id:
-			return member
-	return {}
 
 func count_role(role: int) -> int:
 	var result := 0

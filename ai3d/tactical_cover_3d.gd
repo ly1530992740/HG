@@ -99,6 +99,27 @@ func get_cover_capacity_per_side() -> int:
 func get_cover_axis() -> Vector3:
 	return global_transform.basis.x.normalized()
 
+func get_fire_block_factor(threat_position: Vector3, protected_position: Vector3) -> float:
+	var local_threat := to_local(threat_position)
+	var local_protected := to_local(protected_position)
+	var threat_side := signf(local_threat.z)
+	var protected_side := signf(local_protected.z)
+	if is_zero_approx(threat_side) or is_zero_approx(protected_side) or threat_side == protected_side:
+		return 0.0
+	var segment_z := local_protected.z - local_threat.z
+	if absf(segment_z) <= 0.001:
+		return 0.0
+	var crossing := clampf(-local_threat.z / segment_z, 0.0, 1.0)
+	var crossing_x := lerpf(local_threat.x, local_protected.x, crossing)
+	var half_length := cover_length * 0.5
+	if absf(crossing_x) >= half_length:
+		return 0.0
+	var edge_factor := clampf((half_length - absf(crossing_x)) / minf(1.25, half_length), 0.0, 1.0)
+	var protected_depth := maxf(0.0, absf(local_protected.z) - cover_width * 0.5)
+	var proximity_factor := lerpf(1.0, 0.38, clampf(protected_depth / 12.0, 0.0, 1.0))
+	var height_factor := clampf((cover_height - 0.35) / 0.9, 0.15, 1.0)
+	return clampf(0.84 * edge_factor * proximity_factor * height_factor, 0.0, 0.84)
+
 func get_slots_against(threat_position: Vector3) -> Array[Marker3D]:
 	var result: Array[Marker3D] = []
 	var local_threat := to_local(threat_position)
@@ -130,7 +151,7 @@ func reserve_reachable_slot(actor: Node3D, threat_position: Vector3) -> Marker3D
 	var local_actor := to_local(actor.global_position)
 	for slot in get_slots_against(threat_position):
 		var local_slot := slot.position
-		# Soldiers currently use direct GOAP movement, so do not assign a slot
+		# Soldier State Charts execute movement directly, so do not assign a slot
 		# that requires crossing the cover body itself.
 		if absf(local_actor.z) > cover_width * 0.5 and signf(local_actor.z) != signf(local_slot.z):
 			continue

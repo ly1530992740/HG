@@ -60,7 +60,7 @@ func has_line_of_sight(candidate: Node3D) -> bool:
 		and float(candidate.get_visibility_multiplier()) <= 0.22 \
 		and actor.global_position.distance_to(candidate.global_position) > 4.0:
 		return false
-	var query := PhysicsRayQueryParameters3D.create(origin, endpoint, 9, [actor.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(origin, endpoint, 9, actor.get_combat_ray_exclusions())
 	query.collide_with_areas = true
 	query.collide_with_bodies = true
 	var hit := actor.get_world_3d().direct_space_state.intersect_ray(query)
@@ -76,4 +76,5 @@ func _get_combatant_candidates() -> Array:
 func _is_within_effective_sight(target: Node3D, distance := -1.0) -> bool:
 	var target_distance := distance if distance >= 0.0 else actor.global_position.distance_to(target.global_position)
 	var visibility_multiplier := float(target.get_visibility_multiplier()) if target.has_method("get_visibility_multiplier") else 1.0
-	return target_distance <= actor.sight_range * clampf(visibility_multiplier, 0.35, 1.25)
+	var structure_multiplier := actor.get_structure_sight_multiplier() if actor.has_method("get_structure_sight_multiplier") else 1.0
+	return target_distance <= actor.sight_range * structure_multiplier * clampf(visibility_multiplier, 0.35, 1.25)

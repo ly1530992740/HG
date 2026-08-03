@@ -3,6 +3,9 @@ class_name TacticalDecisionSandbox3D
 
 const SOLDIER_SCENE := preload("res://ai3d/soldier_3d.tscn")
 const COVER_SCENE := preload("res://ai3d/tactical_cover_3d.tscn")
+const MACHINE_GUN_SCENE := preload("res://ai3d/structures/machine_gun_emplacement_3d.tscn")
+const WATCHTOWER_SCENE := preload("res://ai3d/structures/watchtower_3d.tscn")
+const BARBED_WIRE_SCENE := preload("res://ai3d/structures/barbed_wire_3d.tscn")
 const SIGHT_VISUALIZER_SCRIPT := preload("res://tests/3d_battles/tactical_sandbox_sight_visualizer_3d.gd")
 
 enum EditTool {
@@ -13,6 +16,9 @@ enum EditTool {
 	DELETE,
 	SET_BLUE_OBJECTIVE,
 	SET_RED_OBJECTIVE,
+	ADD_MACHINE_GUN,
+	ADD_WATCHTOWER,
+	ADD_BARBED_WIRE,
 }
 
 enum Intent {
@@ -21,7 +27,7 @@ enum Intent {
 	ELIMINATE_AND_RETURN,
 }
 
-@export var start_paused := true
+@export var start_paused := false
 @export var build_user_interface := true
 @export var camera_move_speed := 14.0
 @export var camera_look_sensitivity := 0.003
@@ -55,6 +61,7 @@ var _ui_input_blockers: Array[Control] = []
 var _tool_select: OptionButton
 var _source_select: OptionButton
 var _layer_select: OptionButton
+var _heatmap_toggle: CheckButton
 var _blue_intent: OptionButton
 var _red_intent: OptionButton
 var _analysis_text: RichTextLabel
@@ -115,6 +122,10 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_H:
+			set_heatmap_visible(_heatmap_toggle == null or not _heatmap_toggle.button_pressed)
+			get_viewport().set_input_as_handled()
+			return
 		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_F1:
 			set_debug_ui_visible(_ui_layer == null or not _ui_layer.visible)
 			get_viewport().set_input_as_handled()
@@ -183,6 +194,13 @@ func set_debug_ui_visible(value: bool) -> void:
 		return
 	_ui_layer.visible = value
 
+func set_heatmap_visible(value: bool) -> void:
+	if _heatmap_toggle != null:
+		_heatmap_toggle.set_pressed_no_signal(value)
+	if _heatmap != null:
+		_heatmap.visible = value
+	_mark_analysis_dirty()
+
 func get_sandbox_debug_snapshot() -> Dictionary:
 	return {
 		"paused": get_tree().paused if get_tree() != null else true,
@@ -191,10 +209,18 @@ func get_sandbox_debug_snapshot() -> Dictionary:
 		"red_members": _red_squad.get_configured_member_actors().size() if is_instance_valid(_red_squad) else 0,
 		"editable_covers": _count_editables("cover"),
 		"editable_grass": _count_editables("grass"),
+		"editable_machine_guns": _count_editables("machine_gun"),
+		"editable_watchtowers": _count_editables("watchtower"),
+		"editable_barbed_wire": _count_editables("barbed_wire"),
 		"heat_cells": _heatmap.get_visible_cell_count() if _heatmap != null else 0,
+		"heatmap_visible": _heatmap.visible if _heatmap != null else false,
 		"heatmap_version": _heatmap.get_render_version() if _heatmap != null else 0,
 		"sight_rays": _sight_visualizer.get_visible_ray_count() if _sight_visualizer != null else 0,
 		"sight_version": _sight_visualizer.render_version if _sight_visualizer != null else 0,
+		"structure_range_visible": _sight_visualizer.visible if _sight_visualizer != null \
+			and _selected_edit_node is TacticalStructure3D else false,
+		"structure_range_rays": _sight_visualizer.get_visible_ray_count() if _sight_visualizer != null \
+			and _selected_edit_node is TacticalStructure3D else 0,
 		"simulation_frame": _simulation_frame,
 		"camera_position": _camera.position if _camera != null else Vector3.ZERO,
 		"camera_rotation": _camera.rotation if _camera != null else Vector3.ZERO,
@@ -227,6 +253,28 @@ func debug_add_grass(position_value: Vector3) -> TacticalZone3D:
 	var grass := _add_grass(position_value)
 	_mark_analysis_dirty()
 	return grass
+
+func debug_add_machine_gun(position_value: Vector3, rotation_y := 0.0) -> MachineGunEmplacement3D:
+	var emplacement := _add_machine_gun(position_value, rotation_y)
+	_mark_analysis_dirty()
+	return emplacement
+
+func debug_add_watchtower(position_value: Vector3, rotation_y := 0.0) -> Watchtower3D:
+	var tower := _add_watchtower(position_value, rotation_y)
+	_mark_analysis_dirty()
+	return tower
+
+func debug_add_barbed_wire(position_value: Vector3, rotation_y := 0.0) -> BarbedWire3D:
+	var wire := _add_barbed_wire(position_value, rotation_y)
+	_mark_analysis_dirty()
+	return wire
+
+func debug_select_editable(node: Node3D) -> bool:
+	if not is_instance_valid(node) or not node.has_meta("editable_kind"):
+		return false
+	_selected_edit_node = node
+	_update_selection_label()
+	return true
 
 func debug_move_soldier_initial(member_name: String, position_value: Vector3) -> bool:
 	for squad in [_blue_squad, _red_squad]:
@@ -369,6 +417,9 @@ func _build_ui() -> void:
 	_tool_select = OptionButton.new()
 	for tool_name in ["查看", "添加掩体", "添加草丛", "拖动/移动", "删除", "设置蓝方目标点", "设置红方目标点"]:
 		_tool_select.add_item(tool_name)
+	_tool_select.add_item("添加机枪阵地", EditTool.ADD_MACHINE_GUN)
+	_tool_select.add_item("添加岗哨塔", EditTool.ADD_WATCHTOWER)
+	_tool_select.add_item("添加铁丝网", EditTool.ADD_BARBED_WIRE)
 	_tool_select.item_selected.connect(func(_index: int): _selected_edit_node = null; _update_selection_label())
 	setup.add_child(_tool_select)
 	_selection_label = Label.new()
@@ -425,6 +476,11 @@ func _build_ui() -> void:
 	_source_select.item_selected.connect(func(_index: int): _mark_analysis_dirty())
 	analysis.add_child(_source_select)
 	analysis.add_child(_section_label("热力图图层"))
+	_heatmap_toggle = CheckButton.new()
+	_heatmap_toggle.text = "显示热力图（H）"
+	_heatmap_toggle.button_pressed = true
+	_heatmap_toggle.toggled.connect(set_heatmap_visible)
+	analysis.add_child(_heatmap_toggle)
 	_layer_select = OptionButton.new()
 	for layer_name in ["综合风险", "敌军威胁", "火力压制", "掩体价值", "隐蔽价值", "情报价值"]:
 		_layer_select.add_item(layer_name)
@@ -526,6 +582,10 @@ func _reset_scenario() -> void:
 	_add_cover(Vector3(7.5, 0.0, -4.5), 5.0, 0.0)
 	_add_cover(Vector3(-1.0, 0.0, -5.0), 5.5, 0.0)
 	_add_cover(Vector3(-11.0, 0.0, 0.0), 6.5, PI * 0.5)
+	_add_machine_gun(Vector3(0.0, 0.0, -8.5), PI)
+	_add_watchtower(Vector3(-5.0, 0.0, -11.0), PI)
+	_add_barbed_wire(Vector3(4.5, 0.0, -7.0), 0.0)
+	_add_barbed_wire(Vector3(-4.5, 0.0, -7.0), 0.0)
 	_add_grass(Vector3(10.5, 0.0, 3.0), Vector2(6.0, 9.0))
 	_add_grass(Vector3(-10.0, 0.0, -3.0), Vector2(6.0, 9.0))
 	_restore_default_configuration_values()
@@ -554,6 +614,9 @@ func _rebuild_actors() -> void:
 	_dragged_soldier = null
 	_analysis_by_squad.clear()
 	_perception_refresh_by_squad.clear()
+	# Drop UI metadata before freeing the soldiers referenced by it.
+	if _source_select != null:
+		_source_select.clear()
 	for child in _actors_root.get_children():
 		child.free()
 	_blue_squad = _create_squad("BlueSquad", Soldier3D.Team.BLUE, _get_intent("blue"), Vector3(0.0, 0.0, 13.0), Vector3(0.0, 0.0, -10.0))
@@ -573,6 +636,7 @@ func _create_squad(node_name: String, team: Soldier3D.Team, intent: Intent, spaw
 	squad.combat_team = team
 	squad.can_target_players = false
 	squad.use_advanced_tactics = true
+	squad.defensive_posture = intent == Intent.DEFEND_AREA
 	squad.use_qwen = false
 	squad.evaluation_interval = 1.2
 	squad.contact_report_delay_min = 0.25
@@ -636,6 +700,38 @@ func _add_cover(position_value: Vector3, length: float, rotation_y: float) -> Ta
 	cover.set_meta("editable_kind", "cover")
 	_terrain_root.add_child(cover)
 	return cover
+
+func _add_machine_gun(position_value: Vector3, rotation_y: float) -> MachineGunEmplacement3D:
+	_editable_sequence += 1
+	var emplacement := MACHINE_GUN_SCENE.instantiate() as MachineGunEmplacement3D
+	emplacement.name = "SandboxMachineGun%02d" % _editable_sequence
+	emplacement.position = position_value
+	emplacement.rotation.y = rotation_y
+	emplacement.assigned_team = Soldier3D.Team.RED
+	emplacement.set_meta("editable_kind", "machine_gun")
+	_terrain_root.add_child(emplacement)
+	return emplacement
+
+func _add_watchtower(position_value: Vector3, rotation_y: float) -> Watchtower3D:
+	_editable_sequence += 1
+	var tower := WATCHTOWER_SCENE.instantiate() as Watchtower3D
+	tower.name = "SandboxWatchtower%02d" % _editable_sequence
+	tower.position = position_value
+	tower.rotation.y = rotation_y
+	tower.assigned_team = Soldier3D.Team.RED
+	tower.set_meta("editable_kind", "watchtower")
+	_terrain_root.add_child(tower)
+	return tower
+
+func _add_barbed_wire(position_value: Vector3, rotation_y: float) -> BarbedWire3D:
+	_editable_sequence += 1
+	var wire := BARBED_WIRE_SCENE.instantiate() as BarbedWire3D
+	wire.name = "SandboxBarbedWire%02d" % _editable_sequence
+	wire.position = position_value
+	wire.rotation.y = rotation_y
+	wire.set_meta("editable_kind", "barbed_wire")
+	_terrain_root.add_child(wire)
+	return wire
 
 func _add_grass(position_value: Vector3, size_value := Vector2(5.0, 6.0)) -> TacticalZone3D:
 	_editable_sequence += 1
@@ -706,18 +802,26 @@ func _finish_actor_rebuild() -> void:
 	_mark_analysis_dirty()
 
 func _edit_at(point: Vector3) -> void:
-	if not get_tree().paused:
-		return
 	var tool := _tool_select.get_selected_id() if _tool_select != null else EditTool.INSPECT
+	if not get_tree().paused and tool != EditTool.INSPECT:
+		return
 	match tool:
 		EditTool.ADD_COVER:
 			_selected_edit_node = _add_cover(point, 5.0, 0.0)
 		EditTool.ADD_GRASS:
 			_selected_edit_node = _add_grass(point)
+		EditTool.ADD_MACHINE_GUN:
+			_selected_edit_node = _add_machine_gun(point, 0.0)
+		EditTool.ADD_WATCHTOWER:
+			_selected_edit_node = _add_watchtower(point, 0.0)
+		EditTool.ADD_BARBED_WIRE:
+			_selected_edit_node = _add_barbed_wire(point, 0.0)
 		EditTool.MOVE:
 			if is_instance_valid(_selected_edit_node):
 				if _selected_edit_node is TacticalCover3D:
 					_prepare_cover_for_layout_edit(_selected_edit_node as TacticalCover3D)
+				elif _selected_edit_node is TacticalStructure3D:
+					_prepare_structure_for_layout_edit(_selected_edit_node as TacticalStructure3D)
 				_selected_edit_node.global_position = point
 				_selected_edit_node = null
 			else:
@@ -727,15 +831,19 @@ func _edit_at(point: Vector3) -> void:
 			if target != null:
 				if target is TacticalCover3D:
 					_prepare_cover_for_layout_edit(target as TacticalCover3D)
+				elif target is TacticalStructure3D:
+					_prepare_structure_for_layout_edit(target as TacticalStructure3D)
 				target.queue_free()
 		EditTool.SET_BLUE_OBJECTIVE:
 			_move_objective(_blue_squad, point)
 		EditTool.SET_RED_OBJECTIVE:
 			_move_objective(_red_squad, point)
 		_:
+			var inspected_editable := _nearest_editable(point, false)
 			var inspected_soldier := _nearest_soldier(point)
-			_selected_edit_node = inspected_soldier if inspected_soldier != null else _nearest_editable(point, true)
-			if inspected_soldier != null:
+			_selected_edit_node = inspected_editable if inspected_editable is TacticalStructure3D \
+				else (inspected_soldier if inspected_soldier != null else _nearest_editable(point, true))
+			if inspected_soldier != null and not inspected_editable is TacticalStructure3D:
 				_select_source_for_soldier(inspected_soldier)
 	_last_inspected_position = point
 	_update_selection_label()
@@ -904,6 +1012,8 @@ func _refresh_source_options() -> void:
 	if _source_select.item_count > 0:
 		var old_meta := _source_select.get_item_metadata(_source_select.selected) as Dictionary
 		previous = String(old_meta.get("key", ""))
+	if previous.is_empty():
+		previous = "red_squad"
 	_source_select.clear()
 	_add_source_item("蓝方小队共享认知", "blue_squad", "squad", _blue_squad)
 	_add_source_item("红方小队共享认知", "red_squad", "squad", _red_squad)
@@ -927,7 +1037,7 @@ func _select_source_for_soldier(soldier: Soldier3D) -> void:
 		return
 	for index in _source_select.item_count:
 		var metadata := _source_select.get_item_metadata(index) as Dictionary
-		if metadata.get("node") == soldier:
+		if _source_node(metadata) == soldier:
 			_source_select.select(index)
 			return
 
@@ -967,30 +1077,54 @@ func _refresh_analysis(force_preview: bool, apply_current_frame_plan := false) -
 	var advanced := squad.get_advanced_tactics()
 	_last_analysis = (_analysis_by_squad.get(_squad_cache_key(squad), {}) as Dictionary).duplicate(true)
 	_last_analysis["simulation_frame"] = _simulation_frame
+	var heatmap_visible := _heatmap_toggle == null or _heatmap_toggle.button_pressed
+	_heatmap.visible = heatmap_visible
 	if String(source.get("kind", "")) == "soldier":
 		var soldier := source.get("node") as Soldier3D
-		_heatmap.show_soldier_map(soldier)
-		_sight_visualizer.show_soldier(soldier)
+		if heatmap_visible:
+			_heatmap.show_soldier_map(soldier)
+		else:
+			_heatmap.clear_map()
 		if _layer_select != null:
 			_layer_select.disabled = true
 	else:
 		var layer := _layer_select.get_selected_id() if _layer_select != null else TacticalSandboxHeatmap3D.Layer.COMPOSITE_RISK
-		_heatmap.show_squad_map(advanced.influence, layer as TacticalSandboxHeatmap3D.Layer)
-		_sight_visualizer.clear_view()
+		if heatmap_visible:
+			_heatmap.show_squad_map(advanced.influence, layer as TacticalSandboxHeatmap3D.Layer)
+		else:
+			_heatmap.clear_map()
 		if _layer_select != null:
-			_layer_select.disabled = false
+			_layer_select.disabled = not heatmap_visible
+	_update_range_or_sight_visualizer(source)
 	_update_analysis_text(squad, source)
+
+func _update_range_or_sight_visualizer(source: Dictionary) -> void:
+	if _sight_visualizer == null:
+		return
+	var source_node := _source_node(source)
+	if _selected_edit_node is TacticalStructure3D:
+		_sight_visualizer.show_structure(_selected_edit_node as TacticalStructure3D)
+	elif String(source.get("kind", "")) == "soldier" and source_node is Soldier3D:
+		_sight_visualizer.show_soldier(source_node as Soldier3D)
+	else:
+		_sight_visualizer.clear_view()
 
 func _squad_cache_key(squad: SquadCoordinator3D) -> String:
 	return String(squad.squad_id) if is_instance_valid(squad) else ""
 
 func _selected_source() -> Dictionary:
 	if _source_select == null or _source_select.item_count == 0:
-		return {"kind": "squad", "node": _blue_squad}
+		return {"key": "blue_squad", "kind": "squad", "node": _blue_squad}
 	return _source_select.get_item_metadata(_source_select.selected) as Dictionary
 
+func _source_node(source: Dictionary) -> Node:
+	var raw_node: Variant = source.get("node", null)
+	if raw_node == null or not is_instance_valid(raw_node):
+		return null
+	return raw_node as Node
+
 func _source_squad(source: Dictionary) -> SquadCoordinator3D:
-	var node := source.get("node") as Node
+	var node := _source_node(source)
 	if node is SquadCoordinator3D:
 		return node as SquadCoordinator3D
 	if node is Soldier3D:
@@ -1019,6 +1153,8 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 		int(belief.get("belief_version", 0)),
 	])
 	var selected_candidate := String(_last_analysis.get("selected_candidate", ""))
+	_append_structure_status(lines, squad)
+	lines.append("")
 	lines.append("作战意图：%s [%s]" % [_candidate_name(selected_candidate), selected_candidate])
 	lines.append("火力态势：%s  压力比 %.2f  压制率 %.2f" % [
 		_fire_state_name(String(fire.get("state_name", "UNKNOWN"))),
@@ -1074,6 +1210,26 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 			lines.append("    %s" % String(directive.get("reason", "")))
 	_analysis_text.text = "\n".join(lines)
 
+func _append_structure_status(lines: PackedStringArray, squad: SquadCoordinator3D) -> void:
+	lines.append("[color=#ffcf70][b]防御建筑状态[/b][/color]")
+	var registry := BattlefieldRegistry3D.find(get_tree())
+	var structures: Array = registry.get_structures() if registry != null else get_tree().get_nodes_in_group("tactical_structure3d")
+	if structures.is_empty():
+		lines.append("  当前地图没有可用防御建筑")
+		return
+	for node in structures:
+		if not node is TacticalStructure3D:
+			continue
+		var structure := node as TacticalStructure3D
+		var user := structure.get_user() as Soldier3D
+		var state := "空闲"
+		if user != null:
+			state = "操作中" if structure.is_occupied_by(user) else "正在接近"
+			if not squad.is_member(user):
+				state = "其他小队占用"
+		var label := "机枪阵地" if structure.structure_kind == TacticalStructure3D.Kind.MACHINE_GUN else "岗哨塔"
+		lines.append("  %s  %s  %s" % [label, user.name if user != null else "-", state])
+
 func _update_selection_label() -> void:
 	if _selection_label == null:
 		return
@@ -1086,11 +1242,23 @@ func _update_selection_label() -> void:
 				cover.global_position.z,
 				cover.get_cover_capacity_per_side(),
 			]
+		elif _selected_edit_node is TacticalStructure3D:
+			var structure := _selected_edit_node as TacticalStructure3D
+			var user := structure.get_user() as Soldier3D
+			_selection_label.text = "已选择：%s，坐标 (%.1f, %.1f)\n射程：%.1f 米  射界：%.0f°  操作员：%s" % [
+				"机枪阵地" if structure.structure_kind == TacticalStructure3D.Kind.MACHINE_GUN else "岗哨塔",
+				structure.global_position.x,
+				structure.global_position.z,
+				structure.get_effective_fire_range(),
+				structure.firing_arc_degrees,
+				user.name if user != null else "无",
+			]
 		else:
 			_selection_label.text = "已选择：%s，坐标 (%.1f, %.1f)" % [_selected_edit_node.name, _selected_edit_node.global_position.x, _selected_edit_node.global_position.z]
 	else:
 		_selection_label.text = "查看坐标：(%.1f, %.1f)" % [_last_inspected_position.x, _last_inspected_position.z]
 	_update_cover_controls()
+	_update_range_or_sight_visualizer(_selected_source())
 
 func _update_cover_controls() -> void:
 	if _cover_length_spin == null or _cover_width_spin == null:
@@ -1138,6 +1306,10 @@ func _prepare_cover_for_layout_edit(cover: TacticalCover3D) -> void:
 			if member.active_cover == cover:
 				member.relocate_for_scenario_setup(member.global_position)
 
+func _prepare_structure_for_layout_edit(structure: TacticalStructure3D) -> void:
+	if structure != null:
+		structure.evacuate()
+
 func _set_simulation_paused(value: bool) -> void:
 	if get_tree() == null:
 		return
@@ -1173,11 +1345,15 @@ func _on_rotate_pressed() -> void:
 	if get_tree().paused and is_instance_valid(_selected_edit_node) and _selected_edit_node.has_meta("editable_kind"):
 		if _selected_edit_node is TacticalCover3D:
 			_prepare_cover_for_layout_edit(_selected_edit_node as TacticalCover3D)
+		elif _selected_edit_node is TacticalStructure3D:
+			_prepare_structure_for_layout_edit(_selected_edit_node as TacticalStructure3D)
 		_selected_edit_node.rotation.y = snappedf(_selected_edit_node.rotation.y + PI * 0.5, PI * 0.5)
 		_update_selection_label()
 		_mark_analysis_dirty()
 
 func _directive_name(value: String) -> String:
+	if value == "USE_STRUCTURE":
+		return "使用防御建筑"
 	return {
 		"NONE": "待命",
 		"GUARD": "警戒",
@@ -1203,7 +1379,7 @@ func _role_name(value: String) -> String:
 	}.get(value, value)
 
 func _source_display_name(source: Dictionary) -> String:
-	var node := source.get("node") as Node
+	var node := _source_node(source)
 	if node is SquadCoordinator3D:
 		return "%s共享认知" % (node as SquadCoordinator3D).squad_display_name
 	if node is Soldier3D:

@@ -1,4 +1,4 @@
-﻿[gd_scene format=4 uid="uid://dtkqopu3xic5n"]
+[gd_scene format=4 uid="uid://dtkqopu3xic5n"]
 
 [ext_resource type="Script" uid="uid://u3pejhceboy3" path="res://loadings/loading_screen.gd" id="1_o0jum"]
 [ext_resource type="Texture2D" uid="uid://ewereq2wko7u" path="res://Textures/Terrain/Tileset/Water Background color.png" id="2_f8cb0"]

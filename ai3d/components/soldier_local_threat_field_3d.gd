@@ -38,8 +38,9 @@ func score_position(position: Vector3) -> float:
 			risk += confidence * falloff * intensity * exposure
 	return maxf(0.0, risk)
 
-func score_segment(from_position: Vector3, to_position: Vector3, sample_count := 5) -> float:
-	var count := maxi(2, sample_count)
+func score_segment(from_position: Vector3, to_position: Vector3, sample_count := 0) -> float:
+	var distance := _flat_distance(from_position, to_position)
+	var count := clampi(ceili(distance / 2.5), 3, 14) if sample_count <= 0 else maxi(2, sample_count)
 	var total := 0.0
 	var worst := 0.0
 	for index in count:
@@ -55,7 +56,67 @@ func score_cover(cover: TacticalCover3D, threat_position: Vector3, preferred_ran
 	var tactical_value := cover.score_for_actor(actor, threat_position, preferred_range)
 	var travel_risk := score_segment(actor.global_position, cover.global_position)
 	var destination_risk := score_position(cover.global_position)
-	return tactical_value - travel_risk * 0.32 - destination_risk * 0.18
+	return tactical_value - travel_risk * 0.55 - destination_risk * 0.30
+
+func find_peak_threat_position(origin: Vector3, search_radius := LOCAL_THREAT_RADIUS) -> Vector3:
+	var best_position := origin
+	var best_risk := score_position(origin)
+	if shared_influence != null:
+		for key_value in shared_influence.cells:
+			var key: Vector2i = key_value
+			var cell_position := shared_influence.origin + Vector3(
+				float(key.x) * shared_influence.cell_size,
+				0.0,
+				float(key.y) * shared_influence.cell_size
+			)
+			if _flat_distance(origin, cell_position) > search_radius:
+				continue
+			var risk := float((shared_influence.cells[key] as Dictionary).get(
+				SquadInfluenceMap3D.LAYER_ENEMY_THREAT, 0.0
+			))
+			if risk > best_risk:
+				best_risk = risk
+				best_position = cell_position
+	if working_memory != null:
+		for fact in working_memory.get_spatial_threat_facts():
+			var fact_position := fact.get("position", origin) as Vector3
+			var fact_risk := score_position(fact_position) + float(fact.get("confidence", 0.0)) * 30.0
+			if fact_risk > best_risk:
+				best_risk = fact_risk
+				best_position = fact_position
+	return best_position
+
+func find_safest_escape(
+		origin: Vector3,
+		threat_position: Vector3,
+		max_distance := 10.0
+) -> Dictionary:
+	var current_risk := score_position(origin)
+	var away := origin - threat_position
+	away.y = 0.0
+	if away.length_squared() <= 0.01:
+		away = Vector3.LEFT
+	away = away.normalized()
+	var best := {"valid": false, "point": origin, "risk": current_risk, "route_risk": current_risk, "cost": INF}
+	for distance in [4.0, 7.0, max_distance]:
+		for index in 16:
+			var direction := Vector3.FORWARD.rotated(Vector3.UP, TAU * float(index) / 16.0)
+			if direction.dot(away) < -0.15:
+				continue
+			var point := origin + direction * minf(float(distance), max_distance)
+			if not _segment_is_clear(origin, point):
+				continue
+			var risk := score_position(point)
+			var route_risk := score_segment(origin, point)
+			var cost := risk + route_risk * 0.55 + float(distance) * 0.8 - direction.dot(away) * 12.0
+			if cost >= float(best.get("cost", INF)):
+				continue
+			best = {"valid": true, "point": point, "risk": risk, "route_risk": route_risk, "cost": cost}
+	if not bool(best.get("valid", false)):
+		return best
+	var improvement := current_risk - float(best.get("risk", current_risk))
+	best["valid"] = improvement >= 8.0 or float(best.get("route_risk", current_risk)) < current_risk * 0.78
+	return best
 
 func choose_local_detour(
 		origin: Vector3,
@@ -98,6 +159,9 @@ func choose_local_detour(
 	best["direct_risk"] = float(direct_choice.get("selected_risk", score_segment(origin, direct)))
 	return best
 
+func is_segment_clear(origin: Vector3, destination: Vector3) -> bool:
+	return _segment_is_clear(origin, destination)
+
 func _evaluate_candidate(origin: Vector3, destination: Vector3, point: Vector3, max_detour: float) -> Dictionary:
 	var total_distance := _flat_distance(origin, destination)
 	var remaining := _flat_distance(point, destination)
@@ -108,7 +172,7 @@ func _evaluate_candidate(origin: Vector3, destination: Vector3, point: Vector3, 
 	var risk := score_segment(origin, point)
 	var path_cost := _flat_distance(origin, point) + remaining
 	var crowding := _friendly_crowding_risk(point)
-	var cost := path_cost * 1.2 + corridor_offset * 2.2 + risk * 0.18 + crowding
+	var cost := path_cost * 1.2 + corridor_offset * 2.0 + risk * 0.42 + crowding
 	var result := _choice(point, risk, risk, cost)
 	result["valid"] = true
 	result["progress"] = progress

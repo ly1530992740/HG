@@ -64,7 +64,8 @@ func _render(samples: Array[Dictionary], cell_size: float, beneficial: bool) -> 
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.vertex_color_use_as_albedo = true
-	material.no_depth_test = true
+	material.no_depth_test = false
+	material.render_priority = -10
 	tile.material = material
 	var data := MultiMesh.new()
 	data.transform_format = MultiMesh.TRANSFORM_3D

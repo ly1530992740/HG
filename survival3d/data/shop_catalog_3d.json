@@ -19,7 +19,7 @@
     {"id":"weapon_bayonet","name":"军用刺刀","category":"weapon","cost":2,"weapon_id":"knife","ammo_amount":0,"description":"快速近战武器"},
     {"id":"weapon_dadao","name":"抗战大刀","category":"weapon","cost":4,"weapon_id":"dadao","ammo_amount":0,"description":"高伤害双手近战武器"},
     {"id":"weapon_infantry_knife","name":"步兵短刀","category":"weapon","cost":2,"weapon_id":"infantry_knife","ammo_amount":0,"description":"攻击速度快的近战武器"},
-    {"id":"ally_defense_squad","name":"四人红军守备小队","category":"ally","cost":12,"scene":"res://Prefab/Ally3D/ally_defense_squad_3d.tscn","description":"GOAP队友，按G集结并防守"},
+    {"id":"ally_defense_squad","name":"四人红军守备小队","category":"ally","cost":12,"scene":"res://Prefab/Ally3D/ally_defense_squad_3d.tscn","description":"State Chart队友，按G集结并防守"},
     {"id":"cover_low_wall","name":"标准沙袋矮墙","category":"building","cost":4,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":5.0,"cover_width":0.55,"cover_height":1.2,"description":"左键放置，右键取消"},
     {"id":"cover_long_wall","name":"长型防御工事","category":"building","cost":8,"scene":"res://ai3d/tactical_cover_3d.tscn","cover_length":10.0,"cover_width":0.65,"cover_height":1.35,"description":"提供更多自动掩体点位"}
   ]

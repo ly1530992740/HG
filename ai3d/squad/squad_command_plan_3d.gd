@@ -29,6 +29,13 @@ func add_task(task: SquadTask3D) -> SquadCommandPlan3D:
 		tasks.append(task)
 	return self
 
+func clone_for_patch() -> SquadCommandPlan3D:
+	var result := SquadCommandPlan3D.new().configure(plan_id, intent, source, reason, belief_version)
+	result.created_msec = created_msec
+	for task in tasks:
+		result.add_task(task.clone_for_patch())
+	return result
+
 func validate() -> String:
 	if plan_id == &"":
 		return "plan_id is empty"
@@ -46,4 +53,3 @@ func validate() -> String:
 			if not ids.has(dependency_id):
 				return "task %s has unknown dependency %s" % [task.task_id, dependency_id]
 	return ""
-
