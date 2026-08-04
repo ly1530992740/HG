@@ -37,14 +37,3 @@ state while it selects emergency cover, a minimum-risk escape, prone
 protection, a pinned wait, or bounded return fire. When danger clears, the
 chart returns to `ExecuteOrder` when a directive remains, otherwise to
 `IdleSecurity`. A survival interruption never emits `directive_completed`.
-
-## Verification
-
-```powershell
-& 'C:\Users\15309\Desktop\Godot_v4.7-stable_win64.exe' --headless --path 'D:\project\HG' `
-  'res://tests/3d_battles/soldier_state_chart_smoke_test.tscn'
-& 'C:\Users\15309\Desktop\Godot_v4.7-stable_win64.exe' --headless --path 'D:\project\HG' `
-  'res://tests/3d_battles/tactical_advance_risk_smoke_test.tscn'
-& 'C:\Users\15309\Desktop\Godot_v4.7-stable_win64.exe' --headless --path 'D:\project\HG' `
-  'res://tests/3d_battles/tactical_structure_smoke_test.tscn'
-```

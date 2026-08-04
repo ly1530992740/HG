@@ -20,6 +20,7 @@ const CONSOLIDATE := "CONSOLIDATE"
 const MISSION_COVER_ADVANCE := "MISSION_COVER_ADVANCE"
 
 var _route_planner := SquadHeatmapRoutePlanner3D.new()
+var topology: SquadTacticalTopology3D
 
 func build_candidates(
 		snapshot: SquadDecisionSnapshot3D,
@@ -81,9 +82,17 @@ func build_candidates(
 			"Hold current cover only while contact or incoming fire remains"
 		))
 	if machine_guns > 0 and visible_count > 0:
-		result.append(_candidate(ESTABLISH_BASE_OF_FIRE, ESTABLISH_BASE_OF_FIRE, 72.0 + float(machine_guns) * 14.0 + suppression_ratio * 20.0, "Use support weapons to establish fire superiority"))
+		result.append(_candidate_with_components(ESTABLISH_BASE_OF_FIRE, ESTABLISH_BASE_OF_FIRE, "Use support weapons to establish fire superiority", [
+			_component("base", "Base of fire priority", 72.0, 1.0, "constant", 72.0),
+			_component("machine_guns", "Available machine guns", machine_guns, clampf(float(machine_guns) / 2.0, 0.0, 1.0), "linear", float(machine_guns) * 14.0),
+			_component("suppression", "Friendly suppression pressure", suppression_ratio, suppression_ratio, "linear", suppression_ratio * 20.0),
+		]))
 	if visible_count > 0:
-		result.append(_candidate(FIX_AND_SUPPRESS, FIX_AND_SUPPRESS, 62.0 + float(visible_count) * 5.0 + suppression_ratio * 18.0, "Fix known contacts while the squad prepares its next move"))
+		result.append(_candidate_with_components(FIX_AND_SUPPRESS, FIX_AND_SUPPRESS, "Fix known contacts while the squad prepares its next move", [
+			_component("base", "Fixing fire priority", 62.0, 1.0, "constant", 62.0),
+			_component("visible_contacts", "Visible contacts", visible_count, clampf(float(visible_count) / 4.0, 0.0, 1.0), "linear", float(visible_count) * 5.0),
+			_component("suppression", "Friendly suppression pressure", suppression_ratio, suppression_ratio, "linear", suppression_ratio * 18.0),
+		]))
 	var maneuver_available := snapshot.members.any(func(member: Dictionary):
 		return not bool(member.get("pinned", false)) and float(member.get("health", 0.0)) >= 0.52 \
 			and float(member.get("mobility", 0.0)) >= 0.42
@@ -97,9 +106,12 @@ func build_candidates(
 		)
 		var safest_probe := probe_zones[0] as TacticalZone3D
 		var safest_route_score := _zone_access_score(influence, safest_probe, snapshot.squad_center)
-		var probe_utility := 82.0 + suppression_ratio * 28.0 + float(unobserved_zones.size()) * 5.0 \
-			+ clampf(safest_route_score, -100.0, 100.0) * 0.12
-		var candidate := _candidate(RECON_SPLIT, RECON_SPLIT, probe_utility, "Probe the safest unknown route while a base of fire remains")
+		var candidate := _candidate_with_components(RECON_SPLIT, RECON_SPLIT, "Probe the safest unknown route while a base of fire remains", [
+			_component("base", "Recon probe priority", 82.0, 1.0, "constant", 82.0),
+			_component("suppression", "Covering fire opportunity", suppression_ratio, suppression_ratio, "linear", suppression_ratio * 28.0),
+			_component("unknown_routes", "Unobserved routes", unobserved_zones.size(), clampf(float(unobserved_zones.size()) / 4.0, 0.0, 1.0), "linear", float(unobserved_zones.size()) * 5.0),
+			_component("route_access", "Safest route access", safest_route_score, clampf((safest_route_score + 100.0) / 200.0, 0.0, 1.0), "clamped_linear", clampf(safest_route_score, -100.0, 100.0) * 0.12),
+		])
 		# Probe one route at a time. Once it is observed, Utility can commit to it or test the next route.
 		candidate["zones"] = [safest_probe]
 		candidate["route_score"] = safest_route_score
@@ -131,7 +143,10 @@ func build_candidates(
 				result.append(flank)
 	if snapshot.members.size() >= 4 and pressure_ratio >= 0.72 and suppression_ratio < 0.48 \
 			and (recon_complete or unobserved_zones.is_empty()):
-		result.append(_candidate(BOUNDING_ADVANCE, BOUNDING_ADVANCE, 58.0 + pressure_ratio * 24.0, "Advance by alternating fire and movement teams"))
+		result.append(_candidate_with_components(BOUNDING_ADVANCE, BOUNDING_ADVANCE, "Advance by alternating fire and movement teams", [
+			_component("base", "Bounding advance priority", 58.0, 1.0, "constant", 58.0),
+			_component("fire_pressure", "Friendly fire pressure", pressure_ratio, clampf(pressure_ratio, 0.0, 1.0), "linear", pressure_ratio * 24.0),
+		]))
 	var all_routes_observed := recon_complete or zones.filter(func(zone: TacticalZone3D): return zone.recon_enabled).is_empty()
 	var safe_flank_exists := result.any(func(item: Dictionary): return String(item.get("kind", "")) == SUPPRESS_AND_FLANK and float(item.get("route_score", -INF)) > -35.0)
 	if all_routes_observed and not safe_flank_exists:
@@ -144,11 +159,20 @@ func build_candidates(
 			result.append(direct)
 	var average_awareness := _average_enemy_awareness(snapshot)
 	if visible_count > 0 and average_awareness < 0.45 and suppression_ratio < 0.1:
-		result.append(_candidate(AMBUSH, AMBUSH, 118.0 + (0.45 - average_awareness) * 60.0, "Targets are unaware; prepare a synchronized opening volley"))
+		result.append(_candidate_with_components(AMBUSH, AMBUSH, "Targets are unaware; prepare a synchronized opening volley", [
+			_component("base", "Ambush priority", 118.0, 1.0, "constant", 118.0),
+			_component("surprise", "Enemy unawareness", average_awareness, clampf(1.0 - average_awareness / 0.45, 0.0, 1.0), "inverse_linear", (0.45 - average_awareness) * 60.0),
+		]))
 	if fire_state == FireSuperiorityAssessment3D.State.PINNED or suppression_ratio >= 0.55:
-		result.append(_candidate(RECOVER_IN_COVER, RECOVER_IN_COVER, 150.0 + suppression_ratio * 70.0, "Squad is pinned; recover before further movement"))
+		result.append(_candidate_with_components(RECOVER_IN_COVER, RECOVER_IN_COVER, "Squad is pinned; recover before further movement", [
+			_component("base", "Pinned recovery priority", 150.0, 1.0, "constant", 150.0),
+			_component("suppression", "Squad suppression", suppression_ratio, suppression_ratio, "linear", suppression_ratio * 70.0),
+		]))
 	if fire_state == FireSuperiorityAssessment3D.State.LOSING and snapshot.average_health() < 0.55:
-		result.append(_candidate(BREAK_CONTACT, BREAK_CONTACT, 120.0 + (1.0 - snapshot.average_health()) * 45.0, "Combat power is collapsing; disengage by bounds"))
+		result.append(_candidate_with_components(BREAK_CONTACT, BREAK_CONTACT, "Combat power is collapsing; disengage by bounds", [
+			_component("base", "Disengagement priority", 120.0, 1.0, "constant", 120.0),
+			_component("casualty_pressure", "Missing health", snapshot.average_health(), clampf(1.0 - snapshot.average_health(), 0.0, 1.0), "inverse_linear", (1.0 - snapshot.average_health()) * 45.0),
+		]))
 	if visible_count == 0 and not snapshot.contacts.is_empty():
 		result.append(_candidate(SEARCH_LAST_CONTACT, SEARCH_LAST_CONTACT, 94.0, "Leave static cover and search the last reliable contact sector"))
 	if _average_ammo(snapshot) < 0.2 and suppression_ratio < 0.25:
@@ -156,7 +180,27 @@ func build_candidates(
 	return _sort(result)
 
 func _candidate(id: String, kind: String, utility: float, reason: String) -> Dictionary:
-	return {"id": id, "kind": kind, "utility": utility, "reason": reason}
+	return {
+		"id": id,
+		"kind": kind,
+		"utility": utility,
+		"reason": reason,
+		"considerations": [_component("authored_base", "Authored base priority", utility, 1.0, "constant", utility)],
+		"gates": [],
+	}
+
+func _candidate_with_components(id: String, kind: String, reason: String, components: Array[Dictionary]) -> Dictionary:
+	var utility := 0.0
+	for component in components:
+		utility += float(component.get("contribution", 0.0))
+	return {
+		"id": id,
+		"kind": kind,
+		"utility": utility,
+		"reason": reason,
+		"considerations": components.duplicate(true),
+		"gates": [],
+	}
 
 func _sort(candidates: Array[Dictionary]) -> Array[Dictionary]:
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary): return float(a.get("utility", 0.0)) > float(b.get("utility", 0.0)))
@@ -204,17 +248,22 @@ func _defense_option(
 	var contacts := belief.get_living_contacts()
 	if contacts.is_empty():
 		return _candidate(option_kind, option_kind, base_utility, reason)
-	var route_plan := _route_planner.build_route(snapshot.squad_center, snapshot.mission_target, influence)
+	var controls := _topology_controls(snapshot.squad_center, snapshot.mission_target)
+	var route_plan := _route_planner.build_route(snapshot.squad_center, snapshot.mission_target, influence, controls)
 	var metrics := _option_metrics(snapshot, route_plan)
 	var utility := base_utility \
 		- float(metrics.get("route_peak_threat", 0.0)) * 0.12 \
-		- float(metrics.get("exposure_seconds", 0.0)) * 1.2
-	var template := SquadPlanCompiler3D.defense_option(
-		&"option_defense", snapshot.get_member_ids(), contacts, snapshot.belief_version, snapshot.defense_locked
-	)
-	_set_task_route_metrics(template, &"defense_positions", route_plan)
+		- float(metrics.get("exposure_seconds", 0.0)) * 1.2 \
+		- (18.0 if bool(metrics.get("destination_dead_end", false)) else 0.0)
+	metrics["considerations"] = [
+		_component("situation_base", "Defensive situation", base_utility, 1.0, "authored", base_utility),
+		_component("route_threat", "Route peak threat", metrics.get("route_peak_threat", 0.0), clampf(float(metrics.get("route_peak_threat", 0.0)) / 100.0, 0.0, 1.0), "linear", -float(metrics.get("route_peak_threat", 0.0)) * 0.12),
+		_component("exposure", "Exposure time", metrics.get("exposure_seconds", 0.0), clampf(float(metrics.get("exposure_seconds", 0.0)) / 10.0, 0.0, 1.0), "linear", -float(metrics.get("exposure_seconds", 0.0)) * 1.2),
+		_component("dead_end", "Destination is a dead end", metrics.get("destination_dead_end", false), 1.0 if bool(metrics.get("destination_dead_end", false)) else 0.0, "binary", -18.0 if bool(metrics.get("destination_dead_end", false)) else 0.0),
+	]
 	return SquadTacticalOption3D.new().configure(
-		option_kind, option_kind, utility, reason, "LAYERED_DEFENSE", metrics, template
+		option_kind, option_kind, utility, reason, metrics,
+		[{"role": SquadRoleAllocator3D.SECURITY, "count": snapshot.members.size()}]
 	).to_candidate()
 
 func _flank_option(
@@ -228,17 +277,12 @@ func _flank_option(
 	var contact := belief.get_best_contact()
 	if contact == null or zone == null or snapshot.members.size() < 3:
 		return {}
-	var ranked := snapshot.members.duplicate()
-	ranked.sort_custom(func(a: Dictionary, b: Dictionary): return _support_option_score(a) > _support_option_score(b))
-	var support_ids := PackedStringArray([String(ranked[0].get("id", ""))])
-	var maneuver_ids := PackedStringArray()
-	for member in snapshot.members:
-		var member_id := String(member.get("id", ""))
-		if member_id not in support_ids and _can_option_maneuver(member):
-			maneuver_ids.append(member_id)
-	if maneuver_ids.is_empty():
+	var support_count := snapshot.members.filter(func(member: Dictionary): return _can_option_support(member)).size()
+	var maneuver_count := snapshot.members.filter(func(member: Dictionary): return _can_option_maneuver(member)).size()
+	if support_count < 1 or maneuver_count < 2:
 		return {}
-	var controls: Array[Vector3] = zone.get_recon_route(snapshot.squad_center)
+	var controls := _topology_controls(snapshot.squad_center, zone.get_observation_point(snapshot.squad_center))
+	controls.append_array(zone.get_recon_route(snapshot.squad_center))
 	var destination := zone.get_observation_point(snapshot.squad_center)
 	var route_plan := _route_planner.build_route(snapshot.squad_center, destination, influence, controls)
 	var metrics := _option_metrics(snapshot, route_plan)
@@ -246,16 +290,29 @@ func _flank_option(
 	var utility := base_utility \
 		+ clampf((snapshot.get_power_ratio() - 1.0) * 20.0, -35.0, 30.0) \
 		- float(metrics.get("route_peak_threat", 0.0)) * 0.42 \
-		- float(metrics.get("exposure_seconds", 0.0)) * 3.5
-	var method := "MG_BASE_OF_FIRE" if int(ranked[0].get("role", -1)) == Soldier3D.CombatRole.MACHINE_GUNNER \
-		else "RIFLE_BASE_OF_FIRE"
-	var template := SquadPlanCompiler3D.suppress_and_flank(
-		&"option_flank", support_ids, maneuver_ids, zone, contact, snapshot.belief_version
-	)
-	_set_task_route_metrics(template, &"flank_move", route_plan)
+		- float(metrics.get("exposure_seconds", 0.0)) * 3.5 \
+		- (35.0 if bool(metrics.get("destination_dead_end", false)) else 0.0)
+	metrics["eligible_support"] = support_count
+	metrics["eligible_maneuver"] = maneuver_count
+	metrics["considerations"] = [
+		_component("tactical_base", "Observed flank opportunity", base_utility, 1.0, "authored", base_utility),
+		_component("power_ratio", "Friendly power ratio", snapshot.get_power_ratio(), clampf(snapshot.get_power_ratio() / 2.0, 0.0, 1.0), "clamped_linear", clampf((snapshot.get_power_ratio() - 1.0) * 20.0, -35.0, 30.0)),
+		_component("route_threat", "Route peak threat", metrics.get("route_peak_threat", 0.0), clampf(float(metrics.get("route_peak_threat", 0.0)) / 100.0, 0.0, 1.0), "linear", -float(metrics.get("route_peak_threat", 0.0)) * 0.42),
+		_component("exposure", "Exposure time", metrics.get("exposure_seconds", 0.0), clampf(float(metrics.get("exposure_seconds", 0.0)) / 10.0, 0.0, 1.0), "linear", -float(metrics.get("exposure_seconds", 0.0)) * 3.5),
+		_component("dead_end", "Flank destination is a dead end", metrics.get("destination_dead_end", false), 1.0 if bool(metrics.get("destination_dead_end", false)) else 0.0, "binary", -35.0 if bool(metrics.get("destination_dead_end", false)) else 0.0),
+	]
+	metrics["gates"] = [
+		_gate("support_available", support_count >= 1, support_count, 1),
+		_gate("maneuver_team_available", maneuver_count >= 2, maneuver_count, 2),
+	]
 	var option_id := "FLANK_%s" % String(zone.zone_id).to_upper()
 	return SquadTacticalOption3D.new().configure(
-		option_id, SUPPRESS_AND_FLANK, utility, reason, method, metrics, template
+		option_id, SUPPRESS_AND_FLANK, utility, reason, metrics,
+		[
+			{"role": SquadRoleAllocator3D.BASE_OF_FIRE, "minimum": 1},
+			{"role": SquadRoleAllocator3D.MANEUVER_LEAD, "minimum": 1},
+			{"role": SquadRoleAllocator3D.MANEUVER_WING, "minimum": 1},
+		]
 	).to_candidate()
 
 func _direct_assault_option(
@@ -268,44 +325,62 @@ func _direct_assault_option(
 	var contact := belief.get_best_contact()
 	if contact == null:
 		return {}
-	var route_plan := _route_planner.build_route(snapshot.squad_center, contact.last_known_position, influence)
+	var controls := _topology_controls(snapshot.squad_center, contact.last_known_position)
+	var route_plan := _route_planner.build_route(snapshot.squad_center, contact.last_known_position, influence, controls)
 	var metrics := _option_metrics(snapshot, route_plan)
 	var utility := base_utility \
 		+ clampf((snapshot.get_power_ratio() - 1.0) * 42.0, -70.0, 55.0) \
 		- float(metrics.get("route_peak_threat", 0.0)) * 0.62 \
-		- float(metrics.get("exposure_seconds", 0.0)) * 4.8
-	var template := SquadPlanCompiler3D.direct_assault_option(
-		&"option_direct", snapshot.get_member_ids(), contact, snapshot.belief_version
-	)
-	_set_task_route_metrics(template, &"assault_approach", route_plan)
+		- float(metrics.get("exposure_seconds", 0.0)) * 4.8 \
+		- (45.0 if bool(metrics.get("destination_dead_end", false)) else 0.0)
+	metrics["considerations"] = [
+		_component("assault_base", "Direct assault necessity", base_utility, 1.0, "authored", base_utility),
+		_component("power_ratio", "Friendly power ratio", snapshot.get_power_ratio(), clampf(snapshot.get_power_ratio() / 2.0, 0.0, 1.0), "clamped_linear", clampf((snapshot.get_power_ratio() - 1.0) * 42.0, -70.0, 55.0)),
+		_component("route_threat", "Route peak threat", metrics.get("route_peak_threat", 0.0), clampf(float(metrics.get("route_peak_threat", 0.0)) / 100.0, 0.0, 1.0), "linear", -float(metrics.get("route_peak_threat", 0.0)) * 0.62),
+		_component("exposure", "Exposure time", metrics.get("exposure_seconds", 0.0), clampf(float(metrics.get("exposure_seconds", 0.0)) / 10.0, 0.0, 1.0), "linear", -float(metrics.get("exposure_seconds", 0.0)) * 4.8),
+		_component("dead_end", "Assault destination is a dead end", metrics.get("destination_dead_end", false), 1.0 if bool(metrics.get("destination_dead_end", false)) else 0.0, "binary", -45.0 if bool(metrics.get("destination_dead_end", false)) else 0.0),
+	]
 	return SquadTacticalOption3D.new().configure(
-		DIRECT_ASSAULT, DIRECT_ASSAULT, utility, reason, "COVERED_DIRECT_ASSAULT", metrics, template
+		DIRECT_ASSAULT, DIRECT_ASSAULT, utility, reason, metrics,
+		[{"role": SquadRoleAllocator3D.MANEUVER_LEAD, "minimum": 1}]
 	).to_candidate()
 
 func _option_metrics(snapshot: SquadDecisionSnapshot3D, route_plan: Dictionary) -> Dictionary:
-	return {
+	var result := {
 		"friendly_power": snapshot.friendly_power,
 		"enemy_power": snapshot.enemy_power,
 		"power_ratio": snapshot.get_power_ratio(),
 		"route_peak_threat": float(route_plan.get("peak_threat", 0.0)),
 		"exposure_seconds": float(route_plan.get("exposure_seconds", 0.0)),
 		"route_total_cost": float(route_plan.get("total_cost", 0.0)),
+		"route": route_plan.get("route", []),
+	}
+	if topology != null and topology.version > 0:
+		var topology_score := topology.score_connection(snapshot.squad_center, (route_plan.get("route", []) as Array).back() if not (route_plan.get("route", []) as Array).is_empty() else snapshot.mission_target)
+		for key in topology_score:
+			if key != "waypoints":
+				result[key] = topology_score[key]
+	return result
+
+func _topology_controls(from_position: Vector3, to_position: Vector3) -> Array[Vector3]:
+	return topology.get_route_waypoints(from_position, to_position) if topology != null and topology.version > 0 else []
+
+func _component(id: String, label: String, raw: Variant, normalized: float, curve: String, contribution: float) -> Dictionary:
+	return {
+		"id": id,
+		"label": label,
+		"raw": raw,
+		"normalized": clampf(normalized, 0.0, 1.0),
+		"curve": curve,
+		"contribution": contribution,
 	}
 
-func _set_task_route_metrics(plan: SquadCommandPlan3D, task_id: StringName, route_plan: Dictionary) -> void:
-	if plan == null:
-		return
-	for task in plan.tasks:
-		if task.task_id != task_id:
-			continue
-		task.route.assign(route_plan.get("route", []))
-		task.set_route_metrics(route_plan)
-		return
+func _gate(id: String, passed: bool, raw: Variant, required: Variant) -> Dictionary:
+	return {"id": id, "passed": passed, "raw": raw, "required": required}
 
-func _support_option_score(member: Dictionary) -> float:
-	var role_bonus := 45.0 if int(member.get("role", -1)) == Soldier3D.CombatRole.MACHINE_GUNNER else 0.0
-	return role_bonus + float(member.get("combat_power", 0.0)) * 2.0 \
-		+ float(member.get("ammo", 0.0)) * 25.0 - float(member.get("suppression", 0.0)) * 35.0
+func _can_option_support(member: Dictionary) -> bool:
+	return not bool(member.get("pinned", false)) and bool(member.get("loaded", true)) \
+		and float(member.get("ammo", 0.0)) > 0.08 and float(member.get("health", 0.0)) > 0.2
 
 func _can_option_maneuver(member: Dictionary) -> bool:
 	return not bool(member.get("pinned", false)) and float(member.get("health", 0.0)) >= 0.5 \

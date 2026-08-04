@@ -482,7 +482,7 @@ func _build_ui() -> void:
 	_heatmap_toggle.toggled.connect(set_heatmap_visible)
 	analysis.add_child(_heatmap_toggle)
 	_layer_select = OptionButton.new()
-	for layer_name in ["综合风险", "敌军威胁", "火力压制", "掩体价值", "隐蔽价值", "情报价值"]:
+	for layer_name in ["综合风险", "敌军威胁", "火力压制", "掩体价值", "隐蔽价值", "情报价值", "区域与咽喉"]:
 		_layer_select.add_item(layer_name)
 	_layer_select.item_selected.connect(func(_index: int): _mark_analysis_dirty())
 	analysis.add_child(_layer_select)
@@ -1090,7 +1090,10 @@ func _refresh_analysis(force_preview: bool, apply_current_frame_plan := false) -
 	else:
 		var layer := _layer_select.get_selected_id() if _layer_select != null else TacticalSandboxHeatmap3D.Layer.COMPOSITE_RISK
 		if heatmap_visible:
-			_heatmap.show_squad_map(advanced.influence, layer as TacticalSandboxHeatmap3D.Layer)
+			if layer == TacticalSandboxHeatmap3D.Layer.TACTICAL_TOPOLOGY:
+				_heatmap.show_topology(advanced.topology)
+			else:
+				_heatmap.show_squad_map(advanced.influence, layer as TacticalSandboxHeatmap3D.Layer)
 		else:
 			_heatmap.clear_map()
 		if _layer_select != null:
@@ -1169,6 +1172,28 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 		var candidate_id := String(candidate.get("id", ""))
 		lines.append("%s %6.1f  %s [%s]" % [">" if candidate_id == selected else " ", float(candidate.get("utility", 0.0)), _candidate_name(candidate_id), candidate_id])
 		lines.append("    %s" % _candidate_reason(candidate_id, String(candidate.get("reason", ""))))
+		for component_value in candidate.get("considerations", []):
+			var component := component_value as Dictionary
+			lines.append("      %+6.1f  %s  raw=%s curve=%s" % [
+				float(component.get("contribution", 0.0)),
+				String(component.get("label", component.get("id", ""))),
+				str(component.get("raw", "")),
+				String(component.get("curve", "")),
+			])
+		for gate_value in candidate.get("gates", []):
+			var gate := gate_value as Dictionary
+			lines.append("      GATE %s  %s  raw=%s required=%s" % [
+				"PASS" if bool(gate.get("passed", false)) else "FAIL",
+				String(gate.get("id", "")),
+				str(gate.get("raw", "")),
+				str(gate.get("required", "")),
+			])
+		if int(candidate.get("choke_count", 0)) > 0 or bool(candidate.get("destination_dead_end", false)):
+			lines.append("      topology: chokes=%d narrowest=%.1fm dead_end=%s" % [
+				int(candidate.get("choke_count", 0)),
+				float(candidate.get("narrowest_width", 0.0)),
+				str(bool(candidate.get("destination_dead_end", false))),
+			])
 	lines.append("")
 	var selected_method := String(_last_analysis.get("htn_method", "NONE"))
 	lines.append("[color=#68d6e8][b]HTN 分解方法[/b][/color] %s [%s]" % [_htn_method_name(selected_method), selected_method])
@@ -1176,6 +1201,33 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 		var method := method_value as Dictionary
 		var method_id := String(method.get("id", ""))
 		lines.append("  %6.1f  %s [%s]" % [float(method.get("score", 0.0)), _htn_method_name(method_id), method_id])
+	var allocation := _last_analysis.get("role_assignments", {}) as Dictionary
+	lines.append("[color=#9ed7ff][b]Tactical role slots[/b][/color] score=%.1f complete=%s" % [
+		float(allocation.get("score", 0.0)), str(bool(allocation.get("complete", false))),
+	])
+	for assignment_value in allocation.get("assignments", []):
+		var assignment := assignment_value as Dictionary
+		lines.append("  %s -> %s  score=%.1f" % [
+			String(assignment.get("role", "")),
+			String(assignment.get("member_id", "")),
+			float(assignment.get("score", 0.0)),
+		])
+	var topology_summary := _last_analysis.get("topology", {}) as Dictionary
+	lines.append("[color=#ffd27d][b]Tactical topology[/b][/color] regions=%d chokes=%d dead_ends=%d cells=%d" % [
+		int(topology_summary.get("regions", 0)),
+		int(topology_summary.get("chokepoints", 0)),
+		int(topology_summary.get("dead_ends", 0)),
+		int(topology_summary.get("walkable_cells", 0)),
+	])
+	var replan := _last_analysis.get("replan_decision", {}) as Dictionary
+	if not replan.is_empty():
+		lines.append("Replan: %s reason=%s committed=%.1f/%.1fs margin=%.1f" % [
+			"APPLY" if bool(replan.get("applied", false)) else "KEEP",
+			String(replan.get("reason", "")),
+			float(replan.get("committed_seconds", 0.0)),
+			float(replan.get("minimum_commitment_seconds", 0.0)),
+			float(replan.get("switch_margin", 0.0)),
+		])
 	lines.append("")
 	lines.append("[color=#8ddf82][b]HTN 任务分解[/b][/color]")
 	var tasks: Array = _last_analysis.get("preview_tasks", _last_analysis.get("active_tasks", []))
@@ -1208,6 +1260,18 @@ func _update_analysis_text(squad: SquadCoordinator3D, source: Dictionary) -> voi
 		])
 		if not String(directive.get("reason", "")).is_empty():
 			lines.append("    %s" % String(directive.get("reason", "")))
+	lines.append("")
+	lines.append("[color=#b6b6b6][b]Decision timeline[/b][/color]")
+	for event_value in _last_analysis.get("decision_timeline", []):
+		var timeline_event := event_value as Dictionary
+		lines.append("  %7.2fs  #%d  %s" % [
+			float(timeline_event.get("elapsed_msec", 0)) / 1000.0,
+			int(timeline_event.get("sequence", 0)),
+			String(timeline_event.get("event", "")),
+		])
+	var trace_path := String(_last_analysis.get("decision_trace_path", ""))
+	if not trace_path.is_empty():
+		lines.append("  JSONL: %s" % trace_path)
 	_analysis_text.text = "\n".join(lines)
 
 func _append_structure_status(lines: PackedStringArray, squad: SquadCoordinator3D) -> void:

@@ -109,6 +109,24 @@ func average_health() -> float:
 		total += float(member.get("health", 0.0))
 	return total / float(members.size())
 
+func to_facts() -> Dictionary:
+	return {
+		"belief_version": belief_version,
+		"mission_type": mission_type,
+		"mission_state": mission_state,
+		"defense_locked": defense_locked,
+		"objective_clear_confirmed": objective_clear_confirmed,
+		"mission_target": mission_target,
+		"mission_radius": mission_radius,
+		"squad_center": squad_center,
+		"enemy_count": enemy_count,
+		"enemy_power": enemy_power,
+		"friendly_power": friendly_power,
+		"members": members.duplicate(true),
+		"contacts": contacts.duplicate(true),
+		"fire_assessment": fire_assessment.duplicate(true),
+	}
+
 static func _capture_member(member: Soldier3D) -> Dictionary:
 	var maximum_ammo := maxi(1, member.weapon_component.magazine_size * 4)
 	var available_ammo := member.magazine_ammo + member.reserve_ammo

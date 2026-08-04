@@ -11,8 +11,10 @@ SoldierPerceptionComponent3D
   -> SquadBeliefState3D
   -> SquadDecisionSnapshot3D
   -> SquadInfluenceMap3D
+  -> SquadTacticalTopology3D
   -> SquadUtilityEvaluator3D
   -> SquadHtnPlanner3D
+  -> SquadRoleAllocator3D
   -> SquadTaskScheduler3D
   -> SquadDirectiveDispatcher3D
   -> Soldier State Chart
@@ -23,7 +25,9 @@ SoldierPerceptionComponent3D
 - Belief owns only reports received by one squad. It is not a global battlefield view.
 - The decision snapshot freezes squad members, known contacts, mission state, and fire superiority for one decision.
 - The influence map scores only believed threats, authored terrain, cover, and mission pressure.
-- Utility ranks legal tactical intents. HTN selects a method and decomposes it into parallel or dependent tasks.
+- Utility ranks legal tactical intents from immutable facts. It never creates tasks, chooses HTN methods, or assigns soldiers.
+- HTN owns plan materialization: it selects a method, asks the role allocator to fill tactical slots, and decomposes the chosen intent into parallel or dependent tasks.
+- The role allocator fills the whole set of slots together, so one soldier cannot accidentally receive two incompatible jobs. It favors weapon fit, health, mobility, ammunition, low suppression, distance, and role continuity.
 - The scheduler owns task lifecycle; the dispatcher translates tasks into soldier directives.
 - Qwen remains an optional experiment only. Formal combat prefabs and defense waves keep it disabled.
 - The task graph expresses parallel suppression, reconnaissance, movement, and synchronized attack.
@@ -107,6 +111,42 @@ casualty, mission, and belief changes can request an immediate evaluation.
 - A standalone fix-and-suppress phase is time-bounded. Suppression duration belongs to the directive, so reloads do not restart it.
 - Contacts backed by a destroyed scene object are removed from living-enemy estimates; location-only reports remain valid uncertain contacts.
 
+## Tactical Topology
+
+`SquadTacticalTopology3D` samples the existing 3D collision world on a flat grid
+with a soldier-sized cylinder. Wide connected spaces become regions; narrow
+connections become portals or chokepoints; regions with only one connection are
+marked as dead ends. The HTN can use portal centers as macro route waypoints,
+while Utility can penalize exposed chokepoints and dangerous dead-end destinations.
+
+This version does not require authored door, road, or intersection components.
+A wall arrangement with only one passable opening is detected from collision
+geometry. Cover, barbed wire, machine-gun positions, grass, and watchtowers remain
+ordinary tactical inputs. Doors, stairs, ladders, multiple floors, and dynamic
+navigation links are deferred until vertical navigation is introduced.
+
+## Tactical Role Slots
+
+Current slots are `BASE_OF_FIRE`, `MANEUVER_LEAD`, `MANEUVER_WING`, `SECURITY`,
+`BREACHER`, and `RESERVE`. HTN methods request the slots they need, then
+`SquadRoleAllocator3D` performs a bounded global assignment. The resulting
+assignment and total fit score are stored on `SquadCommandPlan3D`, exposed in the
+sandbox, and written to the decision trace. Plans that do not need specialized
+jobs may legitimately have no role assignments.
+
+## Decision Diagnostics
+
+Every Utility candidate exposes its gates and score considerations, including
+raw input, curve name, and signed contribution. The tactical sandbox displays
+these values next to each candidate, along with the selected HTN method, role
+assignments, topology counts, and the reason a replan was applied or rejected.
+
+`SquadDecisionTrace3D` keeps a bounded in-memory timeline and can write JSONL to
+`user://squad_ai_traces`. It records decisions, selected plans, role assignments,
+task state changes, directives, repairs, cancellations, completion, topology
+bakes, and casualties. This is the combat black box for comparing two runs or
+finding the exact decision that caused unexpected behavior.
+
 ## Active Tactical Candidates
 
 - `MISSION_MOVE`
@@ -175,6 +215,7 @@ damage fixtures and are not formal enemy squads.
 - destructible cover and negative-cover terrain
 - deployable machine-gun tripod visuals and setup animation
 - navigation-mesh pathfinding for arbitrary authored obstacle fields
+- vertical topology connectors for doors, stairs, ladders, and multiple floors
 - blind-fire animation, muzzle origin, spread, and State Chart enablement
 - suppression visualization and machine-gun arc debug rendering
 - per-limb movement and aim penalties in the 3D injury component
@@ -182,9 +223,6 @@ damage fixtures and are not formal enemy squads.
 
 ## Verification
 
-- `STATE_CHART_SMOKE_PASS interruption_resume`
-- `TACTICAL_ROUTE_SMOKE_PASS`
-- `TACTICAL_STRUCTURE_SMOKE_PASS`
 - `SQUAD_TACTICAL_PIPELINE_PASS cases=30`
 - limited-intelligence case study: 10/10 runs completed both route observations and issued the right-grass `SUPPRESS_AND_FLANK`
 - COH combat rhythm, battle soak, survival wave, and full 3D migration tests pass

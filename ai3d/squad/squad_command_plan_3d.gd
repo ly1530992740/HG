@@ -8,6 +8,8 @@ var reason := ""
 var belief_version := 0
 var created_msec := 0
 var tasks: Array[SquadTask3D] = []
+var role_assignments: Array[Dictionary] = []
+var role_assignment_score := 0.0
 
 func configure(
 		new_plan_id: StringName,
@@ -29,9 +31,17 @@ func add_task(task: SquadTask3D) -> SquadCommandPlan3D:
 		tasks.append(task)
 	return self
 
+func set_role_allocation(allocation: Dictionary) -> SquadCommandPlan3D:
+	role_assignments.clear()
+	role_assignments.assign(allocation.get("assignments", []))
+	role_assignment_score = float(allocation.get("score", 0.0))
+	return self
+
 func clone_for_patch() -> SquadCommandPlan3D:
 	var result := SquadCommandPlan3D.new().configure(plan_id, intent, source, reason, belief_version)
 	result.created_msec = created_msec
+	result.role_assignments = role_assignments.duplicate(true)
+	result.role_assignment_score = role_assignment_score
 	for task in tasks:
 		result.add_task(task.clone_for_patch())
 	return result

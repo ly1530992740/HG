@@ -36,6 +36,12 @@ signal leader_changed(previous: Soldier3D, current: Soldier3D)
 @export_range(1, 8, 1) var flank_member_count := 3
 @export_range(0.0, 2.0, 0.05) var formation_surprise_delay := 0.65
 
+@export_category("Tactical Analysis")
+@export var record_decision_trace := true
+@export_range(64, 4096, 32) var decision_trace_max_events := 512
+@export_range(0.5, 3.0, 0.25) var topology_cell_size := 1.0
+@export_range(12.0, 80.0, 1.0) var topology_analysis_radius := 30.0
+
 @export_category("本地模型")
 @export var qwen_endpoint := "http://127.0.0.1:8081/v1/chat/completions"
 @export_range(0.5, 10.0, 0.1) var qwen_timeout_seconds := 4.0

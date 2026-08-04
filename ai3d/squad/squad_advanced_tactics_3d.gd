@@ -14,6 +14,8 @@ var mission := SquadMissionController3D.new()
 var utility := SquadUtilityEvaluator3D.new()
 var htn := SquadHtnPlanner3D.new()
 var influence := SquadInfluenceMap3D.new()
+var topology := SquadTacticalTopology3D.new()
+var decision_trace := SquadDecisionTrace3D.new()
 var replan_policy := SquadReplanPolicy3D.new()
 var plan_repair := SquadPlanRepair3D.new()
 var fire_superiority := FireSuperiorityAssessment3D.new()
@@ -48,6 +50,7 @@ var _last_decision_snapshot: SquadDecisionSnapshot3D
 var _pending_plan_repairs: Array[Dictionary] = []
 var _plan_repair_flush_scheduled := false
 var _plan_repair_in_progress := false
+var _topology_dirty := true
 
 func configure(owner_coordinator: SquadCoordinator3D) -> void:
 	coordinator = owner_coordinator
@@ -65,9 +68,24 @@ func configure(owner_coordinator: SquadCoordinator3D) -> void:
 	dispatcher.task_member_succeeded.connect(scheduler.mark_member_succeeded)
 	dispatcher.task_member_failed.connect(_on_task_member_failed)
 	scheduler.plan_completed.connect(_on_plan_completed)
+	scheduler.plan_started.connect(_on_plan_started)
+	scheduler.plan_cancelled.connect(_on_plan_cancelled)
+	scheduler.plan_patched.connect(_on_plan_patched)
 	scheduler.task_state_changed.connect(_on_task_state_changed)
 	mission.state_changed.connect(_on_mission_state_changed)
 	influence.configure(3.0, 42.0)
+	topology.cell_size = coordinator.topology_cell_size
+	utility.topology = topology
+	decision_trace.configure(
+		coordinator.squad_id,
+		coordinator.record_decision_trace,
+		coordinator.decision_trace_max_events
+	)
+	decision_trace.record("configured", {
+		"scene": get_tree().current_scene.scene_file_path if get_tree().current_scene != null else "",
+		"topology_cell_size": coordinator.topology_cell_size,
+		"topology_radius": coordinator.topology_analysis_radius,
+	})
 	for member in coordinator.get_configured_member_actors():
 		member.set_squad_influence_map(influence)
 	call_deferred("_finish_configuration")
@@ -84,6 +102,7 @@ func refresh_tactical_environment() -> void:
 			zones.append(node as TacticalZone3D)
 	for member in coordinator.get_configured_member_actors():
 		member.set_squad_influence_map(influence)
+	_topology_dirty = true
 
 func refresh_mission_configuration() -> void:
 	if coordinator == null:
@@ -162,13 +181,18 @@ func get_debug_snapshot() -> Dictionary:
 		"tasks": scheduler.get_summary(),
 		"fire_superiority": _last_fire_assessment.duplicate(true),
 		"influence_version": influence.version,
+		"topology": topology.get_summary(),
 		"htn_method": htn.last_selected_method,
 		"htn_methods": htn.last_method_scores.duplicate(true),
+		"role_assignments": htn.last_role_allocation.duplicate(true),
 		"candidates": _make_candidate_debug(_last_candidates),
 		"selected_candidate": _last_selected_candidate_id,
 		"active_tasks": _make_task_debug(),
 		"member_directives": _make_member_directive_debug(),
 		"replan_level": SquadReplanPolicy3D.Level.keys()[_pending_replan_level],
+		"replan_decision": replan_policy.get_debug_state(),
+		"decision_timeline": decision_trace.get_timeline(),
+		"decision_trace_path": decision_trace.trace_path,
 	}
 
 func build_debug_analysis_preview() -> Dictionary:
@@ -281,6 +305,14 @@ func _build_debug_analysis(apply_plan: bool) -> Dictionary:
 		"active_tasks": _make_task_debug(),
 		"member_directives": _make_member_directive_debug(),
 		"influence_version": influence.version,
+		"topology": topology.get_summary(),
+		"topology_cells": topology.get_debug_cells(),
+		"topology_origin": topology.origin,
+		"topology_cell_size": topology.cell_size,
+		"role_assignments": htn.last_role_allocation.duplicate(true),
+		"replan_decision": replan_policy.get_debug_state(),
+		"decision_timeline": decision_trace.get_timeline(),
+		"decision_trace_path": decision_trace.trace_path,
 	}
 
 func _make_candidate_debug(candidates: Array[Dictionary]) -> Array[Dictionary]:
@@ -292,13 +324,17 @@ func _make_candidate_debug(candidates: Array[Dictionary]) -> Array[Dictionary]:
 			"kind": String(candidate.get("kind", "")),
 			"utility": float(candidate.get("utility", 0.0)),
 			"reason": String(candidate.get("reason", "")),
-			"method": String(candidate.get("method", "LEGACY_HTN")),
+			"considerations": (candidate.get("considerations", []) as Array).duplicate(true),
+			"gates": (candidate.get("gates", []) as Array).duplicate(true),
 			"friendly_power": snappedf(float(candidate.get("friendly_power", 0.0)), 0.1),
 			"enemy_power": snappedf(float(candidate.get("enemy_power", 0.0)), 0.1),
 			"power_ratio": snappedf(float(candidate.get("power_ratio", 0.0)), 0.01),
 			"route_peak_threat": snappedf(float(candidate.get("route_peak_threat", 0.0)), 0.1),
 			"exposure_seconds": snappedf(float(candidate.get("exposure_seconds", 0.0)), 0.1),
 			"zone": String(zone.zone_id) if zone != null else "",
+			"choke_count": int(candidate.get("choke_count", 0)),
+			"narrowest_width": snappedf(float(candidate.get("narrowest_width", 0.0)), 0.1),
+			"destination_dead_end": bool(candidate.get("destination_dead_end", false)),
 		})
 	return result
 
@@ -453,6 +489,13 @@ func _evaluate() -> void:
 		)
 	if should_apply:
 		_apply_candidate(selected, "UTILITY", "", active_plan and String(selected.get("id", "")) == _active_candidate_id)
+	decision_trace.record("decision", {
+		"snapshot": _last_decision_snapshot.to_facts(),
+		"candidates": _make_candidate_debug(candidates),
+		"selected_candidate": String(selected.get("id", "")),
+		"replan": replan_policy.get_debug_state(),
+		"topology": topology.get_summary(),
+	})
 	coordinator.request_advanced_candidate(
 		get_qwen_snapshot(), candidates, String(selected.get("id", "")), _qwen_context_version
 	)
@@ -497,12 +540,27 @@ func _apply_candidate(candidate: Dictionary, source: String, reason_override := 
 	coordinator.last_command_summary = "%s | %s" % [candidate_id, plan.reason]
 	coordinator.command_changed.emit(coordinator.current_plan, coordinator.last_command_summary, source)
 	replan_policy.note_applied()
+	decision_trace.record("plan_applied", {
+		"candidate_id": candidate_id,
+		"intent": String(kind),
+		"source": source,
+		"method": htn.last_selected_method,
+		"method_scores": htn.last_method_scores,
+		"role_allocation": htn.last_role_allocation,
+		"tasks": _make_plan_task_debug(plan),
+		"reason": plan.reason,
+	})
 	print("[TACTICAL3D_PLAN] squad=%s mission=%s belief=%d candidate=%s source=%s" % [
 		coordinator.squad_display_name, mission.get_state_name(), belief.version, candidate_id, source
 	])
 
 func _on_directive_bound(task_id: StringName, member_id: StringName, directive_version: int) -> void:
 	_directive_bindings["%s:%d" % [member_id, directive_version]] = {"task_id": task_id, "member_id": member_id}
+	decision_trace.record("directive_bound", {
+		"task_id": String(task_id),
+		"member_id": String(member_id),
+		"directive_version": directive_version,
+	})
 
 func on_member_directive_completed(member: Soldier3D, directive: SquadDirective3D) -> void:
 	var key := "%s:%d" % [member.name, directive.version]
@@ -555,6 +613,10 @@ func _monitor_persistent_redispatches() -> void:
 		dispatcher.redispatch_persistent_member(task, member)
 
 func on_member_died(member: Soldier3D) -> void:
+	decision_trace.record("member_died", {
+		"member_id": String(member.name) if member != null else "",
+		"active_candidate": _active_candidate_id,
+	})
 	var active_task_failed := false
 	var failed_task_id: StringName = &""
 	for task in scheduler.tasks_by_id.values():
@@ -697,6 +759,10 @@ func _complete_recon_information_goal(task: SquadTask3D, member: Soldier3D, reas
 	])
 
 func _on_plan_completed(plan: SquadCommandPlan3D) -> void:
+	decision_trace.record("plan_completed", {
+		"plan_id": String(plan.plan_id),
+		"intent": String(plan.intent),
+	})
 	match plan.intent:
 		&"CONTACT_COVER":
 			_contact_cover_complete = true
@@ -706,11 +772,41 @@ func _on_plan_completed(plan: SquadCommandPlan3D) -> void:
 	_request_replan(SquadReplanPolicy3D.Level.FULL_TACTIC)
 
 func _on_task_state_changed(task: SquadTask3D, _previous: SquadTask3D.State, current: SquadTask3D.State) -> void:
+	decision_trace.record("task_state", {
+		"task_id": String(task.task_id),
+		"type": task.get_type_name(),
+		"previous": SquadTask3D.State.keys()[_previous],
+		"current": SquadTask3D.State.keys()[current],
+		"members": Array(task.recipient_ids),
+	})
 	if current == SquadTask3D.State.FAILED:
 		print("[TACTICAL3D_TASK_FAIL] squad=%s task=%s" % [coordinator.squad_display_name, task.task_id])
 		_request_replan(SquadReplanPolicy3D.Level.PLAN_REPAIR)
 	if scheduler.active_plan != null and scheduler.active_plan.intent == &"RECON_SPLIT":
 		_resolve_partial_recon_plan()
+
+func _on_plan_started(plan: SquadCommandPlan3D) -> void:
+	decision_trace.record("plan_started", {
+		"plan_id": String(plan.plan_id),
+		"intent": String(plan.intent),
+		"source": plan.source,
+		"role_assignments": plan.role_assignments,
+	})
+
+func _on_plan_cancelled(plan: SquadCommandPlan3D, reason: String) -> void:
+	decision_trace.record("plan_cancelled", {
+		"plan_id": String(plan.plan_id),
+		"intent": String(plan.intent),
+		"reason": reason,
+	})
+
+func _on_plan_patched(previous: SquadCommandPlan3D, current: SquadCommandPlan3D) -> void:
+	decision_trace.record("plan_patched", {
+		"previous_plan_id": String(previous.plan_id),
+		"current_plan_id": String(current.plan_id),
+		"intent": String(current.intent),
+		"role_assignments": current.role_assignments,
+	})
 
 func _on_task_member_failed(task_id: StringName, member_id: StringName, reason: String) -> void:
 	print("[TACTICAL3D_MEMBER_FAIL] squad=%s task=%s member=%s reason=%s" % [coordinator.squad_display_name, task_id, member_id, reason])
@@ -926,6 +1022,7 @@ func _attempt_plan_repair(
 func _rebuild_influence() -> void:
 	if coordinator == null:
 		return
+	_rebuild_topology_if_needed()
 	var assessment := fire_superiority.assess(coordinator.get_living_members(), belief.get_estimated_enemy_power())
 	var snapshot := SquadDecisionSnapshot3D.capture(belief, mission, coordinator.get_living_members(), assessment)
 	influence.rebuild(
@@ -938,3 +1035,28 @@ func _rebuild_influence() -> void:
 	)
 	for member in coordinator.get_living_members():
 		member.set_squad_influence_map(influence)
+
+func _rebuild_topology_if_needed() -> void:
+	if not _topology_dirty or coordinator == null or not coordinator.is_inside_tree():
+		return
+	var squad_center := coordinator.get_squad_center()
+	var mission_position := mission.target_position
+	var center := (squad_center + mission_position) * 0.5
+	var mission_distance := Vector2(squad_center.x - mission_position.x, squad_center.z - mission_position.z).length()
+	var radius := maxf(coordinator.topology_analysis_radius, mission_distance * 0.5 + 10.0)
+	var excluded: Array[RID] = []
+	for node in get_tree().get_nodes_in_group("soldier3d"):
+		if node is CollisionObject3D:
+			excluded.append((node as CollisionObject3D).get_rid())
+	topology.cell_size = coordinator.topology_cell_size
+	topology.bake_from_world(
+		coordinator.get_world_3d(),
+		Rect2(center.x - radius, center.z - radius, radius * 2.0, radius * 2.0),
+		squad_center.y,
+		excluded
+	)
+	_topology_dirty = false
+	decision_trace.record("topology_baked", topology.get_summary())
+
+func _exit_tree() -> void:
+	decision_trace.close()

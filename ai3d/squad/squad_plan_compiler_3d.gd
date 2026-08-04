@@ -116,7 +116,7 @@ static func recon_split(
 		contact: CombatContact3D,
 		belief_version: int
 ) -> SquadCommandPlan3D:
-	var plan := SquadCommandPlan3D.new().configure(plan_id, &"RECON_SPLIT", "UTILITY", "Probe unknown routes while a base of fire remains", belief_version)
+	var plan := SquadCommandPlan3D.new().configure(plan_id, &"RECON_SPLIT", "HTN", "Probe unknown routes while a base of fire remains", belief_version)
 	if not suppressor_ids.is_empty():
 		var suppress := SquadTask3D.new().configure(&"recon_base_fire", SquadTask3D.Type.SUPPRESS_CONTACT, suppressor_ids)
 		suppress.contact_id = contact.contact_id
@@ -145,7 +145,7 @@ static func suppress_and_flank(
 		contact: CombatContact3D,
 		belief_version: int
 ) -> SquadCommandPlan3D:
-	var plan := SquadCommandPlan3D.new().configure(plan_id, &"SUPPRESS_AND_FLANK", "UTILITY", "Use the best observed route for a synchronized flank", belief_version)
+	var plan := SquadCommandPlan3D.new().configure(plan_id, &"SUPPRESS_AND_FLANK", "HTN", "Use the best observed route for a synchronized flank", belief_version)
 	var suppress := SquadTask3D.new().configure(&"base_of_fire", SquadTask3D.Type.SUPPRESS_CONTACT, suppressor_ids)
 	suppress.minimum_success_count = 1
 	suppress.contact_id = contact.contact_id
