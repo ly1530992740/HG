@@ -1,5 +1,0 @@
-runtime/
-*.zip
-server.pid
-server.stdout.log
-server.stderr.log

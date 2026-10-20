@@ -1,0 +1,9 @@
+# Project-scoped Codex configuration for the local Cocos Creator MCP server.
+# This file applies only when this repository is trusted by Codex.
+
+[mcp_servers.cocos_creator]
+url = "http://127.0.0.1:3000/mcp"
+enabled = true
+startup_timeout_sec = 10
+tool_timeout_sec = 120
+default_tools_approval_mode = "auto"

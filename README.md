@@ -1,75 +1,20 @@
+# HumiliateGod Cocos Project
 
+This repository is now centered on the Cocos Creator 3.8.8 project. The repository root is the Cocos project root.
 
-# HumiliateGod
+## Project Rules
 
-A medieval strategy game built with Godot Engine, featuring multiple unit types, building construction, and resource management across multiple levels.
+- Read [AGENTS.md](AGENTS.md) before changing project files.
+- The active project skill is [`.agents/skills/cocos-project/SKILL.md`](.agents/skills/cocos-project/SKILL.md).
+- Module ownership and dependency direction are defined in [docs/architecture/MODULE_BOUNDARIES.md](docs/architecture/MODULE_BOUNDARIES.md).
+- Historical game design references are in [docs/design-archive/](docs/design-archive/). They are not current implementation instructions.
 
-## Game Overview
+## Open in Cocos Creator
 
-HumiliateGod is a 2D strategy game where players manage resources, build structures, and train various medieval units to complete objectives across multiple levels. The game features multiple factions with unique unit types including warriors, archers, monks, and lancers.
+Open this repository root with Cocos Creator 3.8.8. The project version is recorded in `package.json` and `settings/v2/project.json`.
 
-## Features
+The current prototype scripts and scenes are under `assets/`. Runtime logic is still being organized; do not infer that a module is fully implemented or tested from its directory name.
 
-- **Multiple Unit Types**: Warriors, Archers, Monks, Lancers, and Pawns
-- **Building System**: Houses, Towers, Barracks, Archery ranges, Castle, Monastery
-- **Resource Management**: Gold, Wood, Meat
-- **5 Faction Colors**: Black, Blue, Purple, Red, Yellow
-- **5 Campaign Levels**: Progress through increasingly challenging missions
-- **Audio System**: Background music, sound effects, and voiceovers
+## Validation
 
-## Project Structure
-
-```
-├── Archers/          - Archer units and arrow projectiles
-├── Audio/           - Music, sound effects, voice overs
-├── Levels/          - Game level definitions (level1-level5)
-├── Main/            - Core game systems, menus, UI
-├── Materiels/        - Game objects (explosions, fire, mines, etc.)
-├── Textures/         - All game graphics and sprites
-├── Tutorials/        - Tutorial levels
-├── buildings/       - Building definitions
-├── unit/            - All unit types (knights, goblins, etc.)
-└── project.godot    - Godot project file
-```
-
-## Getting Started
-
-### Requirements
-- Godot Engine 4.x
-
-### Running the Game
-1. Open the project in Godot 4.x
-2. Click Play or press F5
-3. Select a level from the main menu
-
-## Controls
-
-- **Left Click**: Select units/buildings
-- **Right Click**: Move/Attack command
-- **Mouse Drag**: Box selection (for selecting multiple units)
-- **Keyboard Shortcuts**: See in-game settings menu
-
-## Units
-
-| Unit | Description |
-|------|------------|
-| Warrior | Melee combat unit |
-| Archer | Ranged attack unit |
-| Monk | Healing support unit |
-| Lancer | Heavy cavalry unit |
-| Pawn | Resource gatherer/builder |
-
-## Buildings
-
-| Building | Function |
-|----------|----------|
-| House | Unit production |
-| Tower | Defense structure |
-| Barracks | Warrior training |
-| Archery | Archer training |
-| Castle | Main base |
-| Monastery | Monk training |
-
-## License
-
-This project is for educational/personal use.
+The current test scenes live in `assets/scenes/tests/` and require Cocos Creator preview. They are integration smoke tests, not a complete unit-test or coverage system. Follow the active skill's verification policy and report any unavailable checks as not run.

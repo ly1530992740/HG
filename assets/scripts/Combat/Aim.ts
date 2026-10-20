@@ -1,0 +1,3 @@
+// Combat/Aim：瞄准状态、散布和后坐力。
+import { Vec2 } from 'cc';
+export class AimComponent { aiming = false; spread = 3.5; recoil = 0; constructor(public hipSpread = 3.5, public aimedSpread = 0.12) {} update(dt: number): void { this.spread += (this.aiming ? this.aimedSpread : this.hipSpread - this.spread) * Math.min(1, dt * 5); this.recoil = Math.max(0, this.recoil - dt * 2.4); } kick(amount = 0.55): void { this.recoil = Math.min(3.8, this.recoil + amount); } getSpread(): number { return this.spread + this.recoil; } getAimDirection(forward: Vec2): Vec2 { const direction = forward.clone(); direction.normalize(); return direction; } }

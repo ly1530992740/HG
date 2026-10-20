@@ -1,0 +1,11 @@
+{
+  "general": {
+    "designResolution": {
+      "width": 960,
+      "height": 540,
+      "fitWidth": true,
+      "fitHeight": true
+    },
+    "engine": "3.8.8"
+  }
+}
