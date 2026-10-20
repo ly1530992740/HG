@@ -35,6 +35,14 @@ metadata:
 ## 参考文档
 
 - [模块边界](../../../docs/architecture/MODULE_BOUNDARIES.md)：所有权、分层、允许的依赖和框架契约。
+- [当前代码图](../../../docs/architecture/CURRENT_CODE_MAP.md)：当前脚本的静态引用、运行时装配和已知循环依赖。
 - [编码与测试](references/coding-and-testing.md)：TypeScript、确定性逻辑、测试层级、覆盖率和验证。
 - [MCP 操作](references/mcp-operations.md)：编辑器权限、操作纪律和验证证据。
 - [范围与迁移](references/scope-and-migration.md)：仓库边界、Godot 归档处理和当前迁移状态。
+
+## 文档规则
+
+- 文档必须短小、单一职责；优先更新已有文档，不为同一事实创建第二份说明。
+- 架构图统一使用 Mermaid，并明确标注“当前实现”或“目标架构”。静态 import 图不得冒充运行时挂载图。
+- 只有在 MCP/编辑器或场景序列化中得到证据后，才能记录节点、组件和生命周期关系。
+- 规则写入 Skill，事实写入架构图；不要在业务文档里重复框架规范。
