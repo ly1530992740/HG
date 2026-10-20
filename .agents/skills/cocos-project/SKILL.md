@@ -1,40 +1,40 @@
 ---
 name: cocos-project
-description: "Implement, review, test, or change architecture in this Cocos Creator 3.8.8 game project. Use for gameplay code, project scenes and resources, module boundaries, testing, Cocos MCP editor operations, or build validation."
+description: "在 Cocos Creator 3.8.8 游戏项目中实现、审查、测试或修改架构。适用于玩法代码、项目场景和资源、模块边界、测试、Cocos MCP 编辑器操作或构建验证。"
 metadata:
   version: "1.0.0"
   project: "HumiliateGod Cocos"
   engine: "Cocos Creator 3.8.8"
 ---
 
-# Cocos Project Skill
+# Cocos 项目 Skill
 
-This repository is the active Cocos Creator project. The user owns framework direction; the agent implements requested business behavior within agreed module contracts and participates in framework design when asked.
+本仓库是活动中的 Cocos Creator 项目。用户负责框架方向；Agent 在已约定的模块契约内实现业务需求，并在用户要求时参与框架设计。
 
-## Required Workflow
+## 必须遵循的工作流程
 
-1. Read `AGENTS.md`, confirm the engine version from `package.json`, inspect the requested module, its callers, current worktree state, and relevant tests.
-2. Classify the change as business behavior, framework/contract, scene/resource, or tooling. Keep business changes inside the owning module. For framework changes, state the contract and affected modules before editing; implement only what the request requires.
-3. Map each changed behavior to unit, integration, scene, and build checks. Add or update tests with the behavior. Do not expand scope to unrelated refactors.
-4. Verify the change using the strongest available project-native checks. For editor-dependent behavior, use Cocos preview/MCP where available. Record exact results and distinguish not-run checks from failures.
-5. Review the final diff for boundary violations, generated files, missing `.meta` files, dependency direction, and untested changed behavior.
+1. 阅读 `AGENTS.md`，从 `package.json` 确认引擎版本，检查目标模块、调用方、当前工作区状态和相关测试。
+2. 将变更归类为业务行为、框架/契约、场景/资源或工具链。业务变更必须放在所属模块内。框架变更必须先说明契约和受影响模块，然后只实现请求所需的内容。
+3. 为每个变更行为建立单元测试、集成测试、场景测试和构建检查的映射，并随行为新增或更新测试。不得借机扩大到无关重构。
+4. 使用项目能提供的最强原生检查验证变更。涉及编辑器的行为，在可用时使用 Cocos 预览/MCP。记录准确结果，并明确区分未执行的检查和失败的检查。
+5. 审查最终 diff，检查边界违规、生成文件、缺失的 `.meta` 文件、依赖方向以及未测试的变更行为。
 
-## Non-Negotiable Boundaries
+## 不可妥协的边界
 
-- Repository root is the only active project. Do not recreate or depend on Godot code or project files. `docs/design-archive/` is historical context, not executable specification.
-- Preserve Cocos Creator 3.8.8, project UUID, serialization conventions, and existing asset UUIDs unless the user explicitly requests a framework migration.
-- Follow `docs/architecture/MODULE_BOUNDARIES.md`; do not bypass module APIs or create cross-module cycles.
-- Do not claim line-by-line testing as a goal. Require behavior and branch coverage; pure domain modules target 100% statement and branch coverage. Any exception must be reported with evidence and left explicit for the user to decide.
-- A test that only repeats the implementation or asserts a constant without exercising a behavior does not count as meaningful coverage.
-- Never edit generated caches or build output. Do not modify unrelated user changes.
+- 仓库根目录是唯一活动项目。不得重新创建或依赖 Godot 代码和项目文件。`docs/design-archive/` 只提供历史背景，不是可执行规范。
+- 除非用户明确请求框架迁移，否则必须保持 Cocos Creator 3.8.8、项目 UUID、序列化约定和现有资源 UUID 不变。
+- 遵循 `docs/architecture/MODULE_BOUNDARIES.md`；不得绕过模块 API，也不得创建跨模块循环依赖。
+- 不把“逐行测试”作为目标。要求覆盖行为和分支；纯领域模块目标是 100% 语句覆盖和分支覆盖。任何例外都必须提供证据，并明确留给用户决定。
+- 只重复实现、或只断言常量而没有真正执行行为的测试，不算有意义的覆盖。
+- 永远不要编辑生成缓存或构建产物。不得修改与当前任务无关的用户变更。
 
-## Cocos MCP Authority
+## Cocos MCP 权限
 
-The user authorizes full read/write editor control through the configured Cocos MCP server within this repository: scenes, nodes, components, prefabs, Cocos assets, project settings, editor preview, build operations, validation, snapshots, and logs. Use the editor tools needed for the requested task, inspect the current state first, and verify/save the resulting state. This authority does not extend to files outside this repository, remote publishing, Git commits/pushes, or changing the framework contract without a framework task.
+用户授权在本仓库范围内通过已配置的 Cocos MCP 服务进行完整读写编辑器操作：场景、节点、组件、Prefab、Cocos 资源、项目设置、编辑器预览、构建操作、验证、快照和日志。使用完成任务所需的编辑器工具，但必须先检查当前状态，确认并保存变更结果，再进行验证。这项授权不包括仓库外路径、远程发布、Git 提交/推送，也不包括在没有框架任务授权时修改框架契约。
 
-## References
+## 参考文档
 
-- [Module boundaries](../../../docs/architecture/MODULE_BOUNDARIES.md): ownership, layers, allowed dependencies, framework contracts.
-- [Coding and testing](references/coding-and-testing.md): TypeScript, deterministic logic, test tiers, coverage and verification.
-- [MCP operations](references/mcp-operations.md): editor authority, operation discipline, validation evidence.
-- [Scope and migration](references/scope-and-migration.md): repository boundary, Godot archive handling, current migration status.
+- [模块边界](../../../docs/architecture/MODULE_BOUNDARIES.md)：所有权、分层、允许的依赖和框架契约。
+- [编码与测试](references/coding-and-testing.md)：TypeScript、确定性逻辑、测试层级、覆盖率和验证。
+- [MCP 操作](references/mcp-operations.md)：编辑器权限、操作纪律和验证证据。
+- [范围与迁移](references/scope-and-migration.md)：仓库边界、Godot 归档处理和当前迁移状态。

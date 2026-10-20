@@ -1,45 +1,45 @@
-# Cocos Module Boundaries
+# Cocos 模块边界
 
-This document defines the target framework contract for business-layer work. It does not claim that every current prototype script already follows the contract. Framework refactors and test-runner implementation are separate tasks; do not silently mix them into feature requests.
+本文定义业务层工作的目标框架契约，并不表示当前所有原型脚本都已遵循该契约。框架重构和测试运行器建设应作为独立任务；不得悄悄把它们混入功能需求。
 
-## Layers
+## 分层
 
-| Layer | Owns | May depend on | Must not own |
+| 层 | 负责内容 | 可以依赖 | 不得负责 |
 |---|---|---|---|
-| Domain | Rules, state transitions, validation, deterministic calculations, domain events | Domain types and explicitly injected ports | Cocos scene graph, rendering, input, global time/randomness, asset loading |
-| Application | Use cases and orchestration across domain modules; transaction boundaries | Domain modules and ports | Rendering details or direct editor APIs |
-| Cocos adapters | `Component` lifecycle, input translation, Node/Prefab/asset integration, engine events, scheduling | Application/domain APIs and Cocos `cc` APIs | Duplicated business rules or hidden cross-module state mutation |
-| Presentation | HUD, feedback, visual adapters, animation/rendering | Read-only view data and presentation ports | Owning authoritative gameplay state or payment/damage rules |
-| Composition root | Construct modules, connect ports/events, own scene-level lifetime | All lower layers | Becoming a second implementation of module behavior |
+| Domain（领域层） | 规则、状态转换、校验、确定性计算、领域事件 | 领域类型和显式注入的端口 | Cocos 场景树、渲染、输入、全局时间/随机数、资源加载 |
+| Application（应用层） | 用例和跨领域模块的编排；事务边界 | 领域模块和端口 | 渲染细节或直接调用编辑器 API |
+| Cocos adapters（Cocos 适配层） | `Component` 生命周期、输入转换、Node/Prefab/资源集成、引擎事件、调度 | 应用层/领域层 API 和 Cocos `cc` API | 重复实现业务规则，或暗中修改跨模块状态 |
+| Presentation（表现层） | HUD、反馈、视觉适配器、动画/渲染 | 只读视图数据和表现层端口 | 持有权威玩法状态，或负责支付/伤害规则 |
+| Composition root（组合根） | 构造模块、连接端口/事件、管理场景级生命周期 | 所有下层 | 成为另一套模块行为实现 |
 
-Allowed dependency flow: `Presentation -> Application -> Domain`; Cocos adapters translate between the engine and application/domain interfaces; the composition root can depend on all layers. Domain modules must not import Cocos `cc` or depend on another domain module unless that dependency is explicitly listed below. Cross-domain coordination belongs in Application.
+允许的依赖方向是 `Presentation -> Application -> Domain`。Cocos 适配层负责在引擎与应用/领域接口之间转换；组合根可以依赖所有层。领域模块不得导入 Cocos `cc`，也不得依赖其他领域模块，除非下文明确列出这种依赖。跨领域协调由 Application 负责。
 
-## Domain Ownership
+## 领域所有权
 
-- **Core:** authoritative game/session state, resource ledger, population, day/wave state, and domain event contracts. No gameplay system may bypass its public state operations.
-- **Combat:** damage, health, weapons, ballistics, suppression, soldier state, and combat registry. It emits outcomes; it does not directly update economy, HUD, or scene assets.
-- **Survival:** inventory, construction, durability, population/work, economy, shop, pickups, stealing, and ally rules. Resource transactions go through Core-owned ledger APIs.
-- **AI:** perception snapshots, memory, threat evaluation, utility, planning, role/task assignment, and state transitions. It consumes combat/domain interfaces and emits directives; it does not mutate Cocos nodes directly.
-- **Player and Enemy:** engine-facing actor adapters that translate input/scene lifecycle to application commands and domain outcomes. Their files must not become an alternate owner of Combat or Core rules.
-- **Resource and Build:** scene adapters for world interactions and production visualization. Gather/build/payment rules belong to the domain/application APIs they call.
-- **Wave:** application orchestration for day progression and encounter creation. Spawned scene actors are created through an injected factory/port.
-- **HUD:** read-only presentation of state/events and player feedback.
-- **Playtest and Tests:** test/demo composition only. They may assemble modules but production modules must not import them.
-- **Core/GameRoot and SurvivalDirector:** composition roots. They may wire modules and lifetimes; they should not own reusable business rules.
+- **Core：**权威的游戏/会话状态、资源账本、人口、日期/波次状态和领域事件契约。任何玩法系统都不得绕过 Core 的公开状态操作。
+- **Combat：**伤害、生命、武器、弹道、压制、士兵状态和战场注册表。Combat 负责发出结果，不直接更新经济、HUD 或场景资源。
+- **Survival：**背包、建造、耐久、人口/工作、经济、商店、拾取、偷取和友军规则。资源事务必须通过 Core 所有的账本 API。
+- **AI：**感知快照、记忆、威胁评估、Utility、规划、角色/任务分配和状态转换。AI 消费 Combat/领域接口并发出指令，不得直接修改 Cocos 节点。
+- **Player 和 Enemy：**引擎侧角色适配器，将输入/场景生命周期转换为应用命令和领域结果。不得让它们变成 Combat 或 Core 规则的第二个所有者。
+- **Resource 和 Build：**场景适配器，负责世界交互和生产表现。采集、建造、支付规则归它们调用的领域/应用 API 所有。
+- **Wave：**应用层编排，负责日期推进和遭遇生成。场景角色必须通过注入的工厂/端口创建。
+- **HUD：**只读展示状态/事件，并向玩家提供反馈。
+- **Playtest 和 Tests：**只用于测试/演示装配。它们可以组装模块，但生产模块不得反向导入它们。
+- **Core/GameRoot 和 SurvivalDirector：**组合根。它们可以连接模块、管理生命周期，但不应持有可复用的业务规则。
 
-## Contracts
+## 契约
 
-- One authoritative owner per piece of state. Mutations happen through that owner's API and preserve invariants atomically.
-- Cross-module communication uses explicit APIs, application use cases, or typed events. Event listeners must have a defined lifetime and be detached when their owner is disposed/destroyed.
-- Avoid cycles. If two modules need each other, move coordination to Application or define a narrow port owned by the caller.
-- Keep domain decisions deterministic. Inject random/time/scheduling services at the application boundary.
-- Public APIs return typed outcomes for expected failure conditions; do not hide failure behind `any`, silent fallback, or partially applied mutations.
-- Scene serialization, Cocos component registration, `.meta` UUIDs, and prefab/scene references are framework-owned integration contracts.
+- 每份状态都只有一个权威所有者。状态修改必须通过所有者的 API，并原子地保持不变量。
+- 跨模块通信使用明确 API、应用用例或有类型的事件。事件监听必须有明确生命周期；监听所有者释放/销毁时必须解除监听。
+- 避免循环依赖。如果两个模块需要互相依赖，应把协调逻辑移到 Application，或定义由调用方所有的窄接口端口。
+- 领域决策必须保持确定性。在应用边界注入随机数、时间和调度服务。
+- 公共 API 必须为预期失败返回有类型的结果。不得用 `any`、静默回退或部分提交的状态变更来隐藏失败。
+- 场景序列化、Cocos 组件注册、`.meta` UUID 以及 Prefab/场景引用均属于框架集成契约。
 
-## Change Classification
+## 变更分类
 
-Business requests may add behavior inside an existing module contract and tests. A change is framework-level if it changes a layer's ownership, a public module API, dependency direction, authoritative state, composition root, event/lifetime contract, project engine/toolchain configuration, or test/coverage infrastructure. For framework work, document the affected contracts and migration path before editing, then verify callers and tests across all affected modules.
+业务需求可以在现有模块契约内增加行为和测试。如果变更了分层所有权、公共模块 API、依赖方向、权威状态、组合根、事件/生命周期契约、项目引擎/工具链配置或测试/覆盖率基础设施，则属于框架级变更。处理框架任务时，先记录受影响的契约和迁移路径，再验证所有受影响模块的调用方和测试。
 
-## Current Gap
+## 当前差距
 
-The current prototype mixes some pure rules and Cocos `cc` types in the same modules, and tests are scene-driven. Future framework work should extract deterministic domain logic and establish an automated runner before enforcing coverage gates. Until then, report coverage and editor validation limits accurately.
+当前原型的部分纯规则仍与 Cocos `cc` 类型混在同一模块中，测试也以场景测试为主。后续框架工作应提取确定性的领域逻辑，并先建立自动化测试运行器，再强制执行覆盖率门禁。在此之前，必须如实报告覆盖率和编辑器验证的限制。
