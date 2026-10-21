@@ -15,6 +15,23 @@
 - **Scene tests:** verify Cocos lifecycle, serialized references, input/UI wiring, scene transitions, prefab behavior, and editor-only interactions.
 - **Build checks:** verify the configured Cocos project and target platform when a change affects engine APIs, scenes/resources, settings, or build behavior.
 
+## Test Impact Mapping
+
+Before editing code, list the affected modules and map each behavior to the required test tiers. A test plan that names only a test file is incomplete; it must identify the module contracts being exercised.
+
+For example, a new damage component may affect Combat, Player, and Enemy:
+
+1. Unit tests verify Combat damage rules, health transitions, invalid damage, death, and result events.
+2. Integration tests verify that Player attack output reaches Enemy damage handling, and that Enemy attack output reaches Player damage handling through the approved contracts.
+3. A temporary scene test creates a player and an enemy, triggers an attack automatically, and asserts the runtime hit and health result through Cocos components and scene wiring.
+4. Build checks apply when the feature adds or changes scenes, prefabs, resources, settings, or other build inputs.
+
+The scene test is required evidence for engine behavior; a TypeScript test or type check cannot replace it.
+
+## Temporary Verification Artifacts
+
+Use temporary scenes and scripts when they are the shortest reliable way to verify runtime behavior. Mark them as temporary in the change plan and record every created path. After the verification passes, remove the one-off scene, script, prefab, resource, and related `.meta` files, then inspect the diff for orphaned references. Keep reusable fixtures, test roots, test helpers, and permanent regression tests. If verification fails, keep the temporary artifacts until diagnosis and rerun are complete.
+
 Coverage is measured on production domain logic, not test code, generated files, Cocos engine internals, or serialization glue. Do not exclude a domain branch merely to make a report green. When a branch cannot be exercised or measured, report it as a gap; do not claim full coverage. A test runner and coverage gate are not yet established in this repository, so do not claim the 100% target is met until the tooling exists and produces a report.
 
 ## Verification
