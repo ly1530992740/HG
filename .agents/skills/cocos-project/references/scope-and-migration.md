@@ -12,4 +12,4 @@ Do not add Godot runtime code, Godot scenes/resources, `project.godot`, Godot ed
 
 ## Current Status
 
-The repository has prototype Cocos gameplay modules and editor-run test scenes. Module names do not imply production readiness. The current tests are not a complete unit-test harness, and automated 100% domain coverage has not been established. Treat the boundaries in `docs/architecture/MODULE_BOUNDARIES.md` as the target contract; identify existing code that crosses them rather than silently expanding those exceptions.
+The project is in the design and architecture bootstrap phase. Existing files under `assets/scripts/CodeBackUp/` are legacy source material only; they are not production modules and must not be treated as the current implementation. No target module should be inferred from that material. New production code may begin only after the user approves the relevant `TARGET` `assets/scripts/MODULE_MAP.md` files and must follow `docs/architecture/MODULE_BOUNDARIES.md`. The current tests are not a complete unit-test harness, and automated 100% domain coverage has not been established.
